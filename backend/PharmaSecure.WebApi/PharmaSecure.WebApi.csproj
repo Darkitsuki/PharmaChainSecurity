@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>PharmaSecure.WebApi</RootNamespace>
+    <AssemblyName>PharmaSecure.WebApi</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PharmaSecure.Application\PharmaSecure.Application.csproj" />
+    <ProjectReference Include="..\PharmaSecure.Infrastructure\PharmaSecure.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>PharmaSecure.Infrastructure</RootNamespace>
+    <AssemblyName>PharmaSecure.Infrastructure</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PharmaSecure.Domain\PharmaSecure.Domain.csproj" />
+    <ProjectReference Include="..\PharmaSecure.Application\PharmaSecure.Application.csproj" />
+  </ItemGroup>
+
+</Project>

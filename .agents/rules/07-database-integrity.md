@@ -1,0 +1,172 @@
+---
+trigger: always_on
+---
+
+# Database Integrity and Consistency
+
+## 1. Purpose
+
+This rule establishes requirements for relational integrity, structural constraints, and domain invariants in Microsoft SQL Server for PharmaBranch.
+
+Stored records MUST remain structurally and semantically valid regardless of application defects or client bypasses.
+
+## 2. Database Integrity Boundary
+
+SQL Server is the authoritative persistence boundary and final integrity defense:
+- Application validation gives immediate feedback but MUST NOT be the sole integrity defense.
+- Relational constraints and domain invariants MUST be enforced directly within SQL Server.
+- Client bypasses or bugs MUST NOT produce corrupted, duplicate, or orphan records.
+- Database integrity violations MUST fail closed and abort the transaction.
+
+## 3. Primary Key and Identity Integrity
+
+Every database table MUST define an explicit, immutable Primary Key (PK):
+- PK columns MUST be declared `NOT NULL`.
+- Surrogate keys (`INT IDENTITY`, `BIGINT IDENTITY`, `UNIQUEIDENTIFIER`) SHOULD be used for operational records.
+- Natural keys MAY be used only when immutable and universally unique.
+- PK values MUST NOT be updated, reassigned, or recycled after insertion or deletion.
+
+## 4. Referential Integrity and Foreign Keys
+
+Entity relationships MUST be enforced through explicit Foreign Key (FK) constraints:
+- Child tables (`HOA_DON_ITEM`, `TON_KHO`) MUST define valid FKs referencing parent tables.
+- FKs MUST prevent orphan records; invalid parent references MUST be rejected.
+- `CASCADE DELETE` MUST NOT be used on operational, financial, or audit tables.
+- `NO ACTION` or `RESTRICT` MUST be enforced to protect audit trails.
+- FK columns SHOULD be indexed in SQL Server to maintain join performance.
+
+## 5. Uniqueness and Duplicate Prevention
+
+Unique business identifiers MUST enforce database `UNIQUE` constraints or unique indexes:
+- Entity codes, barcodes, registration numbers, invoice numbers, and credentials MUST enforce uniqueness.
+- Branch-scoped identifiers MUST use composite constraints: `UNIQUE (chi_nhanh_id, code)`.
+- Filtered unique indexes (`WHERE deleted_at IS NULL`) MAY be used for soft-deleted rows.
+- Application checks without database constraints are prohibited as sole defense.
+
+## 6. Nullability and Required Attributes
+
+Attribute nullability MUST reflect domain invariants:
+- Mandatory attributes (prices, quantities, statuses, timestamps, owner FKs) MUST be `NOT NULL`.
+- `NULL` MUST represent solely the absence of a value, never an uninitialized sentinel.
+- Default constraints (`DEFAULT`) MUST NOT mask missing required inputs.
+
+## 7. Domain Constraints and CHECK Constraints
+
+Domain invariants MUST be enforced through SQL Server `CHECK` constraints:
+- **Quantities:** Quantities MUST NOT be negative (`CHECK (quantity >= 0)`).
+- **Financial values:** Prices and totals MUST NOT be negative (`CHECK (price >= 0)`).
+- **Percentages:** Rates MUST fall in valid ranges (`CHECK (rate >= 0 AND rate <= 100)`).
+- **Lifecycle states:** Status columns MUST be restricted to approved domain states.
+- Invalid domain states MUST fail closed at the database level.
+
+## 8. Monetary and Quantity Integrity
+
+Financial and inventory calculations MUST maintain mathematical precision:
+- Monetary and quantity fields MUST use exact numeric types (`DECIMAL(p, s)`); floats are prohibited.
+- Detail line math MUST be consistent: `subtotal = (quantity * unit_price) - discount`.
+- Document headers (`HOA_DON`, `PHIEU_NHAP`) MUST match detail item sums upon finalization.
+- Stock deductions MUST be backed by physical batch records (`TON_KHO`, `GIAO_DICH_KHO`).
+
+## 9. Temporal and Date/Time Consistency
+
+Date and timestamp attributes MUST maintain temporal integrity:
+- Timestamps MUST use `DATETIME2` storing UTC values (`SYSUTCDATETIME()`).
+- Expiration MUST be strictly after manufacturing (`CHECK (ngay_het_han > ngay_san_xuat)`).
+- Effective date ranges MUST satisfy `CHECK (ngay_ket_thuc >= ngay_bat_dau)`.
+- Transaction timestamps MUST NOT be future-dated beyond server clock drift.
+
+## 10. Data State and Lifecycle Consistency
+
+Entities transitioning through lifecycle states MUST preserve historical integrity:
+- State transitions MUST follow explicit valid paths.
+- Finalized documents (`HOA_DON` completed, `PHIEU_NHAP` received) MUST become immutable.
+- Draft entities MUST NOT participate in authoritative ledger or stock balances.
+- Partial updates leaving records in half-states MUST NOT be committed.
+
+## 11. Transactional Mutation Boundaries
+
+Multi-table mutations affecting relational consistency MUST execute within database transactions:
+- Multi-step operations (invoice creation, stock decrement, payment) MUST be transactional.
+- If any integrity constraint fails, the entire transaction MUST rollback completely.
+- Long-running external tasks MUST NOT execute inside open database transactions.
+
+## 12. Migration Safety and Evolution
+
+Database schema evolution MUST follow controlled engineering practices:
+- Schema modifications MUST be captured in deterministic, versioned migration scripts.
+- Migrations MUST be backward-compatible where practical, using expand/contract patterns.
+- Migration scripts MUST execute within transactions in SQL Server.
+- Manual schema edits in production databases without versioned scripts are prohibited.
+
+## 13. Destructive Schema Change Control
+
+Destructive schema operations MUST be strictly governed:
+- `DROP TABLE`, `DROP COLUMN`, `TRUNCATE TABLE`, or constraint drops require impact analysis.
+- Column renames or type changes MUST NOT cause silent data loss or truncation.
+- Production migrations MUST NEVER execute automated schema wipe or recreate routines.
+- Verified database backups MUST exist prior to applying destructive schema modifications.
+
+## 14. Seed and Reference Data Integrity
+
+Seed data and reference catalogs MUST satisfy all database constraints:
+- Seed scripts MUST respect all Primary Key, Foreign Key, UNIQUE, and CHECK constraints.
+- Seed operations MUST be idempotent (using `MERGE` or `IF NOT EXISTS`), permitting safe re-execution.
+- Seed scripts MUST NOT hard-code production credentials or private keys.
+- Seed execution MUST preserve existing branch operational data and never overwrite transactions.
+
+## 15. Concurrency and Locking Integrity
+
+Database integrity under concurrent access MUST be protected:
+- Operations prone to race conditions MUST use appropriate isolation levels or locking.
+- Unchecked read-then-update sequences without locking or `ROWVERSION` tokens are prohibited.
+- Locking patterns MUST adhere to consistent entity access ordering to prevent deadlocks.
+
+## 16. Database Verification and Testing
+
+Database integrity controls MUST be verified through automated tests:
+
+| Test Scenario | Condition | Expected Result |
+|---|---|---|
+| PK Uniqueness | Duplicate primary key | **REJECT (PK Violation)** |
+| FK Reference | Nonexistent parent reference | **REJECT (FK Violation)** |
+| Orphan Prevention | Delete parent with active children | **REJECT (FK Violation)** |
+| Unique Constraint | Duplicate business code / barcode | **REJECT (Unique Violation)** |
+| Negative Quantity | Item/stock quantity < 0 | **REJECT (CHECK Violation)** |
+| Negative Price | Unit price < 0 | **REJECT (CHECK Violation)** |
+| Invalid Dates | Expiry <= manufacture date | **REJECT (CHECK Violation)** |
+| Invalid State | Undefined lifecycle status value | **REJECT (CHECK Violation)** |
+| Atomic Rollback | Error in multi-table transaction | **Full Rollback** |
+| Concurrent Mutation | Competing updates on stock balance | **Consistent Balance** |
+
+## 17. Greenfield and Evidence-First Verification
+
+Implementation claims require physical evidence:
+- Documentation or ERDs do not prove database integrity is enforced.
+- Verification requires inspecting physical constraints, migrations, or database tests.
+- Status MUST be classified as: `IMPLEMENTED`, `PARTIALLY IMPLEMENTED`, `NOT VERIFIED`, or `NOT IMPLEMENTED`.
+- Missing evidence MUST evaluate to `NOT VERIFIED`, never assumed enforced.
+
+## 18. Rule Boundaries
+
+Responsibilities are partitioned as follows:
+- **`07-database-integrity.md`:** Governs WHETHER data is structurally and domain-valid.
+- **`06-branch-isolation.md`:** Governs WHICH branch data a principal may query or modify.
+- **`05-authorization.md`:** Governs HOW runtime actions and endpoints are authorized.
+- **`04-rbac.md`:** Governs WHO possesses business capabilities and role permissions.
+- **`03-security.md`:** Authentication, encryption, CLS, and threat defense.
+- **`02-architecture-quality.md`:** Transaction boundaries, concurrency, and operational quality.
+- **`01-architecture.md` & `00-project-governance.md`:** System layering and engineering governance.
+
+## 19. Database Integrity Invariants
+
+Mandatory database integrity invariants:
+1. Every table MUST define an immutable Primary Key.
+2. Relationships MUST be enforced by explicit Foreign Keys; orphans are prohibited.
+3. Business identifiers MUST enforce database-level UNIQUE constraints.
+4. Impossible quantities, prices, and states MUST be rejected by CHECK constraints.
+5. Financial and quantity attributes MUST use exact numeric types (`DECIMAL`).
+6. Multi-table mutations MUST be atomic, transactional, and fail closed.
+7. Completed financial and inventory records MUST become immutable upon finalization.
+8. Migration scripts MUST be deterministic, versioned, and non-destructive in production.
+9. Seed scripts MUST be idempotent and respect all database constraints.
+10. Integrity claims MUST be backed by physical implementation evidence.

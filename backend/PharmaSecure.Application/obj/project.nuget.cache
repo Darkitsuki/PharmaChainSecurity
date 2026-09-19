@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "IdLSwTa1HNQ=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\QuanLyChuoiBanThuoc\\Pharmacy\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\HoaHung\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.30\\microsoft.windowsdesktop.app.ref.8.0.30.nupkg.sha512",
+    "C:\\Users\\HoaHung\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.30\\microsoft.netcore.app.ref.8.0.30.nupkg.sha512",
+    "C:\\Users\\HoaHung\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\8.0.30\\microsoft.aspnetcore.app.ref.8.0.30.nupkg.sha512"
+  ],
+  "logs": []
+}

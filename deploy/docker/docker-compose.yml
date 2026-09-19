@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: pharmasecure-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${SA_PASSWORD}
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pharmasecure-net
+
+  webapi:
+    build:
+      context: ../../backend
+      dockerfile: ../deploy/docker/Dockerfile.webapi
+    container_name: pharmasecure-webapi
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PharmaSecureDb;User Id=${DB_USER};Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - Jwt__Issuer=${JWT_ISSUER}
+      - Jwt__Audience=${JWT_AUDIENCE}
+      - Jwt__SecretKey=${JWT_SECRET}
+    ports:
+      - "5000:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - pharmasecure-net
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: ../deploy/docker/Dockerfile.frontend
+    container_name: pharmasecure-frontend
+    depends_on:
+      - webapi
+    ports:
+      - "80:80"
+    networks:
+      - pharmasecure-net
+
+volumes:
+  mssql_data:
+
+networks:
+  pharmasecure-net:
+    driver: bridge

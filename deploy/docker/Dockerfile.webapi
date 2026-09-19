@@ -1,0 +1,22 @@
+# Build Stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+WORKDIR /src
+
+# Copy csproj files and restore
+COPY PharmaSecure.Domain/PharmaSecure.Domain.csproj PharmaSecure.Domain/
+COPY PharmaSecure.Application/PharmaSecure.Application.csproj PharmaSecure.Application/
+COPY PharmaSecure.Infrastructure/PharmaSecure.Infrastructure.csproj PharmaSecure.Infrastructure/
+COPY PharmaSecure.WebApi/PharmaSecure.WebApi.csproj PharmaSecure.WebApi/
+RUN dotnet restore PharmaSecure.WebApi/PharmaSecure.WebApi.csproj
+
+# Copy source code and build
+COPY . .
+WORKDIR /src/PharmaSecure.WebApi
+RUN dotnet publish -c Release -o /app/publish
+
+# Runtime Stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+WORKDIR /app
+COPY --from=build /app/publish .
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "PharmaSecure.WebApi.dll"]
