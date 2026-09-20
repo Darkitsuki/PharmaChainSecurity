@@ -12,5 +12,5 @@ Complies with:
    - `OWNER` (Chủ nhà thuốc / Branch Owner)
    - `SALES` (Nhân viên bán hàng / Sales Staff)
    - `WAREHOUSE` (Nhân viên kho / Warehouse Staff)
-3. **Tenant & Branch Isolation**: Operations strictly scoped to authenticated user's branch context (`SESSION_CONTEXT(N'BranchId')` + RLS).
+3. **Tenant & Branch Isolation**: Operations strictly scoped to authenticated user's branch context (`SESSION_CONTEXT('BranchId')` + RLS).
 4. **Zero Trust**: Client-supplied `userId` or `branchId` must never override authoritative server context.

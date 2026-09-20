@@ -12,7 +12,7 @@ PharmaSecure.Domain
            ↑
 PharmaSecure.Infrastructure
            ↓
-Microsoft SQL Server
+Oracle Database 23ai
 ```
 
 ## Layer Responsibilities
