@@ -31,7 +31,7 @@ Branch context MUST originate from validated server-side identity:
 Branch identity MUST propagate reliably through every application layer:
 
 ```text
-Identity → Branch Context → API Authorization → Application Service → Persistence → Session Context → SQL Server RLS → Scoped Result
+Identity → Branch Context → API Authorization → Application Service → Persistence → Session Context (SYS_CONTEXT) → Oracle VPD → Scoped Result
 ```
 
 The persistence layer MUST initialize database branch context before executing branch SQL commands.
@@ -44,13 +44,13 @@ Branch ownership MUST be explicit and verifiable:
 - Schemas MUST NOT permit cross-branch hybrid records.
 - Global catalog tables (e.g., medicine catalog) SHOULD NOT include `branch_id`.
 
-## 6. Database Row-Level Security
+## 6. Database Row-Level Security (Oracle Virtual Private Database - VPD)
 
-SQL Server Row-Level Security (RLS) provides defense-in-depth database enforcement:
-- Predicates MUST evaluate `SESSION_CONTEXT(N'BranchId') == chi_nhanh_id`.
-- Policies MUST define `FILTER PREDICATE` (read) and `BLOCK PREDICATE` (mutation).
-- Missing or uninitialized session context MUST evaluate to false (fail-closed).
-- Application connections MUST execute under least-privileged users subject to RLS.
+Oracle Virtual Private Database (VPD / DBMS_RLS) provides defense-in-depth database enforcement:
+- Predicates MUST evaluate `SYS_CONTEXT('PHARMA_CTX', 'BranchId') = chi_nhanh_id`.
+- Policies MUST define function predicates for read (`SELECT`) and mutation (`INSERT`, `UPDATE`, `DELETE`).
+- Missing or uninitialized session context MUST evaluate to false (fail-closed, e.g. returning `1=2`).
+- Application connections MUST execute under least-privileged users subject to VPD.
 
 ## 7. Cross-Branch Read Isolation
 
@@ -93,10 +93,10 @@ Branch boundaries apply strictly to analytics and bulk operations:
 - Data exports (CSV, Excel, PDF) MUST NEVER include cross-branch rows.
 - Users MUST NOT infer other branches' metrics through aggregate differences.
 
-## 12. Database Session Context
+## 12. Database Session Context (Application Context)
 
 Where database session context is utilized:
-- The persistence layer MUST set `SESSION_CONTEXT(N'BranchId', @branchId)` upon acquiring a connection via parameterized commands.
+- The persistence layer MUST set application context (e.g. via PL/SQL package `DBMS_SESSION.SET_IDENTIFIER` or custom context package setting `SYS_CONTEXT('PHARMA_CTX', 'BranchId')`) upon acquiring a connection via parameterized commands.
 - Client input MUST NEVER be passed directly to session context.
 - Session context MUST be cleared before returning connections to the pool.
 
@@ -112,7 +112,7 @@ Connections reused from pools MUST NOT leak branch state:
 Broader visibility MUST be explicitly modeled and authorized:
 - `OWNER / MANAGER` roles MUST NOT implicitly bypass branch isolation.
 - Supported scopes: `SINGLE_BRANCH`, `ASSIGNED_BRANCHES`, and authorized `GLOBAL` oversight.
-- Multi-branch queries MUST pass explicit branch lists to session context and RLS policies.
+- Multi-branch queries MUST pass explicit branch lists to application context and VPD policies.
 - Global bypasses without audit logging are strictly prohibited.
 
 ## 15. Fail-Closed Behavior
@@ -139,13 +139,13 @@ Branch isolation MUST be verified through test suites:
 | Export Leakage | Export CSV / Excel files | Branch-scoped |
 | Relational Traversal | Order in Branch A references Stock in Branch B | **DENY** |
 | Pool Reuse | Connection reuse across branches | Context refreshed |
-| Database RLS Enforcement | Direct SQL query under app user | RLS enforced |
+| Database VPD Enforcement | Direct SQL query under app user | VPD enforced |
 
 ## 17. Evidence-First Verification
 
 Implementation claims require physical evidence:
 - Documentation or ERDs do not prove branch isolation is active.
-- Verification requires inspecting server context extraction, endpoint authorization, repository queries, and RLS scripts.
+- Verification requires inspecting server context extraction, endpoint authorization, repository queries, and Oracle VPD scripts.
 - Without physical evidence, features MUST be marked `NOT VERIFIED`, never assumed secure.
 
 ## 18. Rule Boundaries
@@ -166,7 +166,7 @@ Mandatory invariants across all layers:
 5. Cross-branch writes MUST be denied.
 6. Relational traversal MUST NOT cross branch boundaries.
 7. Aggregates, reports, and exports MUST remain branch-scoped.
-8. Database RLS MUST provide defense-in-depth where implemented.
+8. Database Oracle VPD MUST provide defense-in-depth where implemented.
 9. Missing or invalid branch context MUST fail closed.
 10. Connection pool reuse MUST NOT leak session context.
 11. Multi-branch visibility MUST be explicit, authorized, and audited.

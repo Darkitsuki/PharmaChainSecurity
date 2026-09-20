@@ -9,7 +9,7 @@ Tệp này đóng vai trò là chỉ mục điều hướng cho tất cả các 
 - **Backend**: .NET Core (Clean Architecture / Domain-Driven Design)
 - **Frontend Web**: React (TypeScript)
 - **Mobile**: Flutter (Dart)
-- **Database**: SQL Server
+- **Database**: Oracle Database (Virtual Private Database / PL-SQL)
 
 ---
 
@@ -35,7 +35,7 @@ Nạp file skill tương ứng từ `.agents/skills/` tùy thuộc vào khu vự
 | **Backend (`src/backend/`)** | `03-dotnet-backend/SKILL.md`<br>`06-api-design/SKILL.md` |
 | **Web Frontend (`src/web/`)** | `04-react-frontend/SKILL.md`<br>`06-api-design/SKILL.md` |
 | **Mobile (`src/mobile/`)** | `05-flutter-mobile/SKILL.md`<br>`06-api-design/SKILL.md` |
-| **Database (`database/`)** | `07-database-sqlserver/SKILL.md` |
+| **Database (`database/`)** | `07-database-oracle/SKILL.md` |
 
 ---
 

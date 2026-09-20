@@ -173,25 +173,24 @@ Examples that must be protected:
 
 ---
 
-## 6. SQL Server Row-Level Security
+## 6. Oracle Virtual Private Database (VPD / Row-Level Security)
 
-SQL Server RLS is part of the security boundary.
+Oracle VPD is part of the database security boundary.
 
 When modifying branch-scoped database objects, inspect:
 
-- Security predicates
-- Filter predicates
-- Block predicates
-- Security policies
-- Session context
-- Stored procedures
+- Security policies (`DBMS_RLS.ADD_POLICY`)
+- Function predicates
+- Statement types (`SELECT`, `INSERT`, `UPDATE`, `DELETE`)
+- Application context (`SYS_CONTEXT`)
+- Stored procedures, packages and functions
 - Views
 - Queries
 - Transactions
 
-Do not disable, bypass, or weaken RLS merely to make an operation work.
+Do not disable, bypass, or weaken VPD policies merely to make an operation work.
 
-If application behavior conflicts with RLS:
+If application behavior conflicts with VPD:
 
 STOP.
 
@@ -199,9 +198,9 @@ Report the conflict before changing the security policy.
 
 ---
 
-## 7. Column-Level Security
+## 7. Column-Level Security & Oracle Data Redaction
 
-Sensitive information must receive appropriate database-level protection.
+Sensitive information must receive appropriate database-level protection (such as Oracle Data Redaction `DBMS_REDACT` for masking sensitive revenues/salaries).
 
 Examples include:
 

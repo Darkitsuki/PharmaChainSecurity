@@ -20,7 +20,7 @@ trigger: always_on
 
 ## 3. Phân cấp Kiểm thử (Test Pyramid)
 1. **Unit Tests (Chủ đạo - 70%)**: Kiểm thử các hàm xử lý logic nghiệp vụ, Domain Models, Service Isolations.
-2. **Integration Tests (20%)**: Kiểm thử tương tác giữa API với Database (sử dụng Testcontainers / SQLite InMemory) hoặc giữa các Component UI với State Management.
+2. **Integration Tests (20%)**: Kiểm thử tương tác giữa API với Database (sử dụng Testcontainers Oracle với image `gvenzl/oracle-free` hoặc `container-registry.oracle.com/database/free`) hoặc giữa các Component UI với State Management.
 3. **E2E / UI Tests (10%)**: Kiểm thử luồng nghiệp vụ quan trọng trên giao diện thực tế.
 
 ## 4. Tiêu chuẩn Coverage
