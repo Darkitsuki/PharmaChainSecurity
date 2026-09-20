@@ -7,17 +7,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
 // Register Infrastructure Layer abstractions and dependencies
-builder.Services.AddInfrastructureServices();
+builder.Services.AddInfrastructureServices(builder.Configuration);
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 app.UseMiddleware<CorrelationIdMiddleware>();
-app.UseMiddleware<BranchContextMiddleware>();
-
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
+app.UseMiddleware<BranchContextMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
