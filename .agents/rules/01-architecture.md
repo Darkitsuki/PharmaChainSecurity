@@ -14,13 +14,13 @@ Client
 → Backend API
 → Application / Business
 → Infrastructure / Persistence
-→ SQL Server
+→ Oracle Database
 
 Target technologies:
 - ReactJS Web
 - Flutter / Dart Mobile
 - ASP.NET Core / .NET 8
-- Microsoft SQL Server
+- Oracle Database (Free Edition / 23ai / 21c)
 - REST API over HTTPS
 
 These are approved technology targets.
@@ -69,7 +69,7 @@ Clients are responsible for:
 - displaying authorized functionality.
 
 Clients MUST NOT:
-- connect directly to SQL Server;
+- connect directly to Oracle Database;
 - contain authoritative business rules;
 - make final authorization decisions;
 - determine trusted branch identity;
@@ -114,7 +114,7 @@ Business logic must not depend on UI behavior.
 ### Infrastructure / Persistence
 
 Responsible for:
-- SQL Server access;
+- Oracle Database access;
 - repositories/data access;
 - external services;
 - persistence implementation;
@@ -128,7 +128,7 @@ Responsible for:
 - constraints;
 - indexes;
 - transactions;
-- RLS where required;
+- Virtual Private Database (VPD) where required;
 - audit persistence.
 
 ---
@@ -238,8 +238,8 @@ Identity
 → User
 → Branch
 → Backend Authorization
-→ Database Security Context
-→ SQL Server RLS / scoped query
+→ Database Security Context (SYS_CONTEXT)
+→ Oracle VPD / scoped query
 → Result
 
 Branch identity must originate from trusted server-side authentication context.
@@ -303,7 +303,7 @@ Frontend logic may improve user experience but must not be the only enforcement 
 
 ## 12. Database Boundary
 
-SQL Server is the authoritative persistence layer.
+Oracle Database is the authoritative persistence layer.
 
 Critical integrity should be protected through appropriate database mechanisms, including:
 
@@ -313,9 +313,9 @@ Critical integrity should be protected through appropriate database mechanisms, 
 - CHECK constraints;
 - indexes;
 - transactions;
-- RLS where required.
+- Virtual Private Database (VPD) where required.
 
-Only approved backend persistence components may access SQL Server.
+Only approved backend persistence components may access Oracle Database.
 
 Clients must never connect directly to the database.
 
@@ -400,7 +400,7 @@ Approved technology targets:
 - ReactJS
 - Flutter / Dart
 - ASP.NET Core / .NET 8
-- Microsoft SQL Server
+- Oracle Database (Free Edition / 23ai / 21c)
 
 Specific libraries remain implementation choices unless physically present or explicitly approved.
 
@@ -455,7 +455,7 @@ STOP and report the conflict before making unrelated changes.
 
 Examples:
 
-Client directly accesses SQL Server
+Client directly accesses Oracle Database
 → STOP
 
 Business logic exists only in frontend
@@ -485,7 +485,7 @@ Client
 → API
 → Application
 → Infrastructure
-→ SQL Server
+→ Oracle Database
 
 The client presents and requests.
 
@@ -495,7 +495,7 @@ The Application layer owns business operations.
 
 Infrastructure owns persistence and integrations.
 
-SQL Server owns authoritative persistent data and database integrity.
+Oracle Database owns authoritative persistent data and database integrity.
 
 When uncertain:
 

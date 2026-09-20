@@ -80,7 +80,7 @@ The implementation must consider:
 - invalid state transitions.
 
 Use appropriate mechanisms such as:
-- SQL Server transaction isolation;
+- Oracle Database transaction isolation;
 - locking;
 - optimistic concurrency;
 - unique constraints;
@@ -392,7 +392,7 @@ Backup credentials and storage access must be protected.
 Deployment architecture must preserve the same boundaries as development.
 
 Production deployment must not:
-- expose SQL Server directly to clients;
+- expose Oracle Database directly to clients;
 - expose private signing keys;
 - expose secrets in frontend bundles;
 - disable required authorization;

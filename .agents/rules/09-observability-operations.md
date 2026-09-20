@@ -45,7 +45,7 @@ Requests traversing the system MUST maintain end-to-end trace correlation:
 
 The system MUST expose standard HTTP health endpoints:
 - **Liveness (`/health/live`):** Verifies process availability. Failure indicates an unrecoverable state requiring restart.
-- **Readiness (`/health/ready`):** Verifies application readiness by validating critical dependencies (SQL Server connectivity).
+- **Readiness (`/health/ready`):** Verifies application readiness by validating critical dependencies (Oracle Database connectivity).
 - Health checks MUST NOT execute expensive queries that degrade database performance.
 - Internal connection strings and infrastructure secrets MUST NOT be exposed in health responses.
 
@@ -65,7 +65,7 @@ Application errors MUST be observable, classified, and tracked:
 
 ## 9. Database Connectivity and Dependency Observability
 
-SQL Server interactions represent critical operations requiring explicit monitoring:
+Oracle Database interactions represent critical operations requiring explicit monitoring:
 - Connection pool exhaustion, transient connection failures, and timeout spikes MUST be logged as distinct events.
 - Long-running SQL commands exceeding duration thresholds SHOULD be logged without sensitive parameters.
 - If database connectivity is lost, the application MUST fail closed, mark readiness checks unhealthy, and alert operators.
@@ -116,7 +116,7 @@ Database backups MUST be monitored and verifiable:
 
 Data recovery capabilities MUST be verified through periodic operational drills:
 - Backup archives MUST be restored to an isolated test environment to verify database consistency.
-- Restoration testing MUST verify that restored databases pass SQL Server integrity checks (`DBCC CHECKDB`).
+- Restoration testing MUST verify that restored databases pass Oracle Database integrity checks (`DBMS_HM`).
 - Recovery Time Objective (RTO) and Recovery Point Objective (RPO) measurements MUST be documented during exercises.
 - A backup that has never been restored and verified MUST NOT be considered recoverable.
 

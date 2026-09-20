@@ -13,14 +13,14 @@ Technology baseline:
 - Web: ReactJS
 - Mobile: Flutter / Dart
 - Backend: C# / .NET 8 / ASP.NET Core
-- Database: Microsoft SQL Server
+- Database: Oracle Database (Free Edition / 23ai / 21c)
 - Architecture: Client-Server / N-Tier
 - Authentication: JWT
 - Authorization: RBAC
-- Database isolation: Row-Level Security (RLS)
-- Sensitive data protection: Column-Level Security (CLS)
+- Database isolation: Virtual Private Database (VPD / Row-Level Security)
+- Sensitive data protection: Data Redaction / Column-Level Security (CLS)
 - Transactions: ACID
-- Concurrency control: SQL Server transaction and locking mechanisms
+- Concurrency control: Oracle transaction and row-level locking mechanisms (SELECT FOR UPDATE)
 
 Core business domains:
 
@@ -71,16 +71,16 @@ If a problem is discovered outside the requested task:
 
 ## 5. Database Safety
 
-Before changing SQL Server schema:
+Before changing Oracle Database schema:
 
 - Check the current schema.
 - Check foreign keys.
 - Check indexes.
 - Check constraints.
 - Check triggers.
-- Check stored procedures/functions if applicable.
-- Check RLS policies.
-- Check CLS/security configuration.
+- Check stored procedures/packages/functions if applicable.
+- Check VPD policies (DBMS_RLS).
+- Check Data Redaction policies (DBMS_REDACT) / security configuration.
 - Check application queries using the affected objects.
 
 Never casually change:
@@ -90,7 +90,7 @@ Never casually change:
 - Table names
 - Column names
 - Relationships
-- RLS policies
+- VPD / RLS policies
 - Security predicates
 
 ## 6. Security
@@ -118,8 +118,8 @@ JWT
 → User
 → Branch
 → Backend authorization
-→ Database session/context
-→ SQL Server RLS
+→ Database session/context (SYS_CONTEXT)
+→ Oracle VPD (Row-Level Security)
 → Query result
 
 Cross-branch access must be denied.
