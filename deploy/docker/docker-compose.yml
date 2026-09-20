@@ -1,19 +1,28 @@
 version: '3.8'
 
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: pharmasecure-sqlserver
+  oracle:
+    image: store/oracle/database/enterprise:23.3.0
+    container_name: pharmasecure-oracle
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${SA_PASSWORD}
-      - MSSQL_PID=Developer
+      - ORACLE_PDB=XE
+      - ORACLE_CHARACTERSET=AL32UTF8
+      - ORACLE_UNQNAME=ORCL
     ports:
-      - "1433:1433"
-    volumes:
-      - mssql_data:/var/opt/mssql
+      - "1521:1521"
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "sqlplus / as sysdba <<EOF
+
+            SELECT 1 FROM dual;
+
+            EXIT;
+
+            EOF || exit 1"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,18 +35,18 @@ services:
       dockerfile: ../deploy/docker/Dockerfile.webapi
     container_name: pharmasecure-webapi
     depends_on:
-      sqlserver:
+      oracle:
         condition: service_healthy
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=PharmaSecureDb;User Id=${DB_USER};Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - ConnectionStrings__DefaultConnection=Server=oracle:1521;Database=XE;User Id=system;Password=${DB_PASSWORD};TrustServerCertificate=True;
       - Jwt__Issuer=${JWT_ISSUER}
       - Jwt__Audience=${JWT_AUDIENCE}
       - Jwt__SecretKey=${JWT_SECRET}
     ports:
       - "5000:8080"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/health/live" ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -55,9 +64,6 @@ services:
       - "80:80"
     networks:
       - pharmasecure-net
-
-volumes:
-  mssql_data:
 
 networks:
   pharmasecure-net:

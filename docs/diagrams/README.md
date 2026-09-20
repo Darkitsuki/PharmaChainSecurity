@@ -13,5 +13,5 @@ graph TD
     Infrastructure --> Application
     Infrastructure --> Domain[PharmaSecure.Domain]
     Application --> Domain
-    Infrastructure -->|T-SQL / RLS| SqlServer[(Microsoft SQL Server)]
+    Infrastructure -->|PL/SQL / RLS| SqlServer[(Oracle Database 23ai)]
 ```
