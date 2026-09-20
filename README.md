@@ -28,7 +28,7 @@ ReactJS Web (Vite + TypeScript)        Flutter Mobile (Dart)
              Infrastructure Layer (PharmaSecure.Infrastructure)
                            │
                            ▼
-             Microsoft SQL Server (T-SQL, RLS, CLS)
+             Oracle Database 23ai (PL/SQL, RLS, CLS)
 ```
 
 ### Dependency Invariants
@@ -55,7 +55,7 @@ ReactJS Web (Vite + TypeScript)        Flutter Mobile (Dart)
 
 ## 5. Database Architecture
 - **Location**: `database/`
-- **Target Engine**: Microsoft SQL Server.
+- **Target Engine**: Oracle Database 23ai.
 - **Integrity**: Enforces Primary Keys, Foreign Keys (`NO ACTION`/`RESTRICT`), `CHECK` constraints for monetary and quantity domains, and composite unique keys.
 - **Isolation**: Tenant isolation backed by database-level Row-Level Security (RLS) policies evaluating `SESSION_CONTEXT(N'BranchId')`.
 
@@ -76,5 +76,4 @@ ReactJS Web (Vite + TypeScript)        Flutter Mobile (Dart)
 - **Node.js**: v18+ (tested with v24.16.0) & npm
 - **.NET SDK**: .NET 8.0 SDK (required for building and running `backend/PharmaSecure.sln`)
 - **Flutter SDK**: Flutter 3.x / Dart SDK (required for building `mobile/`)
-- **SQL Server**: Microsoft SQL Server 2022+ / Azure SQL Database
-- **Docker**: Docker & Docker Compose (optional for containerized deployment)
+- **Oracle Database**: Oracle Database 23ai
