@@ -18,19 +18,29 @@ public class BranchContextMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, ICurrentUserContext currentUserContext)
+    public async Task InvokeAsync(
+        HttpContext context,
+        ICurrentUserContext currentUserContext,
+        IBranchContextAccessor branchContextAccessor)
     {
-        if (currentUserContext.IsAuthenticated && currentUserContext.BranchId.HasValue)
+        if (currentUserContext.IsAuthenticated)
         {
+            if (string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+
+            branchContextAccessor.BranchId = currentUserContext.BranchId;
+
             // Security invariant: Client cannot inject a different branch via query or custom header
             if (context.Request.Query.TryGetValue("branchId", out var clientQueryBranch))
             {
-                if (int.TryParse(clientQueryBranch, out var requestedBranchId) &&
-                    requestedBranchId != currentUserContext.BranchId.Value)
+                if (!string.Equals(clientQueryBranch.ToString(), currentUserContext.BranchId, StringComparison.Ordinal))
                 {
                     _logger.LogWarning(
                         "SECURITY ALERT: Cross-branch access attempt detected. Authenticated BranchId: {AuthBranch}, Requested BranchId: {ReqBranch}",
-                        currentUserContext.BranchId.Value, requestedBranchId);
+                        currentUserContext.BranchId, clientQueryBranch.ToString());
 
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     await context.Response.WriteAsJsonAsync(new

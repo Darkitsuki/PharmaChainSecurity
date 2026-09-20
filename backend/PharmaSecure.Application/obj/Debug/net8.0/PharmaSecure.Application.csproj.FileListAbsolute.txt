@@ -1,0 +1,16 @@
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\bin\Debug\net8.0\PharmaSecure.Application.deps.json
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\bin\Debug\net8.0\PharmaSecure.Application.dll
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\bin\Debug\net8.0\PharmaSecure.Application.pdb
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\bin\Debug\net8.0\PharmaSecure.Domain.dll
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\bin\Debug\net8.0\PharmaSecure.Domain.pdb
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSecure.Application.csproj.AssemblyReference.cache
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSecure.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSecure.Application.AssemblyInfoInputs.cache
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSecure.Application.AssemblyInfo.cs
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSecure.Application.csproj.CoreCompileInputs.cache
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSecure.Application.sourcelink.json
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSe.81591CBC.Up2Date
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSecure.Application.dll
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\refint\PharmaSecure.Application.dll
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\PharmaSecure.Application.pdb
+C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Application\obj\Debug\net8.0\ref\PharmaSecure.Application.dll

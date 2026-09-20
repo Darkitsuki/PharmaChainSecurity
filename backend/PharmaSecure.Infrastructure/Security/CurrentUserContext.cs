@@ -22,12 +22,12 @@ public class CurrentUserContext : ICurrentUserContext
 
     public bool IsAuthenticated => User?.Identity?.IsAuthenticated ?? false;
 
-    public Guid? UserId
+    public string? UserId
     {
         get
         {
-            var idClaim = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return Guid.TryParse(idClaim, out var guid) ? guid : null;
+            return User?.FindFirst("UserId")?.Value
+                ?? User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         }
     }
 
@@ -42,12 +42,12 @@ public class CurrentUserContext : ICurrentUserContext
         }
     }
 
-    public int? BranchId
+    public string? BranchId
     {
         get
         {
-            var branchClaim = User?.FindFirst("branch_id")?.Value;
-            return int.TryParse(branchClaim, out var branchId) ? branchId : null;
+            return User?.FindFirst("BranchId")?.Value
+                ?? User?.FindFirst("branch_id")?.Value;
         }
     }
 }
