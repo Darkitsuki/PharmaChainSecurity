@@ -25,17 +25,22 @@ Tham chiếu `.agents/rules/` theo từng trường hợp nghiệp vụ:
 * **Thao tác với CSDL / Migration**: Đọc `07-database-integrity.md`.
 * **Xử lý Log / Monitoring / Error**: Đọc `09-observability-operations.md`.
 * **Refactor / Tối ưu code**: Đọc `02-architecture-quality.md`.
+* **Kiểm thử / Đảm bảo chất lượng**: Đọc `10-testing-quality.md`.
 
-### B. Kỹ năng công nghệ cụ thể (Technology Skills)
-Nạp file skill tương ứng từ `.agents/skills/` tùy thuộc vào khu vực mã nguồn (`/src/...`) đang thao tác:
+### B. Kỹ năng công nghệ & Nghiệp vụ cụ thể (Technology & Domain Skills)
+Nạp file skill tương ứng từ `.agents/skills/` tùy thuộc vào ngữ cảnh hoặc khu vực mã nguồn (`/src/...`) đang thao tác:
 
-| Khu vực mã nguồn | Skill File cần đọc |
+| Ngữ cảnh / Khu vực mã nguồn | Skill File cần nạp |
 | :--- | :--- |
-| **Chung cho toàn bộ project** | `01-codebase-onboarding/SKILL.md`<br>`02-coding-standards/SKILL.md` |
+| **Chung cho toàn bộ project & Kỷ luật code** | `01-codebase-onboarding/SKILL.md`<br>`02-coding-standards/SKILL.md`<br>`13-karpathy-guidelines/SKILL.md` |
 | **Backend (`src/backend/`)** | `03-dotnet-backend/SKILL.md`<br>`06-api-design/SKILL.md` |
 | **Web Frontend (`src/web/`)** | `04-react-frontend/SKILL.md`<br>`06-api-design/SKILL.md` |
 | **Mobile (`src/mobile/`)** | `05-flutter-mobile/SKILL.md`<br>`06-api-design/SKILL.md` |
 | **Database (`database/`)** | `07-database-oracle/SKILL.md` |
+| **Kiểm thử & Xác minh có hệ thống** | `08-testing-standards/SKILL.md`<br>`09-verification-loop/SKILL.md` |
+| **Đánh giá An ninh & Phân quyền RBAC** | `10-security-review/SKILL.md`<br>`12-rbac-security/SKILL.md` |
+| **Nghiệp vụ Dược & Chuỗi nhà thuốc** | `11-pharma-domain/SKILL.md` |
+| **Chắt lọc tri thức & Tiến hóa kỹ năng** | `14-skill-distillation/SKILL.md` |
 
 ---
 
