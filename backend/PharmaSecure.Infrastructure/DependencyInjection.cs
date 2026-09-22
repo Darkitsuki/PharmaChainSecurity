@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddSingleton<IPasswordHasher, BouncyCastlePasswordHasher>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddSingleton<IIdempotencyService, MemoryIdempotencyService>();
         services.Configure<DigitalSignatureOptions>(configuration.GetSection("DigitalSignature"));
         services.AddSingleton<IDigitalSignatureService, DigitalSignatureService>();
         services.AddScoped<ICheckoutService, CheckoutService>();
