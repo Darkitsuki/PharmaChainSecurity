@@ -35,6 +35,16 @@ public sealed record InvoiceDetailResponse(
     IReadOnlyCollection<InvoiceItemResponse> Items,
     InvoiceSignatureResponse? Signature);
 
+public sealed record InvoiceVerificationResult(
+    string InvoiceId,
+    string InvoiceNumber,
+    bool IsValid,
+    string CalculatedHashSha256,
+    string StoredHashSha256,
+    string CertificateSerial,
+    DateTime SignedAt,
+    string Message);
+
 public interface IInvoiceQueryService
 {
     Task<PagedResult<InvoiceResponse>> GetPageAsync(
@@ -49,6 +59,11 @@ public interface IInvoiceQueryService
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyCollection<InvoiceItemResponse>> GetItemsAsync(
+        string branchId,
+        string invoiceId,
+        CancellationToken cancellationToken = default);
+
+    Task<InvoiceVerificationResult?> VerifyInvoiceSignatureAsync(
         string branchId,
         string invoiceId,
         CancellationToken cancellationToken = default);

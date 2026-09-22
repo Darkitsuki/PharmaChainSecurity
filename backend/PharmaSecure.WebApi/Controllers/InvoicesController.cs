@@ -74,6 +74,23 @@ public sealed class InvoicesController : ControllerBase
         return Ok(items);
     }
 
+    [HttpPost("{id}/verify-signature")]
+    public async Task<ActionResult<InvoiceVerificationResult>> VerifySignatureAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invoice ID is required.");
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            return Unauthorized();
+
+        var result = await invoiceQueryService.VerifyInvoiceSignatureAsync(currentUserContext.BranchId, id, cancellationToken);
+        if (result is null)
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Invoice was not found.");
+
+        return Ok(result);
+    }
+
     [HttpPost]
     [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult> CheckoutAsync(
