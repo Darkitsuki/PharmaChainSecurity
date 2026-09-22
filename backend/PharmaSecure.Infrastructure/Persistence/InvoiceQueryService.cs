@@ -54,6 +54,148 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
         }
     }
 
+    public async Task<InvoiceDetailResponse?> GetByIdAsync(
+        string branchId,
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(branchId))
+            throw new ArgumentException("Branch ID is required.", nameof(branchId));
+        if (string.IsNullOrWhiteSpace(id))
+            throw new ArgumentException("Invoice ID is required.", nameof(id));
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var headerCommand = CreateCommand("""
+                SELECT id, InvoiceNo, CreatedDate, TotalAmount, BranchId, CashierId
+                FROM INVOICES
+                WHERE id = :id AND BranchId = :branchId
+                """);
+            headerCommand.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id;
+            headerCommand.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+            await using var headerReader = await headerCommand.ExecuteReaderAsync(cancellationToken);
+            if (!await headerReader.ReadAsync(cancellationToken))
+            {
+                await unitOfWork.CommitAsync(cancellationToken);
+                return null;
+            }
+
+            var invoiceId = headerReader.GetString(0);
+            var invoiceNo = headerReader.GetString(1);
+            var createdDate = headerReader.GetDateTime(2);
+            var totalAmount = headerReader.GetDecimal(3);
+            var bId = headerReader.GetString(4);
+            var cashierId = headerReader.GetString(5);
+            await headerReader.CloseAsync();
+
+            var items = await QueryItemsInternalAsync(invoiceId, cancellationToken);
+            var signature = await QuerySignatureInternalAsync(invoiceId, cancellationToken);
+
+            await unitOfWork.CommitAsync(cancellationToken);
+            return new InvoiceDetailResponse(
+                invoiceId,
+                invoiceNo,
+                createdDate,
+                totalAmount,
+                bId,
+                cashierId,
+                items,
+                signature);
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<IReadOnlyCollection<InvoiceItemResponse>> GetItemsAsync(
+        string branchId,
+        string invoiceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(branchId))
+            throw new ArgumentException("Branch ID is required.", nameof(branchId));
+        if (string.IsNullOrWhiteSpace(invoiceId))
+            throw new ArgumentException("Invoice ID is required.", nameof(invoiceId));
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var checkCommand = CreateCommand("""
+                SELECT COUNT(*) FROM INVOICES WHERE id = :invoiceId AND BranchId = :branchId
+                """);
+            checkCommand.Parameters.Add("invoiceId", OracleDbType.Varchar2, 50).Value = invoiceId;
+            checkCommand.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+            var exists = Convert.ToInt32(await checkCommand.ExecuteScalarAsync(cancellationToken));
+            if (exists == 0)
+            {
+                await unitOfWork.CommitAsync(cancellationToken);
+                return Array.Empty<InvoiceItemResponse>();
+            }
+
+            var items = await QueryItemsInternalAsync(invoiceId, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return items;
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task<List<InvoiceItemResponse>> QueryItemsInternalAsync(string invoiceId, CancellationToken cancellationToken)
+    {
+        var items = new List<InvoiceItemResponse>();
+        await using var command = CreateCommand("""
+            SELECT ii.DrugId, d.DrugCode, d.Name, ii.BatchId, ii.Quantity, ii.UnitPrice, ii.SubTotal
+            FROM INVOICE_ITEMS ii
+            INNER JOIN DRUGS d ON ii.DrugId = d.id
+            WHERE ii.InvoiceId = :invoiceId
+            ORDER BY d.DrugCode
+            """);
+        command.Parameters.Add("invoiceId", OracleDbType.Varchar2, 50).Value = invoiceId;
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(new InvoiceItemResponse(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetInt32(4),
+                reader.GetDecimal(5),
+                reader.GetDecimal(6)));
+        }
+
+        return items;
+    }
+
+    private async Task<InvoiceSignatureResponse?> QuerySignatureInternalAsync(string invoiceId, CancellationToken cancellationToken)
+    {
+        await using var command = CreateCommand("""
+            SELECT HashValue_SHA256, SignatureData, CertSerial, SignedAt
+            FROM DIGITAL_SIGNATURES
+            WHERE InvoiceId = :invoiceId
+            """);
+        command.Parameters.Add("invoiceId", OracleDbType.Varchar2, 50).Value = invoiceId;
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        return new InvoiceSignatureResponse(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetDateTime(3));
+    }
+
     private async Task<int> ExecuteCountAsync(string branchId, CancellationToken cancellationToken)
     {
         await using var command = CreateCommand("SELECT COUNT(*) FROM INVOICES WHERE BranchId = :branchId");

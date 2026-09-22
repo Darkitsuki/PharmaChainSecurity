@@ -43,6 +43,37 @@ public sealed class InvoicesController : ControllerBase
             cancellationToken));
     }
 
+    [HttpGet("{id}")]
+    public async Task<ActionResult<InvoiceDetailResponse>> GetByIdAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invoice ID is required.");
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            return Unauthorized();
+
+        var invoice = await invoiceQueryService.GetByIdAsync(currentUserContext.BranchId, id, cancellationToken);
+        if (invoice is null)
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Invoice was not found.");
+
+        return Ok(invoice);
+    }
+
+    [HttpGet("{id}/items")]
+    public async Task<ActionResult<IReadOnlyCollection<InvoiceItemResponse>>> GetItemsAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invoice ID is required.");
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            return Unauthorized();
+
+        var items = await invoiceQueryService.GetItemsAsync(currentUserContext.BranchId, id, cancellationToken);
+        return Ok(items);
+    }
+
     [HttpPost]
     [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult> CheckoutAsync(
