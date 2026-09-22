@@ -1,6 +1,6 @@
-# Row-Level Security (RLS) Scripts
+# Row-Level Security (RLS) / Oracle Virtual Private Database (VPD) Scripts
 
-This directory contains Microsoft SQL Server Row-Level Security predicates and policies.
+This directory contains Oracle Database Virtual Private Database (VPD / DBMS_RLS) policies and security context configurations.
 
 ## Invariants (Rule 06 — Branch Isolation)
 - Evaluates `SESSION_CONTEXT(N'BranchId') = chi_nhanh_id`.

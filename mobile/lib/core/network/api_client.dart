@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 /// API Client for mobile application communicating with PharmaSecure Web API.
-/// Mobile MUST NOT connect directly to SQL Server (Rule 01, Section 3).
+/// Mobile MUST NOT connect directly to Oracle Database 23ai (Rule 01, Section 3).
 class ApiClient {
   final String baseUrl;
   final http.Client _httpClient;

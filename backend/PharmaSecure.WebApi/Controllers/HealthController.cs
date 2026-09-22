@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using PharmaSecure.Infrastructure.Persistence;
 
 namespace PharmaSecure.WebApi.Controllers;
 
@@ -6,6 +7,13 @@ namespace PharmaSecure.WebApi.Controllers;
 [Route("health")]
 public class HealthController : ControllerBase
 {
+    private readonly IOracleConnectionFactory connectionFactory;
+
+    public HealthController(IOracleConnectionFactory connectionFactory)
+    {
+        this.connectionFactory = connectionFactory;
+    }
+
     /// <summary>
     /// Liveness probe: verifies process availability.
     /// </summary>
@@ -21,21 +29,24 @@ public class HealthController : ControllerBase
     }
 
     /// <summary>
-    /// Readiness probe: verifies readiness for incoming traffic.
+    /// Readiness probe: verifies readiness for incoming traffic and Oracle Database 23ai connectivity.
     /// </summary>
     [HttpGet("ready")]
-    public IActionResult Ready()
+    public async Task<IActionResult> Ready(CancellationToken cancellationToken = default)
     {
-        // In foundation phase, the application host is ready.
-        // In future phases, critical dependency checks (SQL Server connectivity) will be reported here.
-        return Ok(new
+        var isDbHealthy = await connectionFactory.PingAsync(cancellationToken);
+        var status = isDbHealthy ? "Ready" : "Unhealthy";
+
+        var payload = new
         {
-            status = "Ready",
+            status,
             timestamp = DateTime.UtcNow,
             dependencies = new
             {
-                database = "Ready"
+                database = isDbHealthy ? "Healthy" : "Unhealthy"
             }
-        });
+        };
+
+        return isDbHealthy ? Ok(payload) : StatusCode(StatusCodes.Status503ServiceUnavailable, payload);
     }
 }
