@@ -81,4 +81,55 @@ public sealed class InventoryRepository : IInventoryRepository
         if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
             throw new InvalidOperationException("Inventory row was not updated.");
     }
+
+    public async Task AdjustStockAsync(
+        string branchId,
+        string drugId,
+        string batchId,
+        int newQuantity,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(branchId))
+            throw new ArgumentException("Branch ID is required.", nameof(branchId));
+        if (string.IsNullOrWhiteSpace(drugId))
+            throw new ArgumentException("Drug ID is required.", nameof(drugId));
+        if (string.IsNullOrWhiteSpace(batchId))
+            throw new ArgumentException("Batch ID is required.", nameof(batchId));
+        if (newQuantity < 0)
+            throw new ArgumentOutOfRangeException(nameof(newQuantity), "Quantity cannot be negative.");
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            if (unitOfWork.Transaction is not OracleTransaction transaction)
+                throw new InvalidOperationException("Inventory adjustments require an active Oracle transaction.");
+
+            await using var command = (OracleCommand)unitOfWork.Connection.CreateCommand();
+            command.Transaction = transaction;
+            command.BindByName = true;
+            command.CommandText = """
+                MERGE INTO INVENTORIES target
+                USING (SELECT :branchId AS BranchId, :drugId AS DrugId, :batchId AS BatchId, :quantity AS Quantity FROM DUAL) source
+                ON (target.BranchId = source.BranchId AND target.DrugId = source.DrugId AND target.BatchId = source.BatchId)
+                WHEN MATCHED THEN
+                    UPDATE SET target.Quantity = source.Quantity
+                WHEN NOT MATCHED THEN
+                    INSERT (BranchId, DrugId, BatchId, Quantity)
+                    VALUES (source.BranchId, source.DrugId, source.BatchId, source.Quantity)
+                """;
+            command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+            command.Parameters.Add("drugId", OracleDbType.Varchar2, 50).Value = drugId;
+            command.Parameters.Add("batchId", OracleDbType.Varchar2, 50).Value = batchId;
+            command.Parameters.Add("quantity", OracleDbType.Int32).Value = newQuantity;
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
 }

@@ -51,4 +51,20 @@ public sealed class DrugsController : ControllerBase
 
         return Ok(drug);
     }
+
+    [HttpGet("{id}/batches")]
+    public async Task<ActionResult<IReadOnlyCollection<DrugBatchResponse>>> GetBatchesAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Drug ID is required.");
+
+        var branchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
+
+        var batches = await drugQueryService.GetBatchesAsync(branchId, id, cancellationToken);
+        return Ok(batches);
+    }
 }

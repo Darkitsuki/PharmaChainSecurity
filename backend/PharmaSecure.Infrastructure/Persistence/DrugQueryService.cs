@@ -106,6 +106,48 @@ public sealed class DrugQueryService : IDrugQueryService
         }
     }
 
+    public async Task<IReadOnlyCollection<DrugBatchResponse>> GetBatchesAsync(
+        string branchId,
+        string drugId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(drugId);
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            var batches = new List<DrugBatchResponse>();
+            await using var command = CreateCommand("""
+                SELECT b.id, b.DrugId, b.BatchNo, b.MfgDate, b.ExpiryDate, NVL(inv.Quantity, 0)
+                FROM DRUG_BATCHES b
+                LEFT JOIN INVENTORIES inv ON b.id = inv.BatchId AND inv.BranchId = :branchId
+                WHERE b.DrugId = :drugId
+                ORDER BY b.ExpiryDate ASC
+                """);
+            command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+            command.Parameters.Add("drugId", OracleDbType.Varchar2, 50).Value = drugId;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                batches.Add(new DrugBatchResponse(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+                    reader.GetDateTime(4),
+                    reader.GetInt32(5)));
+            }
+
+            await unitOfWork.CommitAsync(cancellationToken);
+            return batches;
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
     private async Task<int> ExecuteCountAsync(string whereClause, string? searchPattern, CancellationToken cancellationToken)
     {
         await using var command = CreateCommand($"SELECT COUNT(*) FROM DRUGS {whereClause}");
