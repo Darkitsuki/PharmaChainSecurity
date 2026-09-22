@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Application.Features.Auth;
 using PharmaSecure.Application.Features.Sales;
 using PharmaSecure.Application.Features.Inventory;
 using PharmaSecure.Application.Features.Invoices;
@@ -26,6 +27,8 @@ public static class DependencyInjection
         services.AddScoped<IBranchContextAccessor, BranchContextAccessor>();
         services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
         services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddSingleton<IPasswordHasher, BouncyCastlePasswordHasher>();
+        services.AddScoped<IAuthService, AuthService>();
         services.Configure<DigitalSignatureOptions>(configuration.GetSection("DigitalSignature"));
         services.AddSingleton<IDigitalSignatureService, DigitalSignatureService>();
         services.AddScoped<ICheckoutService, CheckoutService>();

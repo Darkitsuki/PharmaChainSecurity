@@ -64,6 +64,13 @@ public sealed class OracleConnectionFactory : IOracleConnectionFactory
         }
     }
 
+    public async Task<OracleConnection> CreateAuthConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        var connection = new OracleConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        return connection;
+    }
+
     public async Task ClearSessionContextAsync(
         OracleConnection connection,
         CancellationToken cancellationToken = default)

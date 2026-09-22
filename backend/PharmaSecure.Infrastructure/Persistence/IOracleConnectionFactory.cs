@@ -10,6 +10,8 @@ public interface IOracleConnectionFactory
 
     Task<bool> PingAsync(CancellationToken cancellationToken = default);
 
+    Task<OracleConnection> CreateAuthConnectionAsync(CancellationToken cancellationToken = default);
+
     Task ClearSessionContextAsync(
         OracleConnection connection,
         CancellationToken cancellationToken = default);
