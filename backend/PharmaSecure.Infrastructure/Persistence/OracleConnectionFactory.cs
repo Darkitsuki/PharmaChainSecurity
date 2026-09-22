@@ -47,6 +47,30 @@ public sealed class OracleConnectionFactory : IOracleConnectionFactory
         }
     }
 
+    public async Task<bool> PingAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var connection = new OracleConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT 1 FROM DUAL";
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<OracleConnection> CreateAuthConnectionAsync(CancellationToken cancellationToken = default)
+    {
+        var connection = new OracleConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        return connection;
+    }
+
     public async Task ClearSessionContextAsync(
         OracleConnection connection,
         CancellationToken cancellationToken = default)

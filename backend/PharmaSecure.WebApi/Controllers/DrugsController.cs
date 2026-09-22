@@ -18,6 +18,7 @@ public sealed class DrugsController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult> GetPageAsync(
+        [FromQuery] string? search = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
@@ -29,6 +30,41 @@ public sealed class DrugsController : ControllerBase
         if (string.IsNullOrWhiteSpace(branchId))
             return Forbid();
 
-        return Ok(await drugQueryService.GetPageAsync(branchId, page, pageSize, cancellationToken));
+        return Ok(await drugQueryService.GetPageAsync(branchId, page, pageSize, search, cancellationToken));
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<DrugResponse>> GetByIdAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Drug ID is required.");
+
+        var branchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
+
+        var drug = await drugQueryService.GetByIdAsync(branchId, id, cancellationToken);
+        if (drug is null)
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Drug was not found.");
+
+        return Ok(drug);
+    }
+
+    [HttpGet("{id}/batches")]
+    public async Task<ActionResult<IReadOnlyCollection<DrugBatchResponse>>> GetBatchesAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Drug ID is required.");
+
+        var branchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
+
+        var batches = await drugQueryService.GetBatchesAsync(branchId, id, cancellationToken);
+        return Ok(batches);
     }
 }

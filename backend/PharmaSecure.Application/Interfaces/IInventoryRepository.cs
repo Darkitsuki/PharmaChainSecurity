@@ -13,4 +13,12 @@ public interface IInventoryRepository
     Task UpdateQuantityAsync(
         Inventory inventory,
         CancellationToken cancellationToken = default);
+
+    Task AdjustStockAsync(
+        string branchId,
+        string drugId,
+        string batchId,
+        int newQuantity,
+        string reason,
+        CancellationToken cancellationToken = default);
 }

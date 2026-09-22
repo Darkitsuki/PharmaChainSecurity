@@ -14,15 +14,18 @@ public sealed class InvoicesController : ControllerBase
     private readonly ICheckoutService checkoutService;
     private readonly IInvoiceQueryService invoiceQueryService;
     private readonly ICurrentUserContext currentUserContext;
+    private readonly IIdempotencyService idempotencyService;
 
     public InvoicesController(
         ICheckoutService checkoutService,
         IInvoiceQueryService invoiceQueryService,
-        ICurrentUserContext currentUserContext)
+        ICurrentUserContext currentUserContext,
+        IIdempotencyService idempotencyService)
     {
         this.checkoutService = checkoutService;
         this.invoiceQueryService = invoiceQueryService;
         this.currentUserContext = currentUserContext;
+        this.idempotencyService = idempotencyService;
     }
 
     [HttpGet]
@@ -43,16 +46,75 @@ public sealed class InvoicesController : ControllerBase
             cancellationToken));
     }
 
+    [HttpGet("{id}")]
+    public async Task<ActionResult<InvoiceDetailResponse>> GetByIdAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invoice ID is required.");
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            return Unauthorized();
+
+        var invoice = await invoiceQueryService.GetByIdAsync(currentUserContext.BranchId, id, cancellationToken);
+        if (invoice is null)
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Invoice was not found.");
+
+        return Ok(invoice);
+    }
+
+    [HttpGet("{id}/items")]
+    public async Task<ActionResult<IReadOnlyCollection<InvoiceItemResponse>>> GetItemsAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invoice ID is required.");
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            return Unauthorized();
+
+        var items = await invoiceQueryService.GetItemsAsync(currentUserContext.BranchId, id, cancellationToken);
+        return Ok(items);
+    }
+
+    [HttpPost("{id}/verify-signature")]
+    public async Task<ActionResult<InvoiceVerificationResult>> VerifySignatureAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invoice ID is required.");
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            return Unauthorized();
+
+        var result = await invoiceQueryService.VerifyInvoiceSignatureAsync(currentUserContext.BranchId, id, cancellationToken);
+        if (result is null)
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Invoice was not found.");
+
+        return Ok(result);
+    }
+
     [HttpPost]
     [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult> CheckoutAsync(
         [FromBody] CheckoutRequestBody request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey = null,
         CancellationToken cancellationToken = default)
     {
         if (request.Lines is null || request.Lines.Count == 0)
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "At least one invoice line is required.");
         if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.UserId) || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
             return Unauthorized();
+
+        var cacheKey = !string.IsNullOrWhiteSpace(idempotencyKey)
+            ? $"checkout:{currentUserContext.BranchId}:{idempotencyKey.Trim()}"
+            : null;
+
+        if (cacheKey is not null && idempotencyService.TryGet<CheckoutResponse>(cacheKey, out var cachedResponse) && cachedResponse is not null)
+        {
+            Response.Headers["X-Idempotent-Replayed"] = "true";
+            return StatusCode(StatusCodes.Status200OK, cachedResponse);
+        }
 
         var result = await checkoutService.CheckoutAsync(
             new CheckoutRequest(
@@ -63,6 +125,9 @@ public sealed class InvoicesController : ControllerBase
 
         if (result.IsFailure)
             return UnprocessableEntity(new ProblemDetails { Title = result.Error, Status = StatusCodes.Status422UnprocessableEntity });
+
+        if (cacheKey is not null)
+            idempotencyService.Set(cacheKey, result.Value, TimeSpan.FromHours(24));
 
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
