@@ -16,5 +16,11 @@ public interface IDrugQueryService
         string branchId,
         int page,
         int pageSize,
+        string? search = null,
+        CancellationToken cancellationToken = default);
+
+    Task<DrugResponse?> GetByIdAsync(
+        string branchId,
+        string id,
         CancellationToken cancellationToken = default);
 }
