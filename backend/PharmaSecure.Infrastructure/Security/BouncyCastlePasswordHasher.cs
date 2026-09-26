@@ -12,7 +12,7 @@ public sealed class BouncyCastlePasswordHasher : IPasswordHasher
 
         try
         {
-            return OpenBSDBCrypt.CheckPassword(passwordHash, password.ToCharArray());
+            return OpenBsdBCrypt.CheckPassword(passwordHash, password.ToCharArray());
         }
         catch
         {

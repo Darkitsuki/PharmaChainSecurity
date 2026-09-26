@@ -25,3 +25,12 @@ D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\Phar
 D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.dll
 D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\refint\PharmaSecure.Infrastructure.dll
 D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.pdb
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\bin\Debug\net8.0\PharmaSecure.Infrastructure.deps.json
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\bin\Debug\net8.0\PharmaSecure.Infrastructure.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\bin\Debug\net8.0\PharmaSecure.Infrastructure.pdb
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\bin\Debug\net8.0\PharmaSecure.Application.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\bin\Debug\net8.0\PharmaSecure.Domain.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\bin\Debug\net8.0\PharmaSecure.Domain.pdb
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\bin\Debug\net8.0\PharmaSecure.Application.pdb
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSe.D299BD10.Up2Date
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\ref\PharmaSecure.Infrastructure.dll

@@ -11,7 +11,7 @@ public class PasswordHasherTests
         // Arrange
         var hasher = new BouncyCastlePasswordHasher();
         // Standard BCrypt hash for "123456" as seeded in database/seed.sql
-        var hash = "$2a$12$eImiTXuWVxjM72fGC47AouX8L.g3qK8zG9/mP83D4qgX4mN3e2P3q";
+        var hash = "$2a$12$..CA.uOD/eaGAOmJB.yMBulqBX0hJtMHj7S0kiRSwJ3VFJtOpGuWC";
 
         // Act
         var result = hasher.VerifyPassword("123456", hash);
@@ -25,7 +25,7 @@ public class PasswordHasherTests
     {
         // Arrange
         var hasher = new BouncyCastlePasswordHasher();
-        var hash = "$2a$12$eImiTXuWVxjM72fGC47AouX8L.g3qK8zG9/mP83D4qgX4mN3e2P3q";
+        var hash = "$2a$12$..CA.uOD/eaGAOmJB.yMBulqBX0hJtMHj7S0kiRSwJ3VFJtOpGuWC";
 
         // Act
         var result = hasher.VerifyPassword("wrongpassword", hash);
