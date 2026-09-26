@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\PharmaSecure.Infrastructure.csproj": {}
+    "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\PharmaSecure.Infrastructure.csproj": {}
   },
   "projects": {
-    "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj": {
+    "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj",
+        "projectUniqueName": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj",
         "projectName": "PharmaSecure.Application",
-        "projectPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj",
+        "projectPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj",
         "packagesPath": "C:\\Users\\HoaHung\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\obj\\",
+        "outputPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files\\Microsoft Visual Studio\\Shared components, tools and SDKs\\NuGetPackages"
@@ -33,8 +33,8 @@
             "framework": "net8.0",
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj": {
-                "projectPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj"
+              "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj": {
+                "projectPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj"
               }
             }
           }
@@ -89,14 +89,14 @@
         }
       }
     },
-    "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj": {
+    "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj",
+        "projectUniqueName": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj",
         "projectName": "PharmaSecure.Domain",
-        "projectPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj",
+        "projectPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj",
         "packagesPath": "C:\\Users\\HoaHung\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\obj\\",
+        "outputPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files\\Microsoft Visual Studio\\Shared components, tools and SDKs\\NuGetPackages"
@@ -170,14 +170,14 @@
         }
       }
     },
-    "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\PharmaSecure.Infrastructure.csproj": {
+    "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\PharmaSecure.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\PharmaSecure.Infrastructure.csproj",
+        "projectUniqueName": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\PharmaSecure.Infrastructure.csproj",
         "projectName": "PharmaSecure.Infrastructure",
-        "projectPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\PharmaSecure.Infrastructure.csproj",
+        "projectPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\PharmaSecure.Infrastructure.csproj",
         "packagesPath": "C:\\Users\\HoaHung\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\obj\\",
+        "outputPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files\\Microsoft Visual Studio\\Shared components, tools and SDKs\\NuGetPackages"
@@ -199,11 +199,11 @@
             "framework": "net8.0",
             "targetAlias": "net8.0",
             "projectReferences": {
-              "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj": {
-                "projectPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj"
+              "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj": {
+                "projectPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Application\\PharmaSecure.Application.csproj"
               },
-              "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj": {
-                "projectPath": "C:\\Users\\HoaHung\\OneDrive\\Desktop\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj"
+              "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj": {
+                "projectPath": "D:\\PharmaChainSecurity\\backend\\PharmaSecure.Domain\\PharmaSecure.Domain.csproj"
               }
             }
           }

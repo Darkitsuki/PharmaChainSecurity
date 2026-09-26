@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PharmaSecure.Application.Features.Invoices;
-using PharmaSecure.Application.Features.Sales;
 using PharmaSecure.Application.Interfaces;
 
 namespace PharmaSecure.WebApi.Controllers;
@@ -11,21 +10,15 @@ namespace PharmaSecure.WebApi.Controllers;
 [Route("api/v1/invoices")]
 public sealed class InvoicesController : ControllerBase
 {
-    private readonly ICheckoutService checkoutService;
     private readonly IInvoiceQueryService invoiceQueryService;
     private readonly ICurrentUserContext currentUserContext;
-    private readonly IIdempotencyService idempotencyService;
 
     public InvoicesController(
-        ICheckoutService checkoutService,
         IInvoiceQueryService invoiceQueryService,
-        ICurrentUserContext currentUserContext,
-        IIdempotencyService idempotencyService)
+        ICurrentUserContext currentUserContext)
     {
-        this.checkoutService = checkoutService;
         this.invoiceQueryService = invoiceQueryService;
         this.currentUserContext = currentUserContext;
-        this.idempotencyService = idempotencyService;
     }
 
     [HttpGet]
@@ -94,45 +87,4 @@ public sealed class InvoicesController : ControllerBase
         return Ok(result);
     }
 
-    [HttpPost]
-    [Authorize(Roles = "OWNER,SALES")]
-    public async Task<ActionResult> CheckoutAsync(
-        [FromBody] CheckoutRequestBody request,
-        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (request.Lines is null || request.Lines.Count == 0)
-            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "At least one invoice line is required.");
-        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.UserId) || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
-            return Unauthorized();
-
-        var cacheKey = !string.IsNullOrWhiteSpace(idempotencyKey)
-            ? $"checkout:{currentUserContext.BranchId}:{idempotencyKey.Trim()}"
-            : null;
-
-        if (cacheKey is not null && idempotencyService.TryGet<CheckoutResponse>(cacheKey, out var cachedResponse) && cachedResponse is not null)
-        {
-            Response.Headers["X-Idempotent-Replayed"] = "true";
-            return StatusCode(StatusCodes.Status200OK, cachedResponse);
-        }
-
-        var result = await checkoutService.CheckoutAsync(
-            new CheckoutRequest(
-                currentUserContext.BranchId,
-                currentUserContext.UserId,
-                request.Lines.Select(line => new CheckoutLineRequest(line.DrugId, line.BatchId, line.Quantity)).ToArray()),
-            cancellationToken);
-
-        if (result.IsFailure)
-            return UnprocessableEntity(new ProblemDetails { Title = result.Error, Status = StatusCodes.Status422UnprocessableEntity });
-
-        if (cacheKey is not null)
-            idempotencyService.Set(cacheKey, result.Value, TimeSpan.FromHours(24));
-
-        return StatusCode(StatusCodes.Status201Created, result.Value);
-    }
 }
-
-public sealed record CheckoutRequestBody(IReadOnlyCollection<CheckoutLineBody> Lines);
-
-public sealed record CheckoutLineBody(string DrugId, string BatchId, int Quantity);

@@ -93,4 +93,34 @@ public class InvoiceSignatureTests
         // Assert
         Assert.False(isValid);
     }
+
+    [Fact]
+    public void VerifyIntegrity_WhenInvoiceIdentityChanges_ReturnsFalse()
+    {
+        var service = CreateSignatureService();
+        var createdDate = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var originalInvoice = new Invoice("HD20260101-004", "br-001", "us-001", createdDate, "invoice-001");
+        originalInvoice.AddItem(new InvoiceItem(originalInvoice.Id, "dr-001", "bt-001", 1, 35000m));
+        originalInvoice.MarkAsPaid();
+        originalInvoice.LockInvoice();
+
+        var signatureResult = service.SignInvoice(originalInvoice);
+        var digitalSignature = new DigitalSignature(
+            originalInvoice.Id,
+            signatureResult.HashValueSha256,
+            signatureResult.SignatureData,
+            signatureResult.CertificateSerial,
+            signatureResult.SignedAt);
+        var changedInvoiceId = new Invoice("HD20260101-004", "br-001", "us-001", createdDate, "invoice-002");
+        changedInvoiceId.AddItem(new InvoiceItem(changedInvoiceId.Id, "dr-001", "bt-001", 1, 35000m));
+        changedInvoiceId.MarkAsPaid();
+        changedInvoiceId.LockInvoice();
+        var changedCashier = new Invoice("HD20260101-004", "br-001", "us-002", createdDate, "invoice-001");
+        changedCashier.AddItem(new InvoiceItem(changedCashier.Id, "dr-001", "bt-001", 1, 35000m));
+        changedCashier.MarkAsPaid();
+        changedCashier.LockInvoice();
+
+        Assert.False(service.VerifyIntegrity(changedInvoiceId, digitalSignature));
+        Assert.False(service.VerifyIntegrity(changedCashier, digitalSignature));
+    }
 }

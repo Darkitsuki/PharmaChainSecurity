@@ -16,3 +16,12 @@ C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Infra
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\refint\PharmaSecure.Infrastructure.dll
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.pdb
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\ref\PharmaSecure.Infrastructure.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.csproj.AssemblyReference.cache
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.AssemblyInfoInputs.cache
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.AssemblyInfo.cs
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.csproj.CoreCompileInputs.cache
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.sourcelink.json
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\refint\PharmaSecure.Infrastructure.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Infrastructure\obj\Debug\net8.0\PharmaSecure.Infrastructure.pdb

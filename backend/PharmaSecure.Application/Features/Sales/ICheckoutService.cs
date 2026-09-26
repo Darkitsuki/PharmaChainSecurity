@@ -4,7 +4,9 @@ namespace PharmaSecure.Application.Features.Sales;
 
 public interface ICheckoutService
 {
-    Task<Result<CheckoutResponse>> CheckoutAsync(
+    Task<Result<CheckoutResponse>> ProcessCheckoutAsync(
         CheckoutRequest request,
+        string branchId,
+        string cashierId,
         CancellationToken cancellationToken = default);
 }

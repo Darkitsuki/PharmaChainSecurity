@@ -24,39 +24,44 @@ public sealed class CheckoutService : ICheckoutService
         this.digitalSignatureService = digitalSignatureService;
     }
 
-    public async Task<Result<CheckoutResponse>> CheckoutAsync(
+    public async Task<Result<CheckoutResponse>> ProcessCheckoutAsync(
         CheckoutRequest request,
+        string branchId,
+        string cashierId,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (string.IsNullOrWhiteSpace(request.BranchId) || string.IsNullOrWhiteSpace(request.CashierId))
+        if (string.IsNullOrWhiteSpace(branchId) || string.IsNullOrWhiteSpace(cashierId))
             return Result<CheckoutResponse>.Failure("Branch and cashier are required.");
         if (request.Lines is null || request.Lines.Count == 0)
             return Result<CheckoutResponse>.Failure("At least one invoice line is required.");
-        if (request.Lines.Any(line => string.IsNullOrWhiteSpace(line.DrugId) || string.IsNullOrWhiteSpace(line.BatchId) || line.Quantity <= 0))
+        if (request.Lines.Any(line => line is null || string.IsNullOrWhiteSpace(line.DrugId) || string.IsNullOrWhiteSpace(line.BatchId) || line.Quantity <= 0))
             return Result<CheckoutResponse>.Failure("Invoice lines are invalid.");
         if (request.Lines.GroupBy(line => $"{line.DrugId}\u001f{line.BatchId}").Any(group => group.Count() > 1))
             return Result<CheckoutResponse>.Failure("Duplicate inventory lines are not allowed.");
 
         try
         {
-            await unitOfWork.BeginTransactionAsync(request.BranchId, cancellationToken);
+            await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
 
             var invoice = new Invoice(
                 invoiceNumber: $"HD{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24],
-                branchId: request.BranchId,
-                cashierId: request.CashierId);
+                branchId: branchId,
+                cashierId: cashierId);
             var lockedInventory = new List<DomainInventory>();
 
             foreach (var line in request.Lines.OrderBy(line => line.DrugId).ThenBy(line => line.BatchId))
             {
                 var inventory = await inventoryRepository.LockRowForUpdateAsync(
-                    request.BranchId,
+                    branchId,
                     line.DrugId,
                     line.BatchId,
                     cancellationToken);
                 if (inventory is null)
                     return await RollbackAsync<CheckoutResponse>("Inventory row was not found.", cancellationToken);
+
+                if (line.Quantity > inventory.Quantity)
+                    throw new InsufficientStockException(line.DrugId, line.BatchId, inventory.Quantity, line.Quantity);
 
                 var unitPrice = await invoicePersistence.GetDrugPriceAsync(line.DrugId, cancellationToken);
                 if (unitPrice is null)
@@ -86,19 +91,32 @@ public sealed class CheckoutService : ICheckoutService
             return Result<CheckoutResponse>.Success(new CheckoutResponse(
                 invoice.Id,
                 invoice.InvoiceNumber,
+                invoice.CreatedDate,
                 invoice.TotalAmount,
-                signatureResult.HashValueSha256));
+                invoice.BranchId,
+                invoice.CashierId,
+                invoice.Items.Select(item => new CheckoutInvoiceItemResponse(
+                    item.DrugId,
+                    item.BatchId,
+                    item.Quantity,
+                    item.UnitPrice,
+                    item.SubTotal)).ToArray(),
+                new CheckoutSignatureResponse(
+                    signatureResult.HashValueSha256,
+                    signatureResult.SignatureData,
+                    signatureResult.CertificateSerial,
+                    signatureResult.SignedAt)));
         }
         catch
         {
-            await unitOfWork.RollbackAsync(cancellationToken);
-            return Result<CheckoutResponse>.Failure("Checkout failed and was rolled back.");
+            await unitOfWork.RollbackAsync(CancellationToken.None);
+            throw;
         }
     }
 
     private async Task<Result<T>> RollbackAsync<T>(string error, CancellationToken cancellationToken)
     {
-        await unitOfWork.RollbackAsync(cancellationToken);
+        await unitOfWork.RollbackAsync(CancellationToken.None);
         return Result<T>.Failure(error);
     }
 }

@@ -24,8 +24,9 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
     public InvoiceSignatureResult SignInvoice(Invoice invoice)
     {
         ArgumentNullException.ThrowIfNull(invoice);
-        var hash = ComputeHash(invoice);
-        var signature = SignHash(hash);
+        var canonicalData = GetCanonicalData(invoice);
+        var hash = SHA256.HashData(canonicalData);
+        var signature = SignData(canonicalData);
         var signedAt = DateTime.UtcNow;
         var certificateSerial = ResolveValue(options.CertificateSerial, "PHARMA_CERT_SERIAL");
         return new InvoiceSignatureResult(Convert.ToHexString(hash).ToLowerInvariant(), signature, certificateSerial, signedAt);
@@ -36,34 +37,26 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
         ArgumentNullException.ThrowIfNull(invoice);
         ArgumentNullException.ThrowIfNull(digitalSignature);
 
-        var hash = ComputeHash(invoice);
+        var canonicalData = GetCanonicalData(invoice);
+        var hash = SHA256.HashData(canonicalData);
         var expectedHash = Convert.ToHexString(hash).ToLowerInvariant();
         if (!CryptographicOperations.FixedTimeEquals(
                 Encoding.ASCII.GetBytes(expectedHash),
                 Encoding.ASCII.GetBytes(digitalSignature.HashValueSha256.ToLowerInvariant())))
             return false;
 
-        return VerifyHash(hash, digitalSignature.SignatureData);
+        return VerifyData(canonicalData, digitalSignature.SignatureData);
     }
 
-    private byte[] ComputeHash(Invoice invoice)
+    private static byte[] GetCanonicalData(Invoice invoice)
     {
         var canonical = new StringBuilder()
-            .Append(invoice.InvoiceNumber).Append('|')
-            .Append(invoice.TotalAmount.ToString("F2", CultureInfo.InvariantCulture)).Append('|')
-            .Append(invoice.CreatedDate.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+            .Append(invoice.Id).Append('|')
+            .Append(invoice.TotalAmount.ToString(CultureInfo.InvariantCulture)).Append('|')
+            .Append(invoice.CreatedDate.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)).Append('|')
+            .Append(invoice.CashierId);
 
-        foreach (var item in invoice.Items.OrderBy(item => item.DrugId).ThenBy(item => item.BatchId))
-        {
-            canonical.Append('|')
-                .Append(item.DrugId).Append('|')
-                .Append(item.BatchId).Append('|')
-                .Append(item.Quantity.ToString(CultureInfo.InvariantCulture)).Append('|')
-                .Append(item.UnitPrice.ToString("F2", CultureInfo.InvariantCulture)).Append('|')
-                .Append(item.SubTotal.ToString("F2", CultureInfo.InvariantCulture));
-        }
-
-        return SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));
+        return Encoding.UTF8.GetBytes(canonical.ToString());
     }
 
     private byte[] LoadPrivateKey()
@@ -79,16 +72,16 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
         }
     }
 
-    private string SignHash(byte[] hash)
+    private string SignData(byte[] canonicalData)
     {
         var privateKey = PrivateKeyFactory.CreateKey(LoadPrivateKey());
         var signer = new RsaDigestSigner(new Sha256Digest());
         signer.Init(true, privateKey);
-        signer.BlockUpdate(hash, 0, hash.Length);
+        signer.BlockUpdate(canonicalData, 0, canonicalData.Length);
         return Convert.ToBase64String(signer.GenerateSignature());
     }
 
-    private bool VerifyHash(byte[] hash, string signatureData)
+    private bool VerifyData(byte[] canonicalData, string signatureData)
     {
         try
         {
@@ -99,7 +92,7 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
             var publicKey = new RsaKeyParameters(false, rsaPrivateKey.Modulus, rsaPrivateKey.PublicExponent);
             var signer = new RsaDigestSigner(new Sha256Digest());
             signer.Init(false, publicKey);
-            signer.BlockUpdate(hash, 0, hash.Length);
+            signer.BlockUpdate(canonicalData, 0, canonicalData.Length);
             return signer.VerifySignature(Convert.FromBase64String(signatureData));
         }
         catch (FormatException)

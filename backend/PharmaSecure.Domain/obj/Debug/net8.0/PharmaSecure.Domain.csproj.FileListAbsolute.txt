@@ -10,3 +10,15 @@ C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Domai
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\refint\PharmaSecure.Domain.dll
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\PharmaSecure.Domain.pdb
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\ref\PharmaSecure.Domain.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\bin\Debug\net8.0\PharmaSecure.Domain.deps.json
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\bin\Debug\net8.0\PharmaSecure.Domain.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\bin\Debug\net8.0\PharmaSecure.Domain.pdb
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\PharmaSecure.Domain.GeneratedMSBuildEditorConfig.editorconfig
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\PharmaSecure.Domain.AssemblyInfoInputs.cache
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\PharmaSecure.Domain.AssemblyInfo.cs
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\PharmaSecure.Domain.csproj.CoreCompileInputs.cache
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\PharmaSecure.Domain.sourcelink.json
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\PharmaSecure.Domain.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\refint\PharmaSecure.Domain.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\PharmaSecure.Domain.pdb
+D:\PharmaChainSecurity\backend\PharmaSecure.Domain\obj\Debug\net8.0\ref\PharmaSecure.Domain.dll

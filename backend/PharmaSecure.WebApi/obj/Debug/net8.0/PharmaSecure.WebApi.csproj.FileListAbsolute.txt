@@ -53,3 +53,6 @@ C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.WebAp
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.WebApi\bin\Debug\net8.0\Microsoft.IdentityModel.Tokens.dll
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.WebApi\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
 C:\Users\HoaHung\OneDrive\Desktop\PharmaChainSecurity\backend\PharmaSecure.WebApi\bin\Debug\net8.0\BouncyCastle.Cryptography.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.WebApi\obj\Debug\net8.0\PharmaSecure.WebApi.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.WebApi\obj\Debug\net8.0\refint\PharmaSecure.WebApi.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.WebApi\obj\Debug\net8.0\PharmaSecure.WebApi.pdb

@@ -6,12 +6,27 @@ public sealed record CheckoutLineRequest(
     int Quantity);
 
 public sealed record CheckoutRequest(
-    string BranchId,
-    string CashierId,
-    IReadOnlyCollection<CheckoutLineRequest> Lines);
+    IReadOnlyCollection<CheckoutLineRequest>? Lines);
 
 public sealed record CheckoutResponse(
     string InvoiceId,
     string InvoiceNumber,
+    DateTime CreatedDate,
     decimal TotalAmount,
-    string HashValueSha256);
+    string BranchId,
+    string CashierId,
+    IReadOnlyCollection<CheckoutInvoiceItemResponse> Items,
+    CheckoutSignatureResponse Signature);
+
+public sealed record CheckoutInvoiceItemResponse(
+    string DrugId,
+    string BatchId,
+    int Quantity,
+    decimal UnitPrice,
+    decimal SubTotal);
+
+public sealed record CheckoutSignatureResponse(
+    string HashValueSha256,
+    string SignatureData,
+    string CertificateSerial,
+    DateTime SignedAt);
