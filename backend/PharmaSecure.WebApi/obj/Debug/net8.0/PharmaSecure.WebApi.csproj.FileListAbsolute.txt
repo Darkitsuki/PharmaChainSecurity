@@ -108,3 +108,4 @@ D:\PharmaChainSecurity\backend\PharmaSecure.WebApi\obj\Debug\net8.0\swae.build.e
 D:\PharmaChainSecurity\backend\PharmaSecure.WebApi\obj\Debug\net8.0\PharmaSe.646D630D.Up2Date
 D:\PharmaChainSecurity\backend\PharmaSecure.WebApi\obj\Debug\net8.0\PharmaSecure.WebApi.genruntimeconfig.cache
 D:\PharmaChainSecurity\backend\PharmaSecure.WebApi\obj\Debug\net8.0\ref\PharmaSecure.WebApi.dll
+D:\PharmaChainSecurity\backend\PharmaSecure.WebApi\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
