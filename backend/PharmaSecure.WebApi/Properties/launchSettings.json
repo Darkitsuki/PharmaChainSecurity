@@ -7,7 +7,8 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DB_USER": "PHARMA_ADMIN",
         "DB_PASSWORD": "YourPassword123",
-        "DB_DATA_SOURCE": "localhost:1521/FREEPDB1"
+        "DB_DATA_SOURCE": "localhost:1521/FREEPDB1",
+        "PHARMA_CERT_SERIAL": "DEV-ONLY-LOCAL"
       },
       "applicationUrl": "https://localhost:55198;http://localhost:55199"
     }

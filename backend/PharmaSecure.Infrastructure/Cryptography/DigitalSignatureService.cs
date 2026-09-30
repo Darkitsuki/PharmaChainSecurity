@@ -114,13 +114,15 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
 
     private static string ResolveValue(string value, string environmentVariable)
     {
+        var environmentValue = Environment.GetEnvironmentVariable(environmentVariable);
+        if (!string.IsNullOrWhiteSpace(environmentValue) &&
+            !environmentValue.Equals($"${{{environmentVariable}}}", StringComparison.Ordinal))
+            return environmentValue;
+
         if (!string.IsNullOrWhiteSpace(value) && !value.Equals($"${{{environmentVariable}}}", StringComparison.Ordinal))
             return value;
 
-        var environmentValue = Environment.GetEnvironmentVariable(environmentVariable);
-        if (string.IsNullOrWhiteSpace(environmentValue))
-            throw new InvalidOperationException($"Environment variable '{environmentVariable}' is required.");
-
-        return environmentValue;
+        throw new InvalidOperationException(
+            $"Configure '{environmentVariable}' through application settings or the environment.");
     }
 }

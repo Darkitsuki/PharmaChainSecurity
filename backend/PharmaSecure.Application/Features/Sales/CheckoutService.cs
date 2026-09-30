@@ -57,6 +57,8 @@ public sealed class CheckoutService : ICheckoutService
                     cancellationToken);
                 if (inventory is null)
                     return await RollbackAsync<CheckoutResponse>("Inventory row was not found.", cancellationToken);
+                if (line.Quantity > inventory.Quantity)
+                    return await RollbackAsync<CheckoutResponse>("Insufficient stock for the selected batch.", cancellationToken);
 
                 var unitPrice = await invoicePersistence.GetDrugPriceAsync(line.DrugId, cancellationToken);
                 if (unitPrice is null)
@@ -69,7 +71,16 @@ public sealed class CheckoutService : ICheckoutService
 
             invoice.MarkAsPaid();
             invoice.LockInvoice();
-            var signatureResult = digitalSignatureService.SignInvoice(invoice);
+            InvoiceSignatureResult signatureResult;
+            try
+            {
+                signatureResult = digitalSignatureService.SignInvoice(invoice);
+            }
+            catch (Exception exception)
+            {
+                throw new DigitalSignatureException("Invoice signing failed.", exception);
+            }
+
             var digitalSignature = new DigitalSignature(
                 invoice.Id,
                 signatureResult.HashValueSha256,
@@ -91,8 +102,8 @@ public sealed class CheckoutService : ICheckoutService
         }
         catch
         {
-            await unitOfWork.RollbackAsync(cancellationToken);
-            return Result<CheckoutResponse>.Failure("Checkout failed and was rolled back.");
+            await unitOfWork.RollbackAsync(CancellationToken.None);
+            throw;
         }
     }
 
