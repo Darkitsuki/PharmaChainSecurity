@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -48,22 +47,7 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
 
     private byte[] ComputeHash(Invoice invoice)
     {
-        var canonical = new StringBuilder()
-            .Append(invoice.InvoiceNumber).Append('|')
-            .Append(invoice.TotalAmount.ToString("F2", CultureInfo.InvariantCulture)).Append('|')
-            .Append(invoice.CreatedDate.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
-
-        foreach (var item in invoice.Items.OrderBy(item => item.DrugId).ThenBy(item => item.BatchId))
-        {
-            canonical.Append('|')
-                .Append(item.DrugId).Append('|')
-                .Append(item.BatchId).Append('|')
-                .Append(item.Quantity.ToString(CultureInfo.InvariantCulture)).Append('|')
-                .Append(item.UnitPrice.ToString("F2", CultureInfo.InvariantCulture)).Append('|')
-                .Append(item.SubTotal.ToString("F2", CultureInfo.InvariantCulture));
-        }
-
-        return SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));
+        return SHA256.HashData(Encoding.UTF8.GetBytes(invoice.GetCanonicalPayload()));
     }
 
     private byte[] LoadPrivateKey()

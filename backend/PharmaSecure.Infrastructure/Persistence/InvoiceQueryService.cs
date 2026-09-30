@@ -183,7 +183,8 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
 
             var invId = headerReader.GetString(0);
             var invNo = headerReader.GetString(1);
-            var createdDate = headerReader.GetDateTime(2);
+            var createdDate = DateTime.SpecifyKind(headerReader.GetDateTime(2), DateTimeKind.Utc);
+            var storedTotalAmount = headerReader.GetDecimal(3);
             var bId = headerReader.GetString(4);
             var cashierId = headerReader.GetString(5);
             await headerReader.CloseAsync();
@@ -238,7 +239,8 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             await sigReader.CloseAsync();
 
             var digitalSignature = new DigitalSignature(invId, storedHash, signatureData, certSerial, signedAt);
-            var isValid = digitalSignatureService.VerifyIntegrity(invoice, digitalSignature);
+            var isValid = invoice.TotalAmount == storedTotalAmount &&
+                digitalSignatureService.VerifyIntegrity(invoice, digitalSignature);
 
             await unitOfWork.CommitAsync(cancellationToken);
             return new InvoiceVerificationResult(

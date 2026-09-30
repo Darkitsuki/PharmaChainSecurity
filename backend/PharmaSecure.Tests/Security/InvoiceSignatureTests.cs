@@ -93,4 +93,88 @@ public class InvoiceSignatureTests
         // Assert
         Assert.False(isValid);
     }
+
+    [Fact]
+    public void VerifyIntegrity_AfterOracleTimestampRoundTrip_ReturnsTrue()
+    {
+        var service = CreateSignatureService();
+        var createdDate = new DateTime(2026, 9, 30, 12, 34, 56, DateTimeKind.Utc).AddTicks(1234567);
+        var signedInvoice = new Invoice("HD20260930-001", "br-001", "us-001", createdDate, "iv-001");
+        signedInvoice.AddItem(new InvoiceItem(signedInvoice.Id, "dr-001", "bt-001", 2, 35000m));
+        signedInvoice.MarkAsPaid();
+        signedInvoice.LockInvoice();
+
+        var signatureResult = service.SignInvoice(signedInvoice);
+        var databaseTimestamp = DateTime.SpecifyKind(signedInvoice.CreatedDate, DateTimeKind.Unspecified);
+        var reconstructedInvoice = new Invoice(
+            signedInvoice.InvoiceNumber,
+            signedInvoice.BranchId,
+            signedInvoice.CashierId,
+            databaseTimestamp,
+            signedInvoice.Id);
+        reconstructedInvoice.AddItem(new InvoiceItem(reconstructedInvoice.Id, "dr-001", "bt-001", 2, 35000m));
+        reconstructedInvoice.MarkAsPaid();
+        reconstructedInvoice.LockInvoice();
+
+        var digitalSignature = new DigitalSignature(
+            signedInvoice.Id,
+            signatureResult.HashValueSha256,
+            signatureResult.SignatureData,
+            signatureResult.CertificateSerial,
+            signatureResult.SignedAt);
+
+        Assert.True(service.VerifyIntegrity(reconstructedInvoice, digitalSignature));
+    }
+
+    [Fact]
+    public void GetCanonicalPayload_WhenItemsAreAddedInDifferentOrders_ReturnsSamePayload()
+    {
+        var createdDate = new DateTime(2026, 9, 30, 12, 34, 56, DateTimeKind.Utc);
+        var firstInvoice = new Invoice("HD20260930-003", "br-001", "us-001", createdDate, "iv-003");
+        firstInvoice.AddItem(new InvoiceItem(firstInvoice.Id, "dr-002", "bt-002", 1, 20m));
+        firstInvoice.AddItem(new InvoiceItem(firstInvoice.Id, "dr-001", "bt-001", 2, 10m));
+
+        var secondInvoice = new Invoice("HD20260930-003", "br-001", "us-001", createdDate, "iv-003");
+        secondInvoice.AddItem(new InvoiceItem(secondInvoice.Id, "dr-001", "bt-001", 2, 10m));
+        secondInvoice.AddItem(new InvoiceItem(secondInvoice.Id, "dr-002", "bt-002", 1, 20m));
+
+        Assert.Equal(firstInvoice.GetCanonicalPayload(), secondInvoice.GetCanonicalPayload());
+        Assert.Contains("2026-09-30T12:34:56.000000Z", firstInvoice.GetCanonicalPayload());
+    }
+
+    [Theory]
+    [InlineData("iv-002", "br-001", "us-001")]
+    [InlineData("iv-001", "br-002", "us-001")]
+    [InlineData("iv-001", "br-001", "us-002")]
+    public void VerifyIntegrity_WhenInvoiceIdentityChanges_ReturnsFalse(
+        string invoiceId,
+        string branchId,
+        string cashierId)
+    {
+        var service = CreateSignatureService();
+        var createdDate = new DateTime(2026, 9, 30, 12, 34, 56, DateTimeKind.Utc);
+        var signedInvoice = new Invoice("HD20260930-002", "br-001", "us-001", createdDate, "iv-001");
+        signedInvoice.AddItem(new InvoiceItem(signedInvoice.Id, "dr-001", "bt-001", 1, 35000m));
+        signedInvoice.MarkAsPaid();
+        signedInvoice.LockInvoice();
+
+        var signatureResult = service.SignInvoice(signedInvoice);
+        var tamperedInvoice = new Invoice(
+            signedInvoice.InvoiceNumber,
+            branchId,
+            cashierId,
+            signedInvoice.CreatedDate,
+            invoiceId);
+        tamperedInvoice.AddItem(new InvoiceItem(tamperedInvoice.Id, "dr-001", "bt-001", 1, 35000m));
+        tamperedInvoice.MarkAsPaid();
+        tamperedInvoice.LockInvoice();
+        var digitalSignature = new DigitalSignature(
+            signedInvoice.Id,
+            signatureResult.HashValueSha256,
+            signatureResult.SignatureData,
+            signatureResult.CertificateSerial,
+            signatureResult.SignedAt);
+
+        Assert.False(service.VerifyIntegrity(tamperedInvoice, digitalSignature));
+    }
 }
