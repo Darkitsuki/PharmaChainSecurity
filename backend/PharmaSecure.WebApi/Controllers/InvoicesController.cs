@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Features.Invoices;
 using PharmaSecure.Application.Features.Sales;
 using PharmaSecure.Application.Interfaces;
@@ -15,17 +16,20 @@ public sealed class InvoicesController : ControllerBase
     private readonly IInvoiceQueryService invoiceQueryService;
     private readonly ICurrentUserContext currentUserContext;
     private readonly IIdempotencyService idempotencyService;
+    private readonly ILogger<InvoicesController> logger;
 
     public InvoicesController(
         ICheckoutService checkoutService,
         IInvoiceQueryService invoiceQueryService,
         ICurrentUserContext currentUserContext,
-        IIdempotencyService idempotencyService)
+        IIdempotencyService idempotencyService,
+        ILogger<InvoicesController> logger)
     {
         this.checkoutService = checkoutService;
         this.invoiceQueryService = invoiceQueryService;
         this.currentUserContext = currentUserContext;
         this.idempotencyService = idempotencyService;
+        this.logger = logger;
     }
 
     [HttpGet]
@@ -95,6 +99,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpPost]
+    [HttpPost("~/api/v1/checkout")]
     [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult> CheckoutAsync(
         [FromBody] CheckoutRequestBody request,
@@ -116,12 +121,32 @@ public sealed class InvoicesController : ControllerBase
             return StatusCode(StatusCodes.Status200OK, cachedResponse);
         }
 
-        var result = await checkoutService.CheckoutAsync(
-            new CheckoutRequest(
-                currentUserContext.BranchId,
-                currentUserContext.UserId,
-                request.Lines.Select(line => new CheckoutLineRequest(line.DrugId, line.BatchId, line.Quantity)).ToArray()),
-            cancellationToken);
+        Result<CheckoutResponse> result;
+        try
+        {
+            result = await checkoutService.CheckoutAsync(
+                new CheckoutRequest(
+                    currentUserContext.BranchId,
+                    currentUserContext.UserId,
+                    request.Lines.Select(line => new CheckoutLineRequest(line.DrugId, line.BatchId, line.Quantity)).ToArray()),
+                cancellationToken);
+        }
+        catch (DigitalSignatureException exception)
+        {
+            logger.LogError(exception, "Invoice signing failed during checkout for branch {BranchId}", currentUserContext.BranchId);
+            return Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Invoice signing failed.",
+                detail: "Checkout was rolled back because the invoice could not be signed.");
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Checkout failed for branch {BranchId}", currentUserContext.BranchId);
+            return Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Checkout failed.",
+                detail: "Checkout could not be completed due to an internal error.");
+        }
 
         if (result.IsFailure)
             return UnprocessableEntity(new ProblemDetails { Title = result.Error, Status = StatusCodes.Status422UnprocessableEntity });

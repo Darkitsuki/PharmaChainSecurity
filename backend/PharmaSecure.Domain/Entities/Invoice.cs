@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using PharmaSecure.Domain.Enums;
 
 namespace PharmaSecure.Domain.Entities;
@@ -21,7 +23,14 @@ public sealed class Invoice : EntityBase<string>
         InvoiceNumber = string.IsNullOrWhiteSpace(invoiceNumber) ? throw new ArgumentException("Invoice number is required.", nameof(invoiceNumber)) : invoiceNumber;
         BranchId = string.IsNullOrWhiteSpace(branchId) ? throw new ArgumentException("Branch ID is required.", nameof(branchId)) : branchId;
         CashierId = string.IsNullOrWhiteSpace(cashierId) ? throw new ArgumentException("Cashier ID is required.", nameof(cashierId)) : cashierId;
-        CreatedDate = createdDate ?? DateTime.UtcNow;
+        var timestamp = createdDate ?? DateTime.UtcNow;
+        timestamp = timestamp.Kind switch
+        {
+            DateTimeKind.Local => timestamp.ToUniversalTime(),
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc),
+            _ => timestamp
+        };
+        CreatedDate = new DateTime(timestamp.Ticks - timestamp.Ticks % 10, DateTimeKind.Utc);
         Status = InvoiceStatus.Draft;
     }
 
@@ -44,6 +53,29 @@ public sealed class Invoice : EntityBase<string>
     public IReadOnlyCollection<InvoiceItem> Items => items;
 
     public DigitalSignature? DigitalSignature { get; private set; }
+
+    public string GetCanonicalPayload()
+    {
+        var canonical = new StringBuilder()
+            .Append(Id).Append('|')
+            .Append(InvoiceNumber).Append('|')
+            .Append(CreatedDate.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", CultureInfo.InvariantCulture)).Append('|')
+            .Append(TotalAmount.ToString("F2", CultureInfo.InvariantCulture)).Append('|')
+            .Append(BranchId).Append('|')
+            .Append(CashierId);
+
+        foreach (var item in items.OrderBy(item => item.DrugId).ThenBy(item => item.BatchId))
+        {
+            canonical.Append('|')
+                .Append(item.DrugId).Append('|')
+                .Append(item.BatchId).Append('|')
+                .Append(item.Quantity.ToString(CultureInfo.InvariantCulture)).Append('|')
+                .Append(item.UnitPrice.ToString("F2", CultureInfo.InvariantCulture)).Append('|')
+                .Append(item.SubTotal.ToString("F2", CultureInfo.InvariantCulture));
+        }
+
+        return canonical.ToString();
+    }
 
     public void AddItem(InvoiceItem item)
     {

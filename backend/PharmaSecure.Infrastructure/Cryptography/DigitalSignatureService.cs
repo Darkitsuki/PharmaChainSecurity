@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
@@ -48,22 +47,7 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
 
     private byte[] ComputeHash(Invoice invoice)
     {
-        var canonical = new StringBuilder()
-            .Append(invoice.InvoiceNumber).Append('|')
-            .Append(invoice.TotalAmount.ToString("F2", CultureInfo.InvariantCulture)).Append('|')
-            .Append(invoice.CreatedDate.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
-
-        foreach (var item in invoice.Items.OrderBy(item => item.DrugId).ThenBy(item => item.BatchId))
-        {
-            canonical.Append('|')
-                .Append(item.DrugId).Append('|')
-                .Append(item.BatchId).Append('|')
-                .Append(item.Quantity.ToString(CultureInfo.InvariantCulture)).Append('|')
-                .Append(item.UnitPrice.ToString("F2", CultureInfo.InvariantCulture)).Append('|')
-                .Append(item.SubTotal.ToString("F2", CultureInfo.InvariantCulture));
-        }
-
-        return SHA256.HashData(Encoding.UTF8.GetBytes(canonical.ToString()));
+        return SHA256.HashData(Encoding.UTF8.GetBytes(invoice.GetCanonicalPayload()));
     }
 
     private byte[] LoadPrivateKey()
@@ -114,13 +98,15 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
 
     private static string ResolveValue(string value, string environmentVariable)
     {
+        var environmentValue = Environment.GetEnvironmentVariable(environmentVariable);
+        if (!string.IsNullOrWhiteSpace(environmentValue) &&
+            !environmentValue.Equals($"${{{environmentVariable}}}", StringComparison.Ordinal))
+            return environmentValue;
+
         if (!string.IsNullOrWhiteSpace(value) && !value.Equals($"${{{environmentVariable}}}", StringComparison.Ordinal))
             return value;
 
-        var environmentValue = Environment.GetEnvironmentVariable(environmentVariable);
-        if (string.IsNullOrWhiteSpace(environmentValue))
-            throw new InvalidOperationException($"Environment variable '{environmentVariable}' is required.");
-
-        return environmentValue;
+        throw new InvalidOperationException(
+            $"Configure '{environmentVariable}' through application settings or the environment.");
     }
 }
