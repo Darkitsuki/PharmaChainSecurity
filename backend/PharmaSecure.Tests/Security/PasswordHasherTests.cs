@@ -6,12 +6,39 @@ namespace PharmaSecure.Tests.Security;
 public class PasswordHasherTests
 {
     [Fact]
+    public void HashPassword_WithValidPassword_GeneratesVerifiableHash()
+    {
+        // Arrange
+        var hasher = new BouncyCastlePasswordHasher();
+
+        // Act
+        var hash = hasher.HashPassword("secure-password");
+
+        // Assert
+        Assert.False(string.IsNullOrWhiteSpace(hash));
+        Assert.StartsWith("$2", hash);
+        Assert.True(hasher.VerifyPassword("secure-password", hash));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData(null)]
+    public void HashPassword_WithNullOrWhitespacePassword_ThrowsArgumentException(string? password)
+    {
+        // Arrange
+        var hasher = new BouncyCastlePasswordHasher();
+
+        // Act & Assert
+        Assert.ThrowsAny<ArgumentException>(() => hasher.HashPassword(password!));
+    }
+
+    [Fact]
     public void VerifyPassword_WithCorrectPassword_ReturnsTrue()
     {
         // Arrange
         var hasher = new BouncyCastlePasswordHasher();
-        // Standard BCrypt hash for "123456" as seeded in database/seed.sql
-        var hash = "$2a$12$eImiTXuWVxjM72fGC47AouX8L.g3qK8zG9/mP83D4qgX4mN3e2P3q";
+        var hash = hasher.HashPassword("123456");
 
         // Act
         var result = hasher.VerifyPassword("123456", hash);
@@ -25,7 +52,7 @@ public class PasswordHasherTests
     {
         // Arrange
         var hasher = new BouncyCastlePasswordHasher();
-        var hash = "$2a$12$eImiTXuWVxjM72fGC47AouX8L.g3qK8zG9/mP83D4qgX4mN3e2P3q";
+        var hash = hasher.HashPassword("123456");
 
         // Act
         var result = hasher.VerifyPassword("wrongpassword", hash);
