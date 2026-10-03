@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PharmaSecure.Application.Features.Inventory;
@@ -37,6 +38,36 @@ public sealed class InventoryController : ControllerBase
         return Ok(await inventoryQueryService.GetPageAsync(branchId, page, pageSize, cancellationToken));
     }
 
+    [HttpGet("expiring-soon")]
+    public async Task<ActionResult<IReadOnlyCollection<InventoryAlertResponse>>> GetExpiringSoonAsync(
+        [FromQuery] int days = 90,
+        CancellationToken cancellationToken = default)
+    {
+        if (days is < 1 or > 365)
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Days must be between 1 and 365.");
+
+        var branchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
+
+        return Ok(await inventoryQueryService.GetExpiringSoonAsync(branchId, days, cancellationToken));
+    }
+
+    [HttpGet("low-stock")]
+    public async Task<ActionResult<IReadOnlyCollection<InventoryAlertResponse>>> GetLowStockAsync(
+        [FromQuery] int threshold = 10,
+        CancellationToken cancellationToken = default)
+    {
+        if (threshold is < 0 or > 1000)
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Threshold must be between 0 and 1000.");
+
+        var branchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
+
+        return Ok(await inventoryQueryService.GetLowStockAsync(branchId, threshold, cancellationToken));
+    }
+
     [HttpPost("adjust")]
     [Authorize(Roles = "OWNER,WAREHOUSE")]
     public async Task<ActionResult> AdjustStockAsync(
@@ -54,12 +85,15 @@ public sealed class InventoryController : ControllerBase
         if (string.IsNullOrWhiteSpace(branchId))
             return Forbid();
 
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+
         await inventoryRepository.AdjustStockAsync(
             branchId,
             request.DrugId,
             request.BatchId,
             request.NewQuantity,
             request.Reason,
+            userId,
             cancellationToken);
 
         return NoContent();

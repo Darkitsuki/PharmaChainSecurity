@@ -20,5 +20,6 @@ public interface IInventoryRepository
         string batchId,
         int newQuantity,
         string reason,
+        string? userId = null,
         CancellationToken cancellationToken = default);
 }
