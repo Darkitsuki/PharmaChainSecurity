@@ -83,3 +83,50 @@ export interface InvoiceVerificationResult {
   signedAt: string;
   message: string;
 }
+
+export interface InventoryAlert {
+  branchId: string;
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  batchId: string;
+  batchNo: string;
+  expiryDate: string;
+  quantity: number;
+}
+
+export interface InvoiceItem {
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  batchId: string;
+  quantity: number;
+  unitPrice: number;
+  subTotal: number;
+}
+
+export interface InvoiceSignature {
+  hashValueSha256: string;
+  signatureData: string;
+  certificateSerial: string;
+  signedAt: string;
+}
+
+export interface InvoiceDetail {
+  invoiceId: string;
+  invoiceNumber: string;
+  createdDate: string;
+  totalAmount: number;
+  branchId: string;
+  cashierId: string;
+  items: InvoiceItem[];
+  signature: InvoiceSignature | null;
+}
+
+export interface StockAdjustmentPayload {
+  drugId: string;
+  batchId: string;
+  newQuantity: number;
+  reason: string;
+}
+
