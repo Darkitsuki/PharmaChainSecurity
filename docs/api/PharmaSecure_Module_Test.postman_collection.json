@@ -1,0 +1,143 @@
+{
+  "info": {
+    "name": "PharmaSecure API - Phân Hệ 1 (Tồn Kho & Hóa Đơn)",
+    "description": "Postman Collection kiểm thử tự động các endpoint của Phân hệ 1 theo tiêu chuẩn Rule 08 và Rule 06.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:55198",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invoiceId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Auth - Login (Thủ Kho)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"thukho_cn1\",\n  \"password\": \"P@ssword123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "02. Inventory - Get Page",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/inventory?page=1&pageSize=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "inventory"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "pageSize", "value": "20" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "03. Inventory - Get Expiring Soon (30/60/90 days)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/inventory/expiring-soon?days=90",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "inventory", "expiring-soon"],
+          "query": [
+            { "key": "days", "value": "90" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "04. Inventory - Get Low Stock (<= 10 units)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/inventory/low-stock?threshold=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "inventory", "low-stock"],
+          "query": [
+            { "key": "threshold", "value": "10" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "05. Inventory - Adjust Stock",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"drugId\": \"DRUG_001\",\n  \"batchId\": \"BATCH_001\",\n  \"newQuantity\": 150,\n  \"reason\": \"Kiểm kê định kỳ chi nhánh 1\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/inventory/adjust",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "inventory", "adjust"]
+        }
+      }
+    },
+    {
+      "name": "06. Invoices - Get Invoice Detail & Signature",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/invoices/{{invoiceId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "invoices", "{{invoiceId}}"]
+        }
+      }
+    },
+    {
+      "name": "07. Invoices - Verify Digital Signature",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/invoices/{{invoiceId}}/verify-signature",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "invoices", "{{invoiceId}}", "verify-signature"]
+        }
+      }
+    }
+  ]
+}
