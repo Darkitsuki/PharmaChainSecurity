@@ -130,3 +130,70 @@ export interface StockAdjustmentPayload {
   reason: string;
 }
 
+export interface Supplier {
+  id: string;
+  supplierCode: string;
+  supplierName: string;
+  contactPerson: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+  address: string | null;
+  taxCode: string | null;
+  isActive: boolean;
+  createdDate: string;
+}
+
+export interface CreateSupplierPayload {
+  supplierCode: string;
+  supplierName: string;
+  contactPerson?: string;
+  phoneNumber?: string;
+  email?: string;
+  address?: string;
+  taxCode?: string;
+}
+
+export interface GoodsReceiptItem {
+  id: string;
+  receiptId: string;
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  batchId: string;
+  batchNo: string;
+  expiryDate: string;
+  quantity: number;
+  importPrice: number;
+  subTotal: number;
+}
+
+export interface GoodsReceipt {
+  id: string;
+  receiptNo: string;
+  branchId: string;
+  supplierId: string;
+  supplierName: string;
+  warehouseStaffId: string;
+  warehouseStaffName: string | null;
+  totalAmount: number;
+  note: string | null;
+  status: string;
+  createdDate: string;
+  items: GoodsReceiptItem[];
+}
+
+export interface CreateGoodsReceiptItemPayload {
+  drugId: string;
+  batchNo: string;
+  expiryDate: string;
+  mfgDate?: string | null;
+  quantity: number;
+  importPrice: number;
+}
+
+export interface CreateGoodsReceiptPayload {
+  supplierId: string;
+  note?: string;
+  items: CreateGoodsReceiptItemPayload[];
+}
+

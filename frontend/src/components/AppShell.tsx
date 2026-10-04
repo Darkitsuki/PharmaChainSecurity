@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Boxes, FileText, LogOut, Menu, Pill, ShoppingCart } from 'lucide-react';
+import { Boxes, FileText, LogOut, Menu, PackagePlus, Pill, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
@@ -7,6 +7,7 @@ const navigation = [
   { label: 'Point of Sale', to: '/checkout', icon: ShoppingCart },
   { label: 'Invoices', to: '/invoices', icon: FileText },
   { label: 'Inventory', to: '/inventory', icon: Boxes },
+  { label: 'Goods Receipts', to: '/goods-receipts', icon: PackagePlus, roles: ['OWNER', 'WAREHOUSE'] },
 ];
 
 const roleLabels: Record<string, string> = {
@@ -18,6 +19,10 @@ const roleLabels: Record<string, string> = {
 export function AppShell() {
   const { currentUser, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  const accessibleNav = navigation.filter(
+    item => !item.roles || (currentUser && item.roles.includes(currentUser.role))
+  );
 
   return (
     <div className="min-h-screen bg-canvas lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
@@ -35,7 +40,7 @@ export function AppShell() {
         <div className="px-4 pt-7">
           <p className="px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Workspace</p>
           <nav className="mt-3 space-y-1" aria-label="Main navigation">
-            {navigation.map(({ label, to, icon: Icon }) => (
+            {accessibleNav.map(({ label, to, icon: Icon }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -96,9 +101,9 @@ export function AppShell() {
         </header>
 
         {menuOpen && (
-          <nav className="grid grid-cols-3 gap-1 border-b border-line bg-white p-2 lg:hidden" aria-label="Mobile navigation">
-            {navigation.map(({ label, to, icon: Icon }) => (
-              <NavLink key={to} to={to} onClick={() => setMenuOpen(false)} className={({ isActive }) => `flex flex-col items-center gap-1 rounded-md py-2 text-[11px] font-semibold ${isActive ? 'bg-mint text-forest' : 'text-slate-500'}`}>
+          <nav className="flex flex-wrap gap-1 border-b border-line bg-white p-2 lg:hidden" aria-label="Mobile navigation">
+            {accessibleNav.map(({ label, to, icon: Icon }) => (
+              <NavLink key={to} to={to} onClick={() => setMenuOpen(false)} className={({ isActive }) => `flex flex-1 min-w-[80px] flex-col items-center gap-1 rounded-md py-2 text-[11px] font-semibold ${isActive ? 'bg-mint text-forest' : 'text-slate-500'}`}>
                 <Icon size={17} />{label}
               </NavLink>
             ))}
