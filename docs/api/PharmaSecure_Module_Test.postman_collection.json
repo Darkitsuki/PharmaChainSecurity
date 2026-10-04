@@ -270,6 +270,61 @@
           "path": ["api", "v1", "drugs", "{{drugId}}"]
         }
       }
+    },
+    {
+      "name": "16. Customers - Search By Phone or Name",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/customers?search=Mai",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "customers"],
+          "query": [
+            { "key": "search", "value": "Mai" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "17. Customers - Create Customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerCode\": \"KH999\",\n  \"fullName\": \"Hoàng Thị Bích\",\n  \"phoneNumber\": \"0988776655\",\n  \"email\": \"bich.hoang@example.com\",\n  \"address\": \"12 Phạm Văn Đồng, Cầu Giấy, Hà Nội\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/customers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "customers"]
+        }
+      }
+    },
+    {
+      "name": "18. Invoices - Checkout With Customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"cus-00000000-0000-0000-0000-000000000001\",\n  \"lines\": [\n    {\n      \"drugId\": \"dr-00000000-0000-0000-0000-000000000001\",\n      \"batchId\": \"bt-00000000-0000-0000-0000-000000000001\",\n      \"quantity\": 1\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/invoices/checkout",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "invoices", "checkout"]
+        }
+      }
     }
   ]
 }
