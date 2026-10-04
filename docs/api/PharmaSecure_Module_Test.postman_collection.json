@@ -138,6 +138,86 @@
           "path": ["api", "v1", "invoices", "{{invoiceId}}", "verify-signature"]
         }
       }
+    },
+    {
+      "name": "08. Suppliers - Get All",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/suppliers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "suppliers"]
+        }
+      }
+    },
+    {
+      "name": "09. Suppliers - Create Supplier",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"supplierCode\": \"NCC_TEST_01\",\n  \"supplierName\": \"Công ty Dược Liệu Trung Ương\",\n  \"contactPerson\": \"Trần Văn A\",\n  \"phoneNumber\": \"0987654321\",\n  \"email\": \"contact@duoclieu.vn\",\n  \"address\": \"Hà Nội\",\n  \"taxCode\": \"0101234567\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/suppliers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "suppliers"]
+        }
+      }
+    },
+    {
+      "name": "10. Goods Receipts - Get All By Branch",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/goods-receipts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "goods-receipts"]
+        }
+      }
+    },
+    {
+      "name": "11. Goods Receipts - Get By ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/goods-receipts/{{receiptId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "goods-receipts", "{{receiptId}}"]
+        }
+      }
+    },
+    {
+      "name": "12. Goods Receipts - Create Goods Receipt",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"supplierId\": \"sup-00000000-0000-0000-0000-000000000001\",\n  \"note\": \"Nhập hàng đợt 1 tháng 10/2026\",\n  \"items\": [\n    {\n      \"drugId\": \"dr-00000000-0000-0000-0000-000000000001\",\n      \"batchNo\": \"BATCH-202610-01\",\n      \"expiryDate\": \"2028-10-01\",\n      \"mfgDate\": \"2026-10-01\",\n      \"quantity\": 100,\n      \"importPrice\": 25000\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/goods-receipts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "goods-receipts"]
+        }
+      }
     }
   ]
 }
