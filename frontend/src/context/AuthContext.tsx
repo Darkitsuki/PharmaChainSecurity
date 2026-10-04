@@ -7,7 +7,7 @@ interface AuthContextValue {
   currentUser: CurrentUser | null;
   isLoading: boolean;
   signIn: (username: string, password: string) => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void> | void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -62,14 +62,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('auth_token', response.accessToken);
     localStorage.setItem('auth_user', JSON.stringify(response.user));
     setCurrentUser(response.user);
-    navigate('/', { replace: true });
+
+    if (response.user.role === 'SALES') {
+      navigate('/checkout', { replace: true });
+    } else if (response.user.role === 'WAREHOUSE') {
+      navigate('/inventory', { replace: true });
+    } else {
+      navigate('/reports', { replace: true });
+    }
   }
 
-  function signOut() {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_user');
-    setCurrentUser(null);
-    navigate('/login', { replace: true });
+  async function signOut() {
+    try {
+      if (localStorage.getItem('auth_token')) {
+        await apiClient('/auth/logout', { method: 'POST' });
+      }
+    } catch {
+      // Ignore logout network errors to ensure client session is always cleaned up
+    } finally {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      setCurrentUser(null);
+      navigate('/login', { replace: true });
+    }
   }
 
   return (

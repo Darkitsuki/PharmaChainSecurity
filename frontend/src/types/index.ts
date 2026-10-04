@@ -6,8 +6,10 @@ export type UserRole = 'OWNER' | 'SALES' | 'WAREHOUSE';
 export interface CurrentUser {
   userId: string;
   username: string;
+  fullName: string;
   role: UserRole;
   branchId: string;
+  branchName: string;
 }
 
 export interface ApiProblemDetails {
