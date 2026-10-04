@@ -3,6 +3,7 @@ import { AppShell } from '../components/AppShell';
 import { RequireAuth } from '../components/RequireAuth';
 import { useAuth } from '../context/AuthContext';
 import { CheckoutPage } from '../pages/CheckoutPage';
+import { DrugCatalogPage } from '../pages/DrugCatalogPage';
 import { GoodsReceiptPage } from '../pages/GoodsReceiptPage';
 import { InventoryPage } from '../pages/InventoryPage';
 import { InvoicesPage } from '../pages/InvoicesPage';
@@ -25,6 +26,7 @@ export function AppRoutes() {
           <Route path="invoices" element={<InvoicesPage />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="goods-receipts" element={<GoodsReceiptPage />} />
+          <Route path="drugs" element={<DrugCatalogPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

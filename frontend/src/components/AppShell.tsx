@@ -8,6 +8,7 @@ const navigation = [
   { label: 'Invoices', to: '/invoices', icon: FileText },
   { label: 'Inventory', to: '/inventory', icon: Boxes },
   { label: 'Goods Receipts', to: '/goods-receipts', icon: PackagePlus, roles: ['OWNER', 'WAREHOUSE'] },
+  { label: 'Drug Catalog', to: '/drugs', icon: Pill, roles: ['OWNER'] },
 ];
 
 const roleLabels: Record<string, string> = {

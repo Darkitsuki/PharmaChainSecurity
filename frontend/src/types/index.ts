@@ -39,6 +39,23 @@ export interface Drug {
   activeIngredient: string | null;
   unit: string;
   price: number;
+  isActive?: boolean;
+}
+
+export interface CreateDrugPayload {
+  drugCode: string;
+  name: string;
+  activeIngredient?: string | null;
+  unit: string;
+  price: number;
+}
+
+export interface UpdateDrugPayload {
+  name: string;
+  activeIngredient?: string | null;
+  unit: string;
+  price: number;
+  isActive: boolean;
 }
 
 export interface DrugBatch {
