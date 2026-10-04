@@ -62,4 +62,18 @@ VALUES ('sup-00000000-0000-0000-0000-000000000002', 'NCC002', 'Công ty Cổ ph�
 INSERT INTO SUPPLIERS (id, SupplierCode, SupplierName, ContactPerson, PhoneNumber, Email, Address, TaxCode, IsActive)
 VALUES ('sup-00000000-0000-0000-0000-000000000003', 'NCC003', 'Công ty TNHH Sanofi-Aventis Việt Nam', 'Lê Hoàng Nam', '02838298526', 'contact-vn@sanofi.com', 'Số 10 Hàm Nghi, Bến Nghé, Quận 1, TP.HCM', '0300481234', 1);
 
+-- 11. BẢNG KHÁCH HÀNG (CUSTOMERS)
+INSERT INTO CUSTOMERS (id, CustomerCode, FullName, PhoneNumber, Email, Address, BranchId, TotalSpent, Points, IsActive)
+VALUES ('cus-00000000-0000-0000-0000-000000000001', 'KH001', 'Nguyễn Thị Mai', '0901234567', 'mai.nguyen@gmail.com', '123 Lê Lợi, Quận 1, TP.HCM', 'br-00000000-0000-0000-0000-000000000001', 115000.00, 11, 1);
+
+INSERT INTO CUSTOMERS (id, CustomerCode, FullName, PhoneNumber, Email, Address, BranchId, TotalSpent, Points, IsActive)
+VALUES ('cus-00000000-0000-0000-0000-000000000002', 'KH002', 'Trần Văn Hùng', '0912345678', 'hung.tran@gmail.com', '456 Hai Bà Trưng, Quận 3, TP.HCM', 'br-00000000-0000-0000-0000-000000000001', 0.00, 0, 1);
+
+INSERT INTO CUSTOMERS (id, CustomerCode, FullName, PhoneNumber, Email, Address, BranchId, TotalSpent, Points, IsActive)
+VALUES ('cus-00000000-0000-0000-0000-000000000003', 'KH003', 'Lê Minh Tuấn', '0987654321', 'tuan.le@gmail.com', '789 Nguyễn Huệ, Quận Ninh Kiều, Cần Thơ', 'br-00000000-0000-0000-0000-000000000002', 85000.00, 8, 1);
+
+-- Cập nhật CustomerId cho hóa đơn mẫu
+UPDATE INVOICES SET CustomerId = 'cus-00000000-0000-0000-0000-000000000001' WHERE id = 'iv-00000000-0000-0000-0000-000000000001';
+UPDATE INVOICES SET CustomerId = 'cus-00000000-0000-0000-0000-000000000003' WHERE id = 'iv-00000000-0000-0000-0000-000000000002';
+
 COMMIT;
