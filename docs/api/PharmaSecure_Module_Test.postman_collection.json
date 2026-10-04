@@ -325,6 +325,75 @@
           "path": ["api", "v1", "invoices", "checkout"]
         }
       }
+    },
+    {
+      "name": "19. Users - Get Branch Staff (Owner)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "users"]
+        }
+      }
+    },
+    {
+      "name": "20. Users - Create New Staff Member (Owner)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"sales_quang\",\n  \"password\": \"QuangPass123!\",\n  \"fullName\": \"Trần Nhật Quang\",\n  \"phoneNumber\": \"0911223344\",\n  \"role\": \"SALES\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "users"]
+        }
+      }
+    },
+    {
+      "name": "21. Users - Update User Active Status (Owner)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isActive\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users/{{userId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "users", "{{userId}}", "status"]
+        }
+      }
+    },
+    {
+      "name": "22. Reports - Get Sales Summary Report (Owner)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports/sales-summary?days=7",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "reports", "sales-summary"],
+          "query": [
+            { "key": "days", "value": "7" }
+          ]
+        }
+      }
     }
   ]
 }
