@@ -11,5 +11,7 @@ public sealed record LoginResponse(
 public sealed record UserProfileResponse(
     string UserId,
     string Username,
+    string FullName,
     string Role,
-    string BranchId);
+    string BranchId,
+    string BranchName);

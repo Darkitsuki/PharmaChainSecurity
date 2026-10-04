@@ -27,7 +27,10 @@ public sealed class AuthController : ControllerBase
         if (request is null || string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Username and password are required.");
 
-        var result = await authService.LoginAsync(request, cancellationToken);
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = Request.Headers.UserAgent.ToString();
+
+        var result = await authService.LoginAsync(request, ipAddress, userAgent, cancellationToken);
         if (result.IsFailure)
             return Problem(statusCode: StatusCodes.Status401Unauthorized, title: result.Error);
 
@@ -46,5 +49,22 @@ public sealed class AuthController : ControllerBase
             return Problem(statusCode: StatusCodes.Status404NotFound, title: result.Error);
 
         return Ok(result.Value);
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> LogoutAsync(CancellationToken cancellationToken = default)
+    {
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.UserId))
+            return Unauthorized();
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = Request.Headers.UserAgent.ToString();
+
+        var result = await authService.LogoutAsync(currentUserContext.UserId, ipAddress, userAgent, cancellationToken);
+        if (result.IsFailure)
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: result.Error);
+
+        return NoContent();
     }
 }
