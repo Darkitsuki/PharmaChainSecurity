@@ -8,7 +8,8 @@ public sealed record DrugResponse(
     string Name,
     string? ActiveIngredient,
     string Unit,
-    decimal Price);
+    decimal Price,
+    bool IsActive = true);
 
 public sealed record DrugBatchResponse(
     string BatchId,
@@ -17,6 +18,20 @@ public sealed record DrugBatchResponse(
     DateTime? MfgDate,
     DateTime ExpiryDate,
     int StockQuantity);
+
+public sealed record CreateDrugRequest(
+    string DrugCode,
+    string Name,
+    string? ActiveIngredient,
+    string Unit,
+    decimal Price);
+
+public sealed record UpdateDrugRequest(
+    string Name,
+    string? ActiveIngredient,
+    string Unit,
+    decimal Price,
+    bool IsActive);
 
 public interface IDrugQueryService
 {
@@ -33,6 +48,22 @@ public interface IDrugQueryService
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyCollection<DrugBatchResponse>> GetBatchesAsync(
+        string branchId,
+        string drugId,
+        CancellationToken cancellationToken = default);
+
+    Task<DrugResponse> CreateDrugAsync(
+        string branchId,
+        CreateDrugRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<DrugResponse?> UpdateDrugAsync(
+        string branchId,
+        string drugId,
+        UpdateDrugRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> DeactivateDrugAsync(
         string branchId,
         string drugId,
         CancellationToken cancellationToken = default);
