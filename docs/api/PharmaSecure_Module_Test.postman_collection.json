@@ -218,6 +218,58 @@
           "path": ["api", "v1", "goods-receipts"]
         }
       }
+    },
+    {
+      "name": "13. Drugs - Create New Drug (Owner)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"drugCode\": \"THUOC_TEST_01\",\n  \"name\": \"Vitamin C 1000mg Tuýp Sủi\",\n  \"activeIngredient\": \"Acid Ascorbic\",\n  \"unit\": \"Tuýp\",\n  \"price\": 65000\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/drugs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "drugs"]
+        }
+      }
+    },
+    {
+      "name": "14. Drugs - Update Drug Info & Price (Owner)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Vitamin C 1000mg Tuýp Sủi (Cam)\",\n  \"activeIngredient\": \"Acid Ascorbic\",\n  \"unit\": \"Tuýp\",\n  \"price\": 70000,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/drugs/{{drugId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "drugs", "{{drugId}}"]
+        }
+      }
+    },
+    {
+      "name": "15. Drugs - Deactivate Drug (Owner)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/drugs/{{drugId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "drugs", "{{drugId}}"]
+        }
+      }
     }
   ]
 }
