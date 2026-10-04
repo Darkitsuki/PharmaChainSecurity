@@ -1,0 +1,413 @@
+{
+  "info": {
+    "name": "PharmaSecure API - Phân Hệ 1 (Tồn Kho & Hóa Đơn)",
+    "description": "Postman Collection kiểm thử tự động các endpoint của Phân hệ 1 theo tiêu chuẩn Rule 08 và Rule 06.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://localhost:55198",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "invoiceId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Auth - Login (Thủ Kho)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"nvkho_cn1\",\n  \"password\": \"Admin@123\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "01b. Auth - Logout",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/logout",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "logout"]
+        }
+      }
+    },
+    {
+      "name": "02. Inventory - Get Page",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/inventory?page=1&pageSize=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "inventory"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "pageSize", "value": "20" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "03. Inventory - Get Expiring Soon (30/60/90 days)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/inventory/expiring-soon?days=90",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "inventory", "expiring-soon"],
+          "query": [
+            { "key": "days", "value": "90" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "04. Inventory - Get Low Stock (<= 10 units)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/inventory/low-stock?threshold=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "inventory", "low-stock"],
+          "query": [
+            { "key": "threshold", "value": "10" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "05. Inventory - Adjust Stock",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"drugId\": \"DRUG_001\",\n  \"batchId\": \"BATCH_001\",\n  \"newQuantity\": 150,\n  \"reason\": \"Kiểm kê định kỳ chi nhánh 1\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/inventory/adjust",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "inventory", "adjust"]
+        }
+      }
+    },
+    {
+      "name": "06. Invoices - Get Invoice Detail & Signature",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/invoices/{{invoiceId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "invoices", "{{invoiceId}}"]
+        }
+      }
+    },
+    {
+      "name": "07. Invoices - Verify Digital Signature",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/invoices/{{invoiceId}}/verify-signature",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "invoices", "{{invoiceId}}", "verify-signature"]
+        }
+      }
+    },
+    {
+      "name": "08. Suppliers - Get All",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/suppliers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "suppliers"]
+        }
+      }
+    },
+    {
+      "name": "09. Suppliers - Create Supplier",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"supplierCode\": \"NCC_TEST_01\",\n  \"supplierName\": \"Công ty Dược Liệu Trung Ương\",\n  \"contactPerson\": \"Trần Văn A\",\n  \"phoneNumber\": \"0987654321\",\n  \"email\": \"contact@duoclieu.vn\",\n  \"address\": \"Hà Nội\",\n  \"taxCode\": \"0101234567\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/suppliers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "suppliers"]
+        }
+      }
+    },
+    {
+      "name": "10. Goods Receipts - Get All By Branch",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/goods-receipts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "goods-receipts"]
+        }
+      }
+    },
+    {
+      "name": "11. Goods Receipts - Get By ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/goods-receipts/{{receiptId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "goods-receipts", "{{receiptId}}"]
+        }
+      }
+    },
+    {
+      "name": "12. Goods Receipts - Create Goods Receipt",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"supplierId\": \"sup-00000000-0000-0000-0000-000000000001\",\n  \"note\": \"Nhập hàng đợt 1 tháng 10/2026\",\n  \"items\": [\n    {\n      \"drugId\": \"dr-00000000-0000-0000-0000-000000000001\",\n      \"batchNo\": \"BATCH-202610-01\",\n      \"expiryDate\": \"2028-10-01\",\n      \"mfgDate\": \"2026-10-01\",\n      \"quantity\": 100,\n      \"importPrice\": 25000\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/goods-receipts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "goods-receipts"]
+        }
+      }
+    },
+    {
+      "name": "13. Drugs - Create New Drug (Owner)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"drugCode\": \"THUOC_TEST_01\",\n  \"name\": \"Vitamin C 1000mg Tuýp Sủi\",\n  \"activeIngredient\": \"Acid Ascorbic\",\n  \"unit\": \"Tuýp\",\n  \"price\": 65000\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/drugs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "drugs"]
+        }
+      }
+    },
+    {
+      "name": "14. Drugs - Update Drug Info & Price (Owner)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Vitamin C 1000mg Tuýp Sủi (Cam)\",\n  \"activeIngredient\": \"Acid Ascorbic\",\n  \"unit\": \"Tuýp\",\n  \"price\": 70000,\n  \"isActive\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/drugs/{{drugId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "drugs", "{{drugId}}"]
+        }
+      }
+    },
+    {
+      "name": "15. Drugs - Deactivate Drug (Owner)",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/drugs/{{drugId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "drugs", "{{drugId}}"]
+        }
+      }
+    },
+    {
+      "name": "16. Customers - Search By Phone or Name",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/customers?search=Mai",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "customers"],
+          "query": [
+            { "key": "search", "value": "Mai" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "17. Customers - Create Customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerCode\": \"KH999\",\n  \"fullName\": \"Hoàng Thị Bích\",\n  \"phoneNumber\": \"0988776655\",\n  \"email\": \"bich.hoang@example.com\",\n  \"address\": \"12 Phạm Văn Đồng, Cầu Giấy, Hà Nội\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/customers",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "customers"]
+        }
+      }
+    },
+    {
+      "name": "18. Invoices - Checkout With Customer",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"cus-00000000-0000-0000-0000-000000000001\",\n  \"lines\": [\n    {\n      \"drugId\": \"dr-00000000-0000-0000-0000-000000000001\",\n      \"batchId\": \"bt-00000000-0000-0000-0000-000000000001\",\n      \"quantity\": 1\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/invoices/checkout",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "invoices", "checkout"]
+        }
+      }
+    },
+    {
+      "name": "19. Users - Get Branch Staff (Owner)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "users"]
+        }
+      }
+    },
+    {
+      "name": "20. Users - Create New Staff Member (Owner)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"sales_quang\",\n  \"password\": \"QuangPass123!\",\n  \"fullName\": \"Trần Nhật Quang\",\n  \"phoneNumber\": \"0911223344\",\n  \"role\": \"SALES\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "users"]
+        }
+      }
+    },
+    {
+      "name": "21. Users - Update User Active Status (Owner)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"isActive\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/users/{{userId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "users", "{{userId}}", "status"]
+        }
+      }
+    },
+    {
+      "name": "22. Reports - Get Sales Summary Report (Owner)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/reports/sales-summary?days=7",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "reports", "sales-summary"],
+          "query": [
+            { "key": "days", "value": "7" }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -32,7 +32,7 @@ public sealed class DrugQueryService : IDrugQueryService
             var totalCount = await ExecuteCountAsync(whereClause, hasSearch ? searchPattern : null, cancellationToken);
             var items = new List<DrugResponse>();
             await using var command = CreateCommand($"""
-                SELECT id, DrugCode, Name, ActiveIngredient, Unit, Price
+                SELECT id, DrugCode, Name, ActiveIngredient, Unit, Price, NVL(IsActive, 1)
                 FROM DRUGS
                 {whereClause}
                 ORDER BY DrugCode
@@ -53,7 +53,8 @@ public sealed class DrugQueryService : IDrugQueryService
                     reader.GetString(2),
                     reader.IsDBNull(3) ? null : reader.GetString(3),
                     reader.GetString(4),
-                    reader.GetDecimal(5)));
+                    reader.GetDecimal(5),
+                    reader.GetInt32(6) == 1));
             }
 
             await unitOfWork.CommitAsync(cancellationToken);
@@ -76,7 +77,7 @@ public sealed class DrugQueryService : IDrugQueryService
         try
         {
             await using var command = CreateCommand("""
-                SELECT id, DrugCode, Name, ActiveIngredient, Unit, Price
+                SELECT id, DrugCode, Name, ActiveIngredient, Unit, Price, NVL(IsActive, 1)
                 FROM DRUGS
                 WHERE id = :id
                 """);
@@ -94,7 +95,8 @@ public sealed class DrugQueryService : IDrugQueryService
                 reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
                 reader.GetString(4),
-                reader.GetDecimal(5));
+                reader.GetDecimal(5),
+                reader.GetInt32(6) == 1);
 
             await unitOfWork.CommitAsync(cancellationToken);
             return result;
@@ -140,6 +142,146 @@ public sealed class DrugQueryService : IDrugQueryService
 
             await unitOfWork.CommitAsync(cancellationToken);
             return batches;
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<DrugResponse> CreateDrugAsync(
+        string branchId,
+        CreateDrugRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.DrugCode))
+            throw new ArgumentException("Mã thuốc không được để trống.", nameof(request.DrugCode));
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("Tên thuốc không được để trống.", nameof(request.Name));
+        if (string.IsNullOrWhiteSpace(request.Unit))
+            throw new ArgumentException("Đơn vị tính không được để trống.", nameof(request.Unit));
+        if (request.Price < 0)
+            throw new ArgumentException("Giá thuốc không được nhỏ hơn 0.", nameof(request.Price));
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var checkCmd = CreateCommand("SELECT COUNT(1) FROM DRUGS WHERE UPPER(DrugCode) = UPPER(:code)");
+            checkCmd.Parameters.Add("code", OracleDbType.Varchar2, 50).Value = request.DrugCode.Trim();
+            var count = Convert.ToInt32(await checkCmd.ExecuteScalarAsync(cancellationToken));
+            if (count > 0)
+                throw new InvalidOperationException($"Thuốc có mã '{request.DrugCode}' đã tồn tại trong hệ thống.");
+
+            var newId = $"dr-{Guid.NewGuid():N}"[..36];
+            await using var insertCmd = CreateCommand("""
+                INSERT INTO DRUGS (id, DrugCode, Name, ActiveIngredient, Unit, Price, IsActive, CreatedDate)
+                VALUES (:id, :code, :name, :activeIngredient, :unit, :price, 1, SYSTIMESTAMP)
+                """);
+            insertCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = newId;
+            insertCmd.Parameters.Add("code", OracleDbType.Varchar2, 50).Value = request.DrugCode.Trim().ToUpperInvariant();
+            insertCmd.Parameters.Add("name", OracleDbType.Varchar2, 255).Value = request.Name.Trim();
+            insertCmd.Parameters.Add("activeIngredient", OracleDbType.Varchar2, 255).Value = (object?)request.ActiveIngredient?.Trim() ?? DBNull.Value;
+            insertCmd.Parameters.Add("unit", OracleDbType.Varchar2, 50).Value = request.Unit.Trim();
+            insertCmd.Parameters.Add("price", OracleDbType.Decimal).Value = request.Price;
+
+            await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+
+            return new DrugResponse(
+                newId,
+                request.DrugCode.Trim().ToUpperInvariant(),
+                request.Name.Trim(),
+                request.ActiveIngredient?.Trim(),
+                request.Unit.Trim(),
+                request.Price,
+                true);
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<DrugResponse?> UpdateDrugAsync(
+        string branchId,
+        string drugId,
+        UpdateDrugRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(drugId);
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new ArgumentException("Tên thuốc không được để trống.", nameof(request.Name));
+        if (string.IsNullOrWhiteSpace(request.Unit))
+            throw new ArgumentException("Đơn vị tính không được để trống.", nameof(request.Unit));
+        if (request.Price < 0)
+            throw new ArgumentException("Giá thuốc không được nhỏ hơn 0.", nameof(request.Price));
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var findCmd = CreateCommand("SELECT DrugCode FROM DRUGS WHERE id = :id");
+            findCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = drugId;
+            var drugCodeObj = await findCmd.ExecuteScalarAsync(cancellationToken);
+            if (drugCodeObj is null)
+            {
+                await unitOfWork.CommitAsync(cancellationToken);
+                return null;
+            }
+            var drugCode = (string)drugCodeObj;
+
+            await using var updateCmd = CreateCommand("""
+                UPDATE DRUGS
+                SET Name = :name,
+                    ActiveIngredient = :activeIngredient,
+                    Unit = :unit,
+                    Price = :price,
+                    IsActive = :isActive
+                WHERE id = :id
+                """);
+            updateCmd.Parameters.Add("name", OracleDbType.Varchar2, 255).Value = request.Name.Trim();
+            updateCmd.Parameters.Add("activeIngredient", OracleDbType.Varchar2, 255).Value = (object?)request.ActiveIngredient?.Trim() ?? DBNull.Value;
+            updateCmd.Parameters.Add("unit", OracleDbType.Varchar2, 50).Value = request.Unit.Trim();
+            updateCmd.Parameters.Add("price", OracleDbType.Decimal).Value = request.Price;
+            updateCmd.Parameters.Add("isActive", OracleDbType.Int32).Value = request.IsActive ? 1 : 0;
+            updateCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = drugId;
+
+            await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+
+            return new DrugResponse(
+                drugId,
+                drugCode,
+                request.Name.Trim(),
+                request.ActiveIngredient?.Trim(),
+                request.Unit.Trim(),
+                request.Price,
+                request.IsActive);
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<bool> DeactivateDrugAsync(
+        string branchId,
+        string drugId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(drugId);
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var cmd = CreateCommand("UPDATE DRUGS SET IsActive = 0 WHERE id = :id");
+            cmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = drugId;
+            var affected = await cmd.ExecuteNonQueryAsync(cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return affected > 0;
         }
         catch
         {

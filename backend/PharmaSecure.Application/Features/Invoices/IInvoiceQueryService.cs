@@ -33,7 +33,10 @@ public sealed record InvoiceDetailResponse(
     string BranchId,
     string CashierId,
     IReadOnlyCollection<InvoiceItemResponse> Items,
-    InvoiceSignatureResponse? Signature);
+    InvoiceSignatureResponse? Signature,
+    string? CustomerId = null,
+    string? CustomerName = null,
+    string? CustomerPhone = null);
 
 public sealed record InvoiceVerificationResult(
     string InvoiceId,

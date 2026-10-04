@@ -88,6 +88,7 @@ public sealed class InventoryRepository : IInventoryRepository
         string batchId,
         int newQuantity,
         string reason,
+        string? userId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(branchId))
@@ -105,25 +106,70 @@ public sealed class InventoryRepository : IInventoryRepository
             if (unitOfWork.Transaction is not OracleTransaction transaction)
                 throw new InvalidOperationException("Inventory adjustments require an active Oracle transaction.");
 
-            await using var command = (OracleCommand)unitOfWork.Connection.CreateCommand();
-            command.Transaction = transaction;
-            command.BindByName = true;
-            command.CommandText = """
-                MERGE INTO INVENTORIES target
-                USING (SELECT :branchId AS BranchId, :drugId AS DrugId, :batchId AS BatchId, :quantity AS Quantity FROM DUAL) source
-                ON (target.BranchId = source.BranchId AND target.DrugId = source.DrugId AND target.BatchId = source.BatchId)
-                WHEN MATCHED THEN
-                    UPDATE SET target.Quantity = source.Quantity
-                WHEN NOT MATCHED THEN
-                    INSERT (BranchId, DrugId, BatchId, Quantity)
-                    VALUES (source.BranchId, source.DrugId, source.BatchId, source.Quantity)
-                """;
-            command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
-            command.Parameters.Add("drugId", OracleDbType.Varchar2, 50).Value = drugId;
-            command.Parameters.Add("batchId", OracleDbType.Varchar2, 50).Value = batchId;
-            command.Parameters.Add("quantity", OracleDbType.Int32).Value = newQuantity;
+            var currentQuantity = 0;
+            await using (var getCmd = (OracleCommand)unitOfWork.Connection.CreateCommand())
+            {
+                getCmd.Transaction = transaction;
+                getCmd.BindByName = true;
+                getCmd.CommandText = "SELECT Quantity FROM INVENTORIES WHERE BranchId = :branchId AND DrugId = :drugId AND BatchId = :batchId";
+                getCmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+                getCmd.Parameters.Add("drugId", OracleDbType.Varchar2, 50).Value = drugId;
+                getCmd.Parameters.Add("batchId", OracleDbType.Varchar2, 50).Value = batchId;
+                var scalar = await getCmd.ExecuteScalarAsync(cancellationToken);
+                if (scalar is not null && scalar != DBNull.Value)
+                    currentQuantity = Convert.ToInt32(scalar);
+            }
 
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            var quantityChange = newQuantity - currentQuantity;
+
+            await using (var command = (OracleCommand)unitOfWork.Connection.CreateCommand())
+            {
+                command.Transaction = transaction;
+                command.BindByName = true;
+                command.CommandText = """
+                    MERGE INTO INVENTORIES target
+                    USING (SELECT :branchId AS BranchId, :drugId AS DrugId, :batchId AS BatchId, :quantity AS Quantity FROM DUAL) source
+                    ON (target.BranchId = source.BranchId AND target.DrugId = source.DrugId AND target.BatchId = source.BatchId)
+                    WHEN MATCHED THEN
+                        UPDATE SET target.Quantity = source.Quantity
+                    WHEN NOT MATCHED THEN
+                        INSERT (BranchId, DrugId, BatchId, Quantity)
+                        VALUES (source.BranchId, source.DrugId, source.BatchId, source.Quantity)
+                    """;
+                command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+                command.Parameters.Add("drugId", OracleDbType.Varchar2, 50).Value = drugId;
+                command.Parameters.Add("batchId", OracleDbType.Varchar2, 50).Value = batchId;
+                command.Parameters.Add("quantity", OracleDbType.Int32).Value = newQuantity;
+
+                await command.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                await using var txCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
+                txCmd.Transaction = transaction;
+                txCmd.BindByName = true;
+                txCmd.CommandText = """
+                    INSERT INTO INVENTORY_TRANSACTIONS (
+                        id, BranchId, DrugId, BatchId, TransactionType,
+                        QuantityChange, RemainingQuantity, CreatedBy, CreatedDate, Note
+                    ) VALUES (
+                        :id, :branchId, :drugId, :batchId, 'DIEU_CHINH',
+                        :quantityChange, :remainingQuantity, :createdBy, CURRENT_TIMESTAMP, :note
+                    )
+                    """;
+                txCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = Guid.NewGuid().ToString("N");
+                txCmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+                txCmd.Parameters.Add("drugId", OracleDbType.Varchar2, 50).Value = drugId;
+                txCmd.Parameters.Add("batchId", OracleDbType.Varchar2, 50).Value = batchId;
+                txCmd.Parameters.Add("quantityChange", OracleDbType.Int32).Value = quantityChange;
+                txCmd.Parameters.Add("remainingQuantity", OracleDbType.Int32).Value = newQuantity;
+                txCmd.Parameters.Add("createdBy", OracleDbType.Varchar2, 50).Value = userId;
+                txCmd.Parameters.Add("note", OracleDbType.Varchar2, 500).Value = reason;
+
+                await txCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
             await unitOfWork.CommitAsync(cancellationToken);
         }
         catch

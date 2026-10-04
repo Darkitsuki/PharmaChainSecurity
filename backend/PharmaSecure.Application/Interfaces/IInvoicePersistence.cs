@@ -6,6 +6,8 @@ public interface IInvoicePersistence
 {
     Task<decimal?> GetDrugPriceAsync(string drugId, CancellationToken cancellationToken = default);
 
+    Task<string?> GetCustomerNameAsync(string customerId, CancellationToken cancellationToken = default);
+
     Task SaveAsync(
         Invoice invoice,
         DigitalSignature digitalSignature,

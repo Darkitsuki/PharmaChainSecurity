@@ -8,10 +8,13 @@ public sealed record CheckoutLineRequest(
 public sealed record CheckoutRequest(
     string BranchId,
     string CashierId,
-    IReadOnlyCollection<CheckoutLineRequest> Lines);
+    IReadOnlyCollection<CheckoutLineRequest> Lines,
+    string? CustomerId = null);
 
 public sealed record CheckoutResponse(
     string InvoiceId,
     string InvoiceNumber,
     decimal TotalAmount,
-    string HashValueSha256);
+    string HashValueSha256,
+    string? CustomerId = null,
+    string? CustomerName = null);

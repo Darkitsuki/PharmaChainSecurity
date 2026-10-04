@@ -99,6 +99,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpPost]
+    [HttpPost("checkout")]
     [HttpPost("~/api/v1/checkout")]
     [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult> CheckoutAsync(
@@ -128,7 +129,8 @@ public sealed class InvoicesController : ControllerBase
                 new CheckoutRequest(
                     currentUserContext.BranchId,
                     currentUserContext.UserId,
-                    request.Lines.Select(line => new CheckoutLineRequest(line.DrugId, line.BatchId, line.Quantity)).ToArray()),
+                    request.Lines.Select(line => new CheckoutLineRequest(line.DrugId, line.BatchId, line.Quantity)).ToArray(),
+                    request.CustomerId),
                 cancellationToken);
         }
         catch (DigitalSignatureException exception)
@@ -158,6 +160,8 @@ public sealed class InvoicesController : ControllerBase
     }
 }
 
-public sealed record CheckoutRequestBody(IReadOnlyCollection<CheckoutLineBody> Lines);
+public sealed record CheckoutRequestBody(
+    IReadOnlyCollection<CheckoutLineBody> Lines,
+    string? CustomerId = null);
 
 public sealed record CheckoutLineBody(string DrugId, string BatchId, int Quantity);

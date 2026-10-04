@@ -22,14 +22,22 @@ public sealed class InvoicePersistence : IInvoicePersistence
         return value is null or DBNull ? null : Convert.ToDecimal(value, System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    public async Task<string?> GetCustomerNameAsync(string customerId, CancellationToken cancellationToken = default)
+    {
+        await using var command = CreateCommand("SELECT FullName FROM CUSTOMERS WHERE id = :customerId AND IsActive = 1");
+        command.Parameters.Add("customerId", OracleDbType.Varchar2, 50).Value = customerId;
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        return value is null or DBNull ? null : value.ToString();
+    }
+
     public async Task SaveAsync(
         Invoice invoice,
         DigitalSignature digitalSignature,
         CancellationToken cancellationToken = default)
     {
         await using (var command = CreateCommand("""
-            INSERT INTO INVOICES (id, InvoiceNo, CreatedDate, TotalAmount, BranchId, CashierId)
-            VALUES (:id, :invoiceNo, :createdDate, :totalAmount, :branchId, :cashierId)
+            INSERT INTO INVOICES (id, InvoiceNo, CreatedDate, TotalAmount, BranchId, CashierId, CustomerId)
+            VALUES (:id, :invoiceNo, :createdDate, :totalAmount, :branchId, :cashierId, :customerId)
             """))
         {
             command.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = invoice.Id;
@@ -38,7 +46,23 @@ public sealed class InvoicePersistence : IInvoicePersistence
             command.Parameters.Add("totalAmount", OracleDbType.Decimal).Value = invoice.TotalAmount;
             command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = invoice.BranchId;
             command.Parameters.Add("cashierId", OracleDbType.Varchar2, 50).Value = invoice.CashierId;
+            command.Parameters.Add("customerId", OracleDbType.Varchar2, 50).Value = (object?)invoice.CustomerId ?? DBNull.Value;
             await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (!string.IsNullOrWhiteSpace(invoice.CustomerId))
+        {
+            var pointsEarned = (int)(invoice.TotalAmount / 10000m);
+            await using var customerCmd = CreateCommand("""
+                UPDATE CUSTOMERS
+                SET TotalSpent = TotalSpent + :totalAmount,
+                    Points = Points + :points
+                WHERE id = :customerId
+                """);
+            customerCmd.Parameters.Add("totalAmount", OracleDbType.Decimal).Value = invoice.TotalAmount;
+            customerCmd.Parameters.Add("points", OracleDbType.Int32).Value = pointsEarned;
+            customerCmd.Parameters.Add("customerId", OracleDbType.Varchar2, 50).Value = invoice.CustomerId;
+            await customerCmd.ExecuteNonQueryAsync(cancellationToken);
         }
 
         foreach (var item in invoice.Items)
