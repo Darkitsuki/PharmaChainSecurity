@@ -42,10 +42,19 @@ public sealed class CheckoutService : ICheckoutService
         {
             await unitOfWork.BeginTransactionAsync(request.BranchId, cancellationToken);
 
+            string? customerName = null;
+            if (!string.IsNullOrWhiteSpace(request.CustomerId))
+            {
+                customerName = await invoicePersistence.GetCustomerNameAsync(request.CustomerId, cancellationToken);
+                if (customerName is null)
+                    return await RollbackAsync<CheckoutResponse>("Customer was not found or is inactive.", cancellationToken);
+            }
+
             var invoice = new Invoice(
                 invoiceNumber: $"HD{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24],
                 branchId: request.BranchId,
-                cashierId: request.CashierId);
+                cashierId: request.CashierId,
+                customerId: request.CustomerId);
             var lockedInventory = new List<DomainInventory>();
 
             foreach (var line in request.Lines.OrderBy(line => line.DrugId).ThenBy(line => line.BatchId))
@@ -98,7 +107,9 @@ public sealed class CheckoutService : ICheckoutService
                 invoice.Id,
                 invoice.InvoiceNumber,
                 invoice.TotalAmount,
-                signatureResult.HashValueSha256));
+                signatureResult.HashValueSha256,
+                invoice.CustomerId,
+                customerName));
         }
         catch
         {

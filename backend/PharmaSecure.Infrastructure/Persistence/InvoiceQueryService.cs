@@ -73,9 +73,10 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
         try
         {
             await using var headerCommand = CreateCommand("""
-                SELECT id, InvoiceNo, CreatedDate, TotalAmount, BranchId, CashierId
-                FROM INVOICES
-                WHERE id = :id AND BranchId = :branchId
+                SELECT i.id, i.InvoiceNo, i.CreatedDate, i.TotalAmount, i.BranchId, i.CashierId, i.CustomerId, c.FullName, c.PhoneNumber
+                FROM INVOICES i
+                LEFT JOIN CUSTOMERS c ON i.CustomerId = c.id
+                WHERE i.id = :id AND i.BranchId = :branchId
                 """);
             headerCommand.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id;
             headerCommand.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
@@ -93,6 +94,9 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             var totalAmount = headerReader.GetDecimal(3);
             var bId = headerReader.GetString(4);
             var cashierId = headerReader.GetString(5);
+            var custId = headerReader.IsDBNull(6) ? null : headerReader.GetString(6);
+            var custName = headerReader.IsDBNull(7) ? null : headerReader.GetString(7);
+            var custPhone = headerReader.IsDBNull(8) ? null : headerReader.GetString(8);
             await headerReader.CloseAsync();
 
             var items = await QueryItemsInternalAsync(invoiceId, cancellationToken);
@@ -107,7 +111,10 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                 bId,
                 cashierId,
                 items,
-                signature);
+                signature,
+                custId,
+                custName,
+                custPhone);
         }
         catch
         {

@@ -17,12 +17,14 @@ public sealed class Invoice : EntityBase<string>
         string branchId,
         string cashierId,
         DateTime? createdDate = null,
-        string? id = null)
+        string? id = null,
+        string? customerId = null)
     {
         Id = id ?? Guid.NewGuid().ToString("D");
         InvoiceNumber = string.IsNullOrWhiteSpace(invoiceNumber) ? throw new ArgumentException("Invoice number is required.", nameof(invoiceNumber)) : invoiceNumber;
         BranchId = string.IsNullOrWhiteSpace(branchId) ? throw new ArgumentException("Branch ID is required.", nameof(branchId)) : branchId;
         CashierId = string.IsNullOrWhiteSpace(cashierId) ? throw new ArgumentException("Cashier ID is required.", nameof(cashierId)) : cashierId;
+        CustomerId = string.IsNullOrWhiteSpace(customerId) ? null : customerId.Trim();
         var timestamp = createdDate ?? DateTime.UtcNow;
         timestamp = timestamp.Kind switch
         {
@@ -44,6 +46,8 @@ public sealed class Invoice : EntityBase<string>
 
     public string CashierId { get; private set; } = null!;
 
+    public string? CustomerId { get; private set; }
+
     public InvoiceStatus Status { get; private set; }
 
     public Branch Branch { get; private set; } = null!;
@@ -53,6 +57,13 @@ public sealed class Invoice : EntityBase<string>
     public IReadOnlyCollection<InvoiceItem> Items => items;
 
     public DigitalSignature? DigitalSignature { get; private set; }
+
+    public void SetCustomer(string? customerId)
+    {
+        if (Status != InvoiceStatus.Draft)
+            throw new InvalidOperationException("Only draft invoices can be changed.");
+        CustomerId = string.IsNullOrWhiteSpace(customerId) ? null : customerId.Trim();
+    }
 
     public string GetCanonicalPayload()
     {
