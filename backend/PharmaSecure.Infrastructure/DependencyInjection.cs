@@ -11,6 +11,8 @@ using PharmaSecure.Application.Features.Inventory;
 using PharmaSecure.Application.Features.Invoices;
 using PharmaSecure.Application.Features.Procurement;
 using PharmaSecure.Application.Features.Customers;
+using PharmaSecure.Application.Features.Users;
+using PharmaSecure.Application.Features.Reports;
 using PharmaSecure.Application.Features.Security;
 using PharmaSecure.Infrastructure.Cryptography;
 using PharmaSecure.Infrastructure.Persistence;
@@ -41,6 +43,8 @@ public static class DependencyInjection
         services.AddScoped<ISupplierService, SupplierService>();
         services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
         services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IReportService, ReportService>();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
