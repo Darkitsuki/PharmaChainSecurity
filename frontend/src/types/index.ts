@@ -88,6 +88,8 @@ export interface CheckoutResponse {
   invoiceNumber: string;
   totalAmount: number;
   hashValueSha256: string;
+  customerId?: string | null;
+  customerName?: string | null;
 }
 
 export interface InvoiceVerificationResult {
@@ -138,6 +140,31 @@ export interface InvoiceDetail {
   cashierId: string;
   items: InvoiceItem[];
   signature: InvoiceSignature | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+}
+
+export interface Customer {
+  id: string;
+  customerCode: string;
+  fullName: string;
+  phoneNumber: string;
+  email: string | null;
+  address: string | null;
+  branchId: string | null;
+  totalSpent: number;
+  points: number;
+  isActive: boolean;
+  createdDate: string;
+}
+
+export interface CreateCustomerPayload {
+  fullName: string;
+  phoneNumber: string;
+  customerCode?: string;
+  email?: string;
+  address?: string;
 }
 
 export interface StockAdjustmentPayload {

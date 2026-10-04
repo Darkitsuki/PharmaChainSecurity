@@ -200,10 +200,17 @@ export function InvoicesPage() {
 
             {selectedInvoice && (
               <div className="space-y-5">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#f8faf9] p-3 rounded border border-line text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-[#f8faf9] p-3 rounded border border-line text-xs">
                   <div>
                     <span className="block text-slate-400 font-bold uppercase text-[9px]">Số hóa đơn</span>
                     <span className="font-mono font-bold text-ink">{selectedInvoice.invoiceNumber}</span>
+                  </div>
+                  <div>
+                    <span className="block text-slate-400 font-bold uppercase text-[9px]">Khách hàng</span>
+                    <span className="font-bold text-ink">{selectedInvoice.customerName || 'Khách lẻ vãng lai'}</span>
+                    {selectedInvoice.customerPhone && (
+                      <span className="block text-[10px] text-slate-500 font-mono">{selectedInvoice.customerPhone}</span>
+                    )}
                   </div>
                   <div>
                     <span className="block text-slate-400 font-bold uppercase text-[9px]">Thời gian</span>

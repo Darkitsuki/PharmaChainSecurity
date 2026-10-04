@@ -99,6 +99,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpPost]
+    [HttpPost("checkout")]
     [HttpPost("~/api/v1/checkout")]
     [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult> CheckoutAsync(
