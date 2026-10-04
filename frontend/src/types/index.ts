@@ -241,3 +241,48 @@ export interface CreateGoodsReceiptPayload {
   items: CreateGoodsReceiptItemPayload[];
 }
 
+export interface StaffUser {
+  id: string;
+  username: string;
+  fullName: string;
+  phoneNumber: string | null;
+  role: string;
+  branchId: string;
+  branchName: string;
+  isActive: boolean;
+  createdDate: string;
+}
+
+export interface CreateStaffPayload {
+  username: string;
+  password: string;
+  fullName: string;
+  phoneNumber?: string;
+  role: 'SALES' | 'WAREHOUSE';
+}
+
+export interface TopDrugReportItem {
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  totalQuantitySold: number;
+  totalRevenue: number;
+}
+
+export interface DailySalesItem {
+  date: string;
+  revenue: number;
+  invoiceCount: number;
+}
+
+export interface SalesSummaryReport {
+  totalRevenue: number;
+  totalInvoices: number;
+  todayRevenue: number;
+  todayInvoices: number;
+  monthRevenue: number;
+  monthInvoices: number;
+  topSellingDrugs: TopDrugReportItem[];
+  dailySales: DailySalesItem[];
+}
+

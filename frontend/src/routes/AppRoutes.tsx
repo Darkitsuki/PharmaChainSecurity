@@ -8,6 +8,8 @@ import { GoodsReceiptPage } from '../pages/GoodsReceiptPage';
 import { InventoryPage } from '../pages/InventoryPage';
 import { InvoicesPage } from '../pages/InvoicesPage';
 import { LoginPage } from '../pages/LoginPage';
+import { UsersPage } from '../pages/UsersPage';
+import { ReportsPage } from '../pages/ReportsPage';
 
 function LoginRoute() {
   const { currentUser, isLoading } = useAuth();
@@ -27,6 +29,8 @@ export function AppRoutes() {
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="goods-receipts" element={<GoodsReceiptPage />} />
           <Route path="drugs" element={<DrugCatalogPage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="reports" element={<ReportsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
