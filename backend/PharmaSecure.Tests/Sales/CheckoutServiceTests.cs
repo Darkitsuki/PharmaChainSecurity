@@ -2,6 +2,7 @@ using Moq;
 using PharmaSecure.Application.Features.Sales;
 using PharmaSecure.Application.Interfaces;
 using PharmaSecure.Domain.Entities;
+using Inventory = PharmaSecure.Domain.Entities.Inventory;
 using Xunit;
 
 namespace PharmaSecure.Tests.Sales;
@@ -20,7 +21,7 @@ public class CheckoutServiceTests
         var inventoryRepository = new Mock<IInventoryRepository>();
         inventoryRepository.Setup(repository => repository.LockRowForUpdateAsync(
                 "branch-1", "drug-1", "batch-1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Inventory("branch-1", "drug-1", "batch-1", 1));
+            .ReturnsAsync(new PharmaSecure.Domain.Entities.Inventory("branch-1", "drug-1", "batch-1", 1));
 
         var invoicePersistence = new Mock<IInvoicePersistence>();
         var digitalSignatureService = new Mock<IDigitalSignatureService>();
@@ -54,7 +55,7 @@ public class CheckoutServiceTests
         var inventoryRepository = new Mock<IInventoryRepository>();
         inventoryRepository.Setup(repository => repository.LockRowForUpdateAsync(
                 "branch-1", "drug-1", "batch-1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Inventory("branch-1", "drug-1", "batch-1", 5));
+            .ReturnsAsync(new PharmaSecure.Domain.Entities.Inventory("branch-1", "drug-1", "batch-1", 5));
 
         var invoicePersistence = new Mock<IInvoicePersistence>();
         invoicePersistence.Setup(persistence => persistence.GetDrugPriceAsync(
@@ -95,7 +96,7 @@ public class CheckoutServiceTests
         var inventoryRepository = new Mock<IInventoryRepository>();
         inventoryRepository.Setup(repository => repository.LockRowForUpdateAsync(
                 "branch-1", "drug-1", "batch-1", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Inventory("branch-1", "drug-1", "batch-1", 5));
+            .ReturnsAsync(new PharmaSecure.Domain.Entities.Inventory("branch-1", "drug-1", "batch-1", 5));
 
         var invoicePersistence = new Mock<IInvoicePersistence>();
         invoicePersistence.Setup(p => p.GetDrugPriceAsync("drug-1", It.IsAny<CancellationToken>()))
