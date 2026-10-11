@@ -25,7 +25,7 @@ export function InvoicesPage() {
     setError('');
     apiClient<PageResult<Invoice>>(`/invoices?page=${page}&pageSize=20`)
       .then((data) => { if (active) setResult(data); })
-      .catch((requestError) => { if (active) setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Could not load invoices.'); })
+      .catch((requestError) => { if (active) setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách hóa đơn.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [page]);
@@ -51,7 +51,7 @@ export function InvoicesPage() {
       const verification = await apiClient<InvoiceVerificationResult>(`/invoices/${encodeURIComponent(invoice.invoiceId)}/verify-signature`, { method: 'POST' });
       setNotice(verification);
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Signature verification failed.');
+      setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Xác thực chữ ký số thất bại.');
     } finally {
       setVerifyingId(null);
     }
@@ -158,10 +158,10 @@ export function InvoicesPage() {
             {result?.totalCount ? `Hiển thị ${(page - 1) * (result.pageSize || 20) + 1}–${Math.min(page * (result.pageSize || 20), result.totalCount)} trong tổng ${result.totalCount}` : 'Không có bản ghi'}
           </p>
           <div className="flex gap-1">
-            <button onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page <= 1 || loading} className="grid h-8 w-8 place-items-center rounded border border-line text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label="Previous page">
+            <button onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page <= 1 || loading} className="grid h-8 w-8 place-items-center rounded border border-line text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label="Trang trước">
               <ChevronLeft size={16} />
             </button>
-            <button onClick={() => setPage((value) => Math.min(result?.totalPages || 1, value + 1))} disabled={loading || page >= (result?.totalPages || 1)} className="grid h-8 w-8 place-items-center rounded border border-line text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label="Next page">
+            <button onClick={() => setPage((value) => Math.min(result?.totalPages || 1, value + 1))} disabled={loading || page >= (result?.totalPages || 1)} className="grid h-8 w-8 place-items-center rounded border border-line text-slate-600 hover:bg-slate-50 disabled:opacity-40" aria-label="Trang sau">
               <ChevronRight size={16} />
             </button>
           </div>

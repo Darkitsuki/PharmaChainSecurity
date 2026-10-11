@@ -13,11 +13,11 @@ export function AuthFooter({ appName = 'PharmaSecure ERP' }: AuthFooterProps) {
 
         {/* Security Invariants & Compliance Indicators */}
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-slate-500 font-mono text-[10.5px]">
-          <span className="hover:text-emerald-700 transition-colors">SHA-256 Auth</span>
+          <span className="hover:text-emerald-700 transition-colors">Xác thực SHA-256</span>
           <span className="text-slate-300">•</span>
-          <span className="text-emerald-700 font-medium hover:underline">Row-Level Security Active</span>
+          <span className="text-emerald-700 font-medium hover:underline">Bảo mật cách ly CSDL (VPD/RLS)</span>
           <span className="text-slate-300">•</span>
-          <span className="hover:text-slate-700 transition-colors">ISO/IEC 27001</span>
+          <span className="hover:text-slate-700 transition-colors">Tiêu chuẩn ISO/IEC 27001</span>
         </div>
       </div>
     </footer>

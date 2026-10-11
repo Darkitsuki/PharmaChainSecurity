@@ -40,21 +40,21 @@ export function InventoryPage() {
           setDrugNames(Object.fromEntries(drugs.items.map((drug) => [drug.drugId, drug.name])));
         })
         .catch((requestError) => {
-          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Could not load branch inventory.');
+          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải tồn kho chi nhánh.');
         })
         .finally(() => setLoading(false));
     } else if (activeTab === 'expiring') {
       apiClient<InventoryAlert[]>('/inventory/expiring-soon?days=90')
         .then((alerts) => setAlertRows(alerts))
         .catch((requestError) => {
-          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Could not load expiring batches.');
+          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách lô cận hạn.');
         })
         .finally(() => setLoading(false));
     } else if (activeTab === 'low') {
       apiClient<InventoryAlert[]>('/inventory/low-stock?threshold=10')
         .then((alerts) => setAlertRows(alerts))
         .catch((requestError) => {
-          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Could not load low-stock items.');
+          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách thuốc sắp hết hàng.');
         })
         .finally(() => setLoading(false));
     }
