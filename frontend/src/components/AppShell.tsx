@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { BarChart3, Boxes, FileText, LogOut, Menu, PackagePlus, Pill, ShoppingCart, Users } from 'lucide-react';
+import { Boxes, FileText, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, ShoppingCart, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,7 +10,7 @@ const navigation = [
   { label: 'Goods Receipts', to: '/goods-receipts', icon: PackagePlus, roles: ['OWNER', 'WAREHOUSE'] },
   { label: 'Drug Catalog', to: '/drugs', icon: Pill, roles: ['OWNER'] },
   { label: 'Staff Management', to: '/users', icon: Users, roles: ['OWNER'] },
-  { label: 'Sales Reports', to: '/reports', icon: BarChart3, roles: ['OWNER'] },
+  { label: 'Tổng quan chi nhánh', to: '/reports', icon: LayoutDashboard, roles: ['OWNER'] },
 ];
 
 const roleLabels: Record<string, string> = {
