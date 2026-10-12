@@ -1,16 +1,16 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { BarChart3, Boxes, FileText, LogOut, Menu, PackagePlus, Pill, ShoppingCart, Users } from 'lucide-react';
+import { Boxes, FileText, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, ShoppingCart, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const navigation = [
-  { label: 'Point of Sale', to: '/checkout', icon: ShoppingCart },
-  { label: 'Invoices', to: '/invoices', icon: FileText },
-  { label: 'Inventory', to: '/inventory', icon: Boxes },
-  { label: 'Goods Receipts', to: '/goods-receipts', icon: PackagePlus, roles: ['OWNER', 'WAREHOUSE'] },
-  { label: 'Drug Catalog', to: '/drugs', icon: Pill, roles: ['OWNER'] },
-  { label: 'Staff Management', to: '/users', icon: Users, roles: ['OWNER'] },
-  { label: 'Sales Reports', to: '/reports', icon: BarChart3, roles: ['OWNER'] },
+  { label: 'Bán hàng tại quầy', to: '/checkout', icon: ShoppingCart },
+  { label: 'Hóa đơn bán hàng', to: '/invoices', icon: FileText },
+  { label: 'Tồn kho chi nhánh', to: '/inventory', icon: Boxes },
+  { label: 'Nhập kho thuốc', to: '/goods-receipts', icon: PackagePlus, roles: ['OWNER', 'WAREHOUSE'] },
+  { label: 'Danh mục thuốc', to: '/drugs', icon: Pill, roles: ['OWNER'] },
+  { label: 'Quản lý nhân viên', to: '/users', icon: Users, roles: ['OWNER'] },
+  { label: 'Tổng quan chi nhánh', to: '/reports', icon: LayoutDashboard, roles: ['OWNER'] },
 ];
 
 const roleLabels: Record<string, string> = {
@@ -58,7 +58,7 @@ export function AppShell() {
               >
                 <Icon size={17} strokeWidth={1.9} />
                 <span>{label}</span>
-                {label === 'Point of Sale' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-coral" />}
+                {label === 'Bán hàng tại quầy' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-coral" />}
               </NavLink>
             ))}
           </nav>

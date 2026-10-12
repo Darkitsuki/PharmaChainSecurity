@@ -119,7 +119,7 @@ export function CheckoutPage() {
     setError('');
     const existingIndex = cart.findIndex((line) => line.drug.drugId === selectedDrug.drugId && line.batch.batchId === selectedBatch.batchId);
     if (existingIndex >= 0 && cart[existingIndex].quantity + quantity > selectedBatch.stockQuantity) {
-      setError('Requested quantity exceeds the selected batch stock.');
+      setError(existingIndex < 0 ? '' : 'Số lượng yêu cầu vượt quá tồn kho của lô đã chọn.');
       return;
     }
     setCart(existingIndex < 0
@@ -157,7 +157,7 @@ export function CheckoutPage() {
       setCart([]);
       idempotencyKey.current = crypto.randomUUID();
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Checkout could not be completed.');
+      setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể hoàn tất thanh toán hóa đơn.');
     } finally {
       setIsSubmitting(false);
     }
@@ -192,19 +192,19 @@ export function CheckoutPage() {
     <div className="animate-enter">
       <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.13em] text-forest">Sales desk</p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-ink">Point of Sale</h1>
-          <p className="mt-1.5 text-sm text-slate-500">Build an invoice from branch stock.</p>
+          <p className="text-xs font-bold uppercase tracking-[0.13em] text-forest">Quầy thu ngân</p>
+          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-ink">Bán hàng tại quầy</h1>
+          <p className="mt-1.5 text-sm text-slate-500">Tạo hóa đơn bán lẻ trực tiếp từ tồn kho chi nhánh.</p>
         </div>
         <div className="flex items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-xs font-semibold text-slate-600">
-          <ShoppingBag size={15} className="text-forest" /> {itemCount} units in cart
+          <ShoppingBag size={15} className="text-forest" /> {itemCount} sản phẩm trong giỏ
         </div>
       </div>
 
       {error && (
         <div role="alert" className="mb-5 flex items-center justify-between gap-3 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           {error}
-          <button onClick={() => setError('')} aria-label="Dismiss error"><X size={16} /></button>
+          <button onClick={() => setError('')} aria-label="Bỏ qua thông báo"><X size={16} /></button>
         </div>
       )}
 
@@ -213,14 +213,14 @@ export function CheckoutPage() {
         <section>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-base font-extrabold text-ink">
-              Medicine catalog <span className="ml-1 font-sans text-xs font-medium text-slate-400">{drugs.length}</span>
+              Danh mục thuốc <span className="ml-1 font-sans text-xs font-medium text-slate-400">({drugs.length} mặt hàng)</span>
             </h2>
             <label className="relative block w-full sm:w-[280px]">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search medicine or code"
+                placeholder="Tìm tên thuốc hoặc mã thuốc..."
                 className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-xs text-ink placeholder:text-slate-400 focus:border-forest focus:outline-none"
               />
             </label>
@@ -228,7 +228,7 @@ export function CheckoutPage() {
 
           {isLoadingDrugs ? (
             <div className="flex h-40 items-center justify-center gap-2 text-sm text-slate-500">
-              <LoaderCircle size={17} className="animate-spin" /> Loading catalog
+              <LoaderCircle size={17} className="animate-spin" /> Đang tải danh mục thuốc...
             </div>
           ) : drugs.length ? (
             <div className="overflow-hidden rounded-md border border-line bg-white shadow-panel">
@@ -253,19 +253,19 @@ export function CheckoutPage() {
             </div>
           ) : (
             <div className="rounded-md border border-dashed border-line bg-white px-5 py-12 text-center text-sm text-slate-500">
-              No medicines match that search.
+              Không tìm thấy thuốc nào phù hợp với từ khóa tìm kiếm.
             </div>
           )}
 
           <div className="mt-5 grid gap-3 rounded-md border border-line bg-white p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_auto] sm:items-end">
             <label className="block">
-              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Selected medicine</span>
+              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Thuốc đã chọn</span>
               <span className="flex h-10 items-center truncate rounded-md bg-slate-50 px-3 text-xs font-semibold text-ink">
-                {selectedDrug?.name ?? 'Choose from catalog'}
+                {selectedDrug?.name ?? 'Chọn thuốc từ danh mục'}
               </span>
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Batch</span>
+              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Lô thuốc (FEFO)</span>
               <span className="relative block">
                 <select
                   disabled={!selectedDrug || isLoadingBatches}
@@ -273,10 +273,10 @@ export function CheckoutPage() {
                   onChange={(event) => setSelectedBatchId(event.target.value)}
                   className="h-10 w-full appearance-none rounded-md border border-line bg-white px-3 pr-8 text-xs text-ink disabled:bg-slate-50 disabled:text-slate-400"
                 >
-                  <option value="">{isLoadingBatches ? 'Loading…' : 'Select batch'}</option>
+                  <option value="">{isLoadingBatches ? 'Đang tải…' : 'Chọn lô xuất bán'}</option>
                   {batches.map((batch) => (
                     <option key={batch.batchId} value={batch.batchId}>
-                      {batch.batchNo} · {batch.stockQuantity} available
+                      {batch.batchNo} · Còn {batch.stockQuantity} {selectedDrug?.unit ?? 'đơn vị'}
                     </option>
                   ))}
                 </select>
@@ -284,7 +284,7 @@ export function CheckoutPage() {
               </span>
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Quantity</span>
+              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Số lượng</span>
               <input
                 type="number"
                 min="1"
@@ -299,7 +299,7 @@ export function CheckoutPage() {
               disabled={!selectedDrug || !selectedBatch || quantity < 1 || quantity > (selectedBatch?.stockQuantity ?? 0)}
               className="flex h-10 items-center justify-center gap-2 rounded-md bg-ink px-4 text-xs font-bold text-white hover:bg-forest disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Plus size={15} /> Add
+              <Plus size={15} /> Thêm
             </button>
           </div>
         </section>
@@ -394,9 +394,9 @@ export function CheckoutPage() {
 
           {/* Cart Header */}
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <h2 className="font-display text-base font-extrabold text-ink">Current sale</h2>
+            <h2 className="font-display text-base font-extrabold text-ink">Đơn hàng hiện tại</h2>
             <span className="rounded bg-mint px-2 py-1 text-[10px] font-bold uppercase text-forest">
-              {cart.length} lines
+              {cart.length} dòng thuốc
             </span>
           </div>
 
@@ -406,7 +406,7 @@ export function CheckoutPage() {
               <div className="grid min-h-[140px] place-items-center text-center text-xs text-slate-400">
                 <div>
                   <ShoppingBag className="mx-auto mb-2 text-slate-300" size={21} />
-                  Your cart is empty
+                  Giỏ hàng đang trống
                 </div>
               </div>
             ) : (
@@ -416,12 +416,12 @@ export function CheckoutPage() {
                     <div className="min-w-0">
                       <p className="truncate text-xs font-bold text-ink">{line.drug.name}</p>
                       <p className="mt-1 truncate text-[10px] text-slate-500">
-                        {line.batch.batchNo} · {money.format(line.drug.price)} / {line.drug.unit}
+                        Lô: {line.batch.batchNo} · {money.format(line.drug.price)} / {line.drug.unit}
                       </p>
                     </div>
                     <button
                       onClick={() => updateQuantity(index, 0)}
-                      aria-label={`Remove ${line.drug.name}`}
+                      aria-label={`Xóa ${line.drug.name}`}
                       className="text-slate-400 hover:text-rose-600"
                     >
                       <X size={15} />
@@ -432,7 +432,7 @@ export function CheckoutPage() {
                       <button
                         onClick={() => updateQuantity(index, line.quantity - 1)}
                         className="grid h-7 w-7 place-items-center rounded border border-line text-slate-600 hover:bg-slate-50"
-                        aria-label="Decrease quantity"
+                        aria-label="Giảm số lượng"
                       >
                         −
                       </button>
@@ -441,7 +441,7 @@ export function CheckoutPage() {
                         onClick={() => updateQuantity(index, line.quantity + 1)}
                         disabled={line.quantity >= line.batch.stockQuantity}
                         className="grid h-7 w-7 place-items-center rounded border border-line text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-                        aria-label="Increase quantity"
+                        aria-label="Tăng số lượng"
                       >
                         +
                       </button>
@@ -458,7 +458,7 @@ export function CheckoutPage() {
           {/* Cart Footer */}
           <div className="border-t border-line bg-[#fafcfb] px-5 py-4">
             <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>Subtotal</span>
+              <span>Tạm tính</span>
               <span className="font-mono">{money.format(total)}</span>
             </div>
             {selectedCustomer && (
@@ -468,7 +468,7 @@ export function CheckoutPage() {
               </div>
             )}
             <div className="mt-3 flex items-end justify-between">
-              <span className="text-sm font-bold text-ink">Total</span>
+              <span className="text-sm font-bold text-ink">Tổng thanh toán</span>
               <span className="font-mono text-xl font-semibold text-forest">{money.format(total)}</span>
             </div>
             <button
@@ -478,11 +478,11 @@ export function CheckoutPage() {
             >
               {isSubmitting ? (
                 <>
-                  <LoaderCircle size={16} className="animate-spin" /> Processing sale
+                  <LoaderCircle size={16} className="animate-spin" /> Đang phát hành &amp; Ký số HSM...
                 </>
               ) : (
                 <>
-                  Complete sale <Check size={16} />
+                  Thanh toán &amp; Xuất hóa đơn <Check size={16} />
                 </>
               )}
             </button>
@@ -581,7 +581,7 @@ export function CheckoutPage() {
                   disabled={isCreatingCustomer}
                   className="flex h-9 items-center justify-center gap-1.5 rounded bg-forest px-4 text-xs font-bold text-white hover:bg-forest/90 disabled:opacity-50"
                 >
-                  {isCreatingCustomer ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} Lưu & Chọn
+                  {isCreatingCustomer ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} Lưu &amp; Chọn
                 </button>
               </div>
             </form>
@@ -605,21 +605,21 @@ export function CheckoutPage() {
                   <Check size={20} />
                 </span>
                 <div>
-                  <h2 id="receipt-title" className="font-display text-lg font-extrabold text-ink">Sale completed</h2>
-                  <p className="mt-0.5 text-xs text-slate-500">Invoice issued and digitally signed.</p>
+                  <h2 id="receipt-title" className="font-display text-lg font-extrabold text-ink">Thanh toán hoàn tất</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">Hóa đơn đã được phát hành và ký số điện tử HSM PKCS#11.</p>
                 </div>
               </div>
               <button
                 onClick={() => setReceipt(null)}
                 className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-slate-100"
-                aria-label="Close receipt"
+                aria-label="Đóng biên lai"
               >
                 <X size={17} />
               </button>
             </div>
             <div className="space-y-4 px-6 py-5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500">Invoice</span>
+                <span className="text-slate-500">Số hóa đơn</span>
                 <span className="font-mono font-semibold text-ink">{receipt.invoiceNumber}</span>
               </div>
               {receipt.customerName && (
@@ -629,15 +629,15 @@ export function CheckoutPage() {
                 </div>
               )}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-500">Invoice ID</span>
+                <span className="text-slate-500">Mã định danh hóa đơn</span>
                 <span className="max-w-[270px] truncate font-mono text-[10px] text-ink">{receipt.invoiceId}</span>
               </div>
               <div className="flex items-center justify-between border-t border-line pt-4">
-                <span className="text-sm font-bold text-ink">Total amount</span>
+                <span className="text-sm font-bold text-ink">Tổng tiền thanh toán</span>
                 <span className="font-mono text-lg font-semibold text-forest">{money.format(receipt.totalAmount)}</span>
               </div>
               <div>
-                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">SHA-256 signature</p>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">Chữ ký số SHA-256 (Ledger)</p>
                 <div className="break-all rounded-md bg-[#f3f6f4] p-3 font-mono text-[10px] leading-5 text-ink">
                   {receipt.hashValueSha256}
                 </div>
@@ -646,9 +646,9 @@ export function CheckoutPage() {
             <div className="border-t border-line px-6 py-4">
               <button
                 onClick={() => setReceipt(null)}
-                className="h-10 w-full rounded-md bg-ink text-xs font-bold text-white hover:bg-forest"
+                className="h-10 w-full rounded-md bg-forest text-xs font-bold text-white hover:bg-forest/90"
               >
-                Done
+                Hoàn tất
               </button>
             </div>
           </section>

@@ -47,7 +47,7 @@ public sealed class AuthService : IAuthService
         await using var command = connection.CreateCommand();
         command.BindByName = true;
         command.CommandText = """
-            SELECT u.id, u.Username, u.PasswordHash, u.FullName, u.BranchId, b.BranchName, u.IsActive, r.RoleName
+            SELECT u.id, u.Username, u.PasswordHash, u.FullName, u.BranchId, b.BranchName, u.IsActive, r.RoleName, u.RoleId
             FROM USERS u
             INNER JOIN ROLES r ON u.RoleId = r.id
             INNER JOIN BRANCHES b ON u.BranchId = b.id
@@ -71,6 +71,7 @@ public sealed class AuthService : IAuthService
         var branchName = reader.IsDBNull(5) ? branchId : reader.GetString(5);
         var isActive = reader.GetInt32(6);
         var roleName = reader.GetString(7);
+        var roleId = reader.GetString(8);
 
         if (isActive == 0)
         {
@@ -86,7 +87,7 @@ public sealed class AuthService : IAuthService
             return Result<LoginResponse>.Failure("Invalid username or password.");
         }
 
-        var role = MapToUserRole(roleName);
+        var role = MapToUserRole(roleName, roleId);
         var token = jwtTokenService.GenerateToken(userId, username, role, branchId);
         var profile = new UserProfileResponse(userId, username, fullName, role.ToString(), branchId, branchName);
 
@@ -109,7 +110,7 @@ public sealed class AuthService : IAuthService
         await using var command = connection.CreateCommand();
         command.BindByName = true;
         command.CommandText = """
-            SELECT u.id, u.Username, u.FullName, u.BranchId, b.BranchName, r.RoleName
+            SELECT u.id, u.Username, u.FullName, u.BranchId, b.BranchName, r.RoleName, u.RoleId
             FROM USERS u
             INNER JOIN ROLES r ON u.RoleId = r.id
             INNER JOIN BRANCHES b ON u.BranchId = b.id
@@ -127,7 +128,8 @@ public sealed class AuthService : IAuthService
         var branchId = reader.GetString(3);
         var branchName = reader.IsDBNull(4) ? branchId : reader.GetString(4);
         var roleName = reader.GetString(5);
-        var role = MapToUserRole(roleName);
+        var roleId = reader.GetString(6);
+        var role = MapToUserRole(roleName, roleId);
 
         return Result<UserProfileResponse>.Success(new UserProfileResponse(id, username, fullName, role.ToString(), branchId, branchName));
     }
@@ -202,14 +204,23 @@ public sealed class AuthService : IAuthService
         }
     }
 
-    private static UserRole MapToUserRole(string roleName)
+    private static UserRole MapToUserRole(string roleName, string? roleId = null)
     {
-        return roleName.Trim().ToUpperInvariant() switch
-        {
-            "CHỦ NHÀ THUỐC" or "CHU NHA THUOC" or "OWNER" => UserRole.OWNER,
-            "NHÂN VIÊN KHO" or "NHAN VIEN KHO" or "WAREHOUSE" => UserRole.WAREHOUSE,
-            "NHÂN VIÊN BÁN HÀNG" or "NHAN VIEN BAN HANG" or "SALES" => UserRole.SALES,
-            _ => Enum.TryParse<UserRole>(roleName, true, out var role) ? role : UserRole.SALES
-        };
+        if (string.Equals(roleId, "rl-00000000-0000-0000-0000-000000000001", StringComparison.OrdinalIgnoreCase))
+            return UserRole.OWNER;
+        if (string.Equals(roleId, "rl-00000000-0000-0000-0000-000000000002", StringComparison.OrdinalIgnoreCase))
+            return UserRole.WAREHOUSE;
+        if (string.Equals(roleId, "rl-00000000-0000-0000-0000-000000000003", StringComparison.OrdinalIgnoreCase))
+            return UserRole.SALES;
+
+        var clean = roleName.Trim().ToUpperInvariant();
+        if (clean.Contains("CHỦ") || clean.Contains("CHU") || clean.Contains("OWNER"))
+            return UserRole.OWNER;
+        if (clean.Contains("KHO") || clean.Contains("WAREHOUSE"))
+            return UserRole.WAREHOUSE;
+        if (clean.Contains("BÁN") || clean.Contains("BAN") || clean.Contains("SALES"))
+            return UserRole.SALES;
+
+        return Enum.TryParse<UserRole>(roleName, true, out var role) ? role : UserRole.SALES;
     }
 }

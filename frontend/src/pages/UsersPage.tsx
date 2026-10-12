@@ -60,7 +60,7 @@ export function UsersPage() {
       if (err instanceof ApiError) {
         setError(err.detail || err.message);
       } else {
-        setError('Failed to load branch staff list.');
+        setError('Không thể tải danh sách nhân viên chi nhánh.');
       }
     } finally {
       setLoading(false);
@@ -69,7 +69,7 @@ export function UsersPage() {
 
   async function handleToggleStatus(user: StaffUser) {
     if (user.id === currentUser?.userId) {
-      setError('You cannot deactivate your own active account (Rule 05 Self-Lockout defense).');
+      setError('Bạn không thể tự vô hiệu hóa tài khoản của chính mình (Nguyên tắc an toàn chống tự khóa tài khoản).');
       return;
     }
 
@@ -84,12 +84,12 @@ export function UsersPage() {
       });
 
       setUsers(prev => prev.map(u => (u.id === updated.id ? updated : u)));
-      setSuccessMsg(`Staff account '${updated.username}' is now ${newStatus ? 'active' : 'deactivated'}.`);
+      setSuccessMsg(`Tài khoản nhân viên '${updated.username}' hiện đã ${newStatus ? 'kích hoạt hoạt động' : 'tạm ngưng hoạt động'}.`);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.detail || err.message);
       } else {
-        setError('Failed to update staff status.');
+        setError('Không thể cập nhật trạng thái nhân viên.');
       }
     } finally {
       setUpdatingId(null);
@@ -98,13 +98,14 @@ export function UsersPage() {
 
   async function handleCreateStaff(e: React.FormEvent) {
     e.preventDefault();
+
     if (!formData.username.trim() || !formData.password.trim() || !formData.fullName.trim()) {
-      setCreateError('Please complete all required fields.');
+      setCreateError('Vui lòng điền đầy đủ các thông tin bắt buộc.');
       return;
     }
 
     if (formData.password.length < 6) {
-      setCreateError('Password must be at least 6 characters long.');
+      setCreateError('Mật khẩu phải có độ dài ít nhất 6 ký tự.');
       return;
     }
 
@@ -131,12 +132,12 @@ export function UsersPage() {
         phoneNumber: '',
         role: 'SALES'
       });
-      setSuccessMsg(`Created new ${created.role} staff account: ${created.username}`);
+      setSuccessMsg(`Đã tạo thành công tài khoản nhân viên: ${created.username} (${created.fullName})`);
     } catch (err) {
       if (err instanceof ApiError) {
         setCreateError(err.detail || err.message);
       } else {
-        setCreateError('Failed to create staff account.');
+        setCreateError('Không thể tạo tài khoản nhân viên.');
       }
     } finally {
       setCreating(false);
@@ -159,21 +160,21 @@ export function UsersPage() {
         return (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 ring-1 ring-inset ring-purple-600/20">
             <ShieldCheck size={13} className="text-purple-600" />
-            Owner
+            Chủ nhà thuốc
           </span>
         );
       case 'SALES':
         return (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-mint px-2.5 py-1 text-xs font-semibold text-forest ring-1 ring-inset ring-forest/20">
             <UserCheck size={13} className="text-forest" />
-            Sales Staff
+            Dược sĩ bán hàng
           </span>
         );
       case 'WAREHOUSE':
         return (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
             <KeyRound size={13} className="text-amber-600" />
-            Warehouse
+            Thủ kho
           </span>
         );
       default:
@@ -196,10 +197,10 @@ export function UsersPage() {
             </div>
             <div>
               <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-                Staff Management
+                Quản Lý Nhân Viên
               </h1>
               <p className="mt-1 text-sm text-slate-500">
-                Manage branch staff accounts, operational roles, and access credentials.
+                Quản lý tài khoản nhân sự chi nhánh, vai trò nghiệp vụ và trạng thái hoạt động.
               </p>
             </div>
           </div>
@@ -210,10 +211,10 @@ export function UsersPage() {
             onClick={loadUsers}
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-ink disabled:opacity-60"
-            title="Refresh staff list"
+            title="Làm mới danh sách nhân viên"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-            <span>Refresh</span>
+            <span>Làm mới</span>
           </button>
 
           <button
@@ -224,7 +225,7 @@ export function UsersPage() {
             className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-forest/90 focus:outline-none focus:ring-2 focus:ring-forest/30"
           >
             <UserPlus size={16} />
-            <span>Add Staff Member</span>
+            <span>Thêm Nhân Viên Mới</span>
           </button>
         </div>
       </div>
@@ -256,7 +257,7 @@ export function UsersPage() {
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by full name, username, or phone number..."
+            placeholder="Tìm theo họ tên, tên đăng nhập hoặc số điện thoại..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             className="w-full rounded-lg border border-line bg-slate-50/50 py-2 pl-10 pr-4 text-xs text-ink placeholder:text-slate-400 focus:border-forest focus:bg-white focus:outline-none focus:ring-2 focus:ring-forest/20"
@@ -264,18 +265,23 @@ export function UsersPage() {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-          <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Filter Role:</span>
-          {(['ALL', 'SALES', 'WAREHOUSE', 'OWNER'] as const).map(role => (
+          <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Lọc vai trò:</span>
+          {[
+            { key: 'ALL', label: 'Tất cả' },
+            { key: 'SALES', label: 'Dược sĩ bán hàng' },
+            { key: 'WAREHOUSE', label: 'Thủ kho' },
+            { key: 'OWNER', label: 'Chủ nhà thuốc' },
+          ].map(({ key, label }) => (
             <button
-              key={role}
-              onClick={() => setRoleFilter(role)}
+              key={key}
+              onClick={() => setRoleFilter(key as any)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                roleFilter === role
+                roleFilter === key
                   ? 'bg-forest text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200/70 hover:text-ink'
               }`}
             >
-              {role === 'ALL' ? 'All Roles' : role}
+              {label}
             </button>
           ))}
         </div>
@@ -286,18 +292,18 @@ export function UsersPage() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
             <LoaderCircle size={36} className="animate-spin text-forest" />
-            <p className="mt-3 text-xs font-medium">Loading branch personnel...</p>
+            <p className="mt-3 text-xs font-medium">Đang tải danh sách nhân sự chi nhánh...</p>
           </div>
         ) : filteredUsers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-400">
               <Users size={24} />
             </div>
-            <h3 className="mt-3 font-display text-sm font-bold text-ink">No staff members found</h3>
+            <h3 className="mt-3 font-display text-sm font-bold text-ink">Không tìm thấy nhân viên nào</h3>
             <p className="mt-1 text-xs text-slate-500">
               {searchTerm || roleFilter !== 'ALL'
-                ? 'Try adjusting your search query or filters.'
-                : 'Get started by creating your branch’s first sales or warehouse staff member.'}
+                ? 'Thử điều chỉnh lại từ khóa tìm kiếm hoặc bộ lọc vai trò.'
+                : 'Bắt đầu bằng cách thêm nhân viên bán hàng hoặc thủ kho đầu tiên cho chi nhánh.'}
             </p>
           </div>
         ) : (
@@ -305,13 +311,13 @@ export function UsersPage() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-line bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="py-3.5 pl-6 pr-4">Staff Member</th>
-                  <th className="px-4 py-3.5">Username</th>
-                  <th className="px-4 py-3.5">Role</th>
-                  <th className="px-4 py-3.5">Contact</th>
-                  <th className="px-4 py-3.5">Status</th>
-                  <th className="px-4 py-3.5">Joined Date</th>
-                  <th className="py-3.5 pl-4 pr-6 text-right">Actions</th>
+                  <th className="py-3.5 pl-6 pr-4">Nhân Viên</th>
+                  <th className="px-4 py-3.5">Tên Đăng Nhập</th>
+                  <th className="px-4 py-3.5">Vai Trò Nghiệp Vụ</th>
+                  <th className="px-4 py-3.5">Số Điện Thoại</th>
+                  <th className="px-4 py-3.5">Trạng Thái</th>
+                  <th className="px-4 py-3.5">Ngày Tham Gia</th>
+                  <th className="py-3.5 pl-4 pr-6 text-right">Thao Tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
@@ -329,11 +335,11 @@ export function UsersPage() {
                               <span className="font-semibold text-ink">{user.fullName}</span>
                               {isCurrent && (
                                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">
-                                  You
+                                  Bạn
                                 </span>
                               )}
                             </div>
-                            <span className="text-[11px] text-slate-400 font-mono">ID: {user.id.slice(0, 10)}...</span>
+                            <span className="text-[11px] text-slate-400 font-mono">Mã: {user.id.slice(0, 10)}...</span>
                           </div>
                         </div>
                       </td>
@@ -350,19 +356,19 @@ export function UsersPage() {
                             <span>{user.phoneNumber}</span>
                           </div>
                         ) : (
-                          <span className="text-slate-300 italic">Not set</span>
+                          <span className="text-slate-300 italic">Chưa cập nhật</span>
                         )}
                       </td>
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         {user.isActive ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            Active
+                            Đang hoạt động
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-400/20">
                             <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                            Inactive
+                            Tạm ngưng
                           </span>
                         )}
                       </td>
@@ -373,10 +379,10 @@ export function UsersPage() {
                         {isCurrent ? (
                           <span
                             className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 cursor-not-allowed"
-                            title="Rule 05: Self-lockout defense"
+                            title="Nguyên tắc an toàn chống tự khóa tài khoản"
                           >
                             <ShieldAlert size={13} />
-                            Locked (Self)
+                            Khóa (Chính bạn)
                           </span>
                         ) : (
                           <button
@@ -387,19 +393,19 @@ export function UsersPage() {
                                 ? 'border border-rose-200 text-rose-700 hover:bg-rose-50'
                                 : 'border border-emerald-200 text-emerald-700 hover:bg-emerald-50'
                             }`}
-                            title={user.isActive ? 'Deactivate account' : 'Reactivate account'}
+                            title={user.isActive ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt lại tài khoản'}
                           >
                             {updatingId === user.id ? (
                               <LoaderCircle size={14} className="animate-spin" />
                             ) : user.isActive ? (
                               <>
                                 <PowerOff size={13} />
-                                <span>Deactivate</span>
+                                <span>Vô hiệu hóa</span>
                               </>
                             ) : (
                               <>
                                 <CheckCircle2 size={13} />
-                                <span>Activate</span>
+                                <span>Kích hoạt</span>
                               </>
                             )}
                           </button>
@@ -424,8 +430,8 @@ export function UsersPage() {
                   <UserPlus size={18} />
                 </div>
                 <div>
-                  <h3 className="font-display text-base font-bold text-ink">Add Staff Member</h3>
-                  <p className="text-xs text-slate-500">Create login credentials for branch employee.</p>
+                  <h3 className="font-display text-base font-bold text-ink">Thêm Nhân Viên Mới</h3>
+                  <p className="text-xs text-slate-500">Cấp tài khoản đăng nhập cho nhân sự làm việc tại chi nhánh.</p>
                 </div>
               </div>
               <button
@@ -446,12 +452,12 @@ export function UsersPage() {
             <form onSubmit={handleCreateStaff} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700">
-                  Full Name <span className="text-rose-500">*</span>
+                  Họ và tên <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Nguyễn Văn An"
+                  placeholder="Ví dụ: Nguyễn Văn An"
                   value={formData.fullName}
                   onChange={e => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
                   className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-xs text-ink focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/20"
@@ -461,12 +467,12 @@ export function UsersPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700">
-                    Username <span className="text-rose-500">*</span>
+                    Tên đăng nhập <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="e.g. sales_an"
+                    placeholder="Ví dụ: nvbanhang_an"
                     value={formData.username}
                     onChange={e => setFormData(prev => ({ ...prev, username: e.target.value }))}
                     className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-xs text-ink font-mono focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/20"
@@ -475,11 +481,11 @@ export function UsersPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700">
-                    Phone Number
+                    Số điện thoại
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. 0912345678"
+                    placeholder="Ví dụ: 0912345678"
                     value={formData.phoneNumber}
                     onChange={e => setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))}
                     className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-xs text-ink focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/20"
@@ -489,14 +495,14 @@ export function UsersPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700">
-                  Password <span className="text-rose-500">*</span>
+                  Mật khẩu <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative mt-1">
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
                     minLength={6}
-                    placeholder="At least 6 characters"
+                    placeholder="Ít nhất 6 ký tự"
                     value={formData.password}
                     onChange={e => setFormData(prev => ({ ...prev, password: e.target.value }))}
                     className="w-full rounded-lg border border-line px-3 py-2 pr-10 text-xs text-ink focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/20"
@@ -509,12 +515,12 @@ export function UsersPage() {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">Securely hashed on server with Argon2/BouncyCastle.</p>
+                <p className="mt-1 text-[11px] text-slate-400">Được mã hóa băm an toàn trên máy chủ bằng thuật toán BCrypt.</p>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700">
-                  Operational Role <span className="text-rose-500">*</span>
+                  Vai trò nghiệp vụ <span className="text-rose-500">*</span>
                 </label>
                 <div className="mt-1.5 grid grid-cols-2 gap-3">
                   <button
@@ -527,8 +533,8 @@ export function UsersPage() {
                     }`}
                   >
                     <UserCheck size={18} />
-                    <span>Sales Staff</span>
-                    <span className="text-[10px] font-normal text-slate-500">POS checkout & invoices</span>
+                    <span>Dược sĩ bán hàng</span>
+                    <span className="text-[10px] font-normal text-slate-500">Bán hàng tại quầy &amp; xuất hóa đơn</span>
                   </button>
 
                   <button
@@ -541,8 +547,8 @@ export function UsersPage() {
                     }`}
                   >
                     <KeyRound size={18} />
-                    <span>Warehouse Staff</span>
-                    <span className="text-[10px] font-normal text-slate-500">Receipts & inventory</span>
+                    <span>Thủ kho</span>
+                    <span className="text-[10px] font-normal text-slate-500">Nhập kho &amp; kiểm soát tồn kho</span>
                   </button>
                 </div>
               </div>
@@ -554,7 +560,7 @@ export function UsersPage() {
                   disabled={creating}
                   className="rounded-lg border border-line px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                 >
-                  Cancel
+                  Hủy
                 </button>
                 <button
                   type="submit"
@@ -562,7 +568,7 @@ export function UsersPage() {
                   className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-forest/90 disabled:opacity-60"
                 >
                   {creating && <LoaderCircle size={14} className="animate-spin" />}
-                  <span>{creating ? 'Creating Account...' : 'Create Account'}</span>
+                  <span>{creating ? 'Đang tạo tài khoản...' : 'Tạo Tài Khoản'}</span>
                 </button>
               </div>
             </form>
