@@ -1,8 +1,24 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { AlertTriangle, Boxes, CheckCircle2, Clock, Edit3, LoaderCircle, Search, SlidersHorizontal, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Boxes,
+  Clock,
+  Edit3,
+  LoaderCircle,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
 import { useAuth } from '../context/AuthContext';
 import type { Drug, InventoryAlert, InventoryRow, PageResult } from '../types';
+import {
+  Modal,
+  DataTable,
+  SearchToolbar,
+  AlertBanner,
+  FefoExpiryBadge,
+  StatCard,
+  type Column,
+} from '../components/common';
 
 export function InventoryPage() {
   const { currentUser } = useAuth();
@@ -101,10 +117,9 @@ export function InventoryPage() {
         }),
       });
 
-      setSuccessNotice(`Đã cập nhật tồn kho lô ${adjustBatchId} thành công.`);
+      setSuccessNotice(`Đã cập nhật tồn kho lô thành công (${adjustNewQuantity} đơn vị).`);
       setIsAdjustModalOpen(false);
       loadData();
-      setTimeout(() => setSuccessNotice(''), 4000);
     } catch (err) {
       setAdjustError(err instanceof ApiError ? err.detail || err.message : 'Không thể điều chỉnh tồn kho.');
     } finally {
@@ -112,324 +127,309 @@ export function InventoryPage() {
     }
   }
 
+  const normalizedSearch = search.trim().toLowerCase();
+
   const filteredAllRows = rows.filter((row) => {
-    const query = search.trim().toLocaleLowerCase();
-    return !query || `${drugNames[row.drugId] ?? ''} ${row.drugId} ${row.batchId}`.toLocaleLowerCase().includes(query);
+    const name = drugNames[row.drugId]?.toLowerCase() ?? '';
+    return name.includes(normalizedSearch) || row.drugId.toLowerCase().includes(normalizedSearch) || row.batchId.toLowerCase().includes(normalizedSearch);
   });
 
   const filteredAlertRows = alertRows.filter((alert) => {
-    const query = search.trim().toLocaleLowerCase();
-    return !query || `${alert.drugName} ${alert.drugCode} ${alert.batchNo} ${alert.batchId}`.toLocaleLowerCase().includes(query);
+    return alert.drugName.toLowerCase().includes(normalizedSearch) || alert.drugCode.toLowerCase().includes(normalizedSearch) || alert.batchNo.toLowerCase().includes(normalizedSearch);
   });
 
-  const totalUnits = rows.reduce((sum, row) => sum + row.quantity, 0);
-  const lowStockCount = rows.filter((row) => row.quantity <= 10).length;
+  const totalUnits = rows.reduce((sum, item) => sum + item.quantity, 0);
+  const lowStockCount = rows.filter((item) => item.quantity <= 10).length;
+
+  const allColumns: Column<InventoryRow>[] = [
+    {
+      header: 'Thuốc',
+      cell: (row) => <span className="font-bold text-ink">{drugNames[row.drugId] ?? 'Đang nạp...'}</span>,
+    },
+    {
+      header: 'Mã Thuốc',
+      cell: (row) => <span className="font-mono text-[11px] text-slate-500">{row.drugId}</span>,
+    },
+    {
+      header: 'Mã Lô',
+      cell: (row) => <span className="font-mono text-[11px] text-slate-500">{row.batchId}</span>,
+    },
+    {
+      header: 'Tồn Khả Dụng',
+      align: 'right',
+      cell: (row) => (
+        <span
+          className={`inline-flex min-w-12 justify-center rounded-md px-2 py-1 font-mono text-xs font-semibold ${
+            row.quantity <= 10 ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/20' : 'bg-mint text-forest'
+          }`}
+        >
+          {row.quantity}
+        </span>
+      ),
+    },
+    ...(isAuthorizedToAdjust
+      ? [
+          {
+            header: 'Thao Tác',
+            align: 'center' as const,
+            cell: (row: InventoryRow) => (
+              <button
+                type="button"
+                onClick={() => handleOpenAdjust(row.drugId, row.batchId, row.quantity)}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-forest hover:bg-mint hover:text-forest cursor-pointer transition-colors"
+                title="Điều chỉnh số lượng lô này"
+              >
+                <Edit3 size={12} />
+                <span>Chỉnh</span>
+              </button>
+            ),
+          },
+        ]
+      : []),
+  ];
+
+  const alertColumns: Column<InventoryAlert>[] = [
+    {
+      header: 'Thuốc',
+      cell: (alert) => <span className="font-bold text-ink">{alert.drugName}</span>,
+    },
+    {
+      header: 'Mã Thuốc',
+      cell: (alert) => <span className="font-mono text-[11px] text-slate-500">{alert.drugCode}</span>,
+    },
+    {
+      header: 'Số Lô',
+      cell: (alert) => <span className="font-mono text-[11px] text-slate-700 font-semibold">{alert.batchNo}</span>,
+    },
+    {
+      header: 'Hạn Sử Dụng (FEFO)',
+      cell: (alert) => <FefoExpiryBadge expiryDate={alert.expiryDate} size="sm" />,
+    },
+    {
+      header: 'Tồn Khả Dụng',
+      align: 'right',
+      cell: (alert) => (
+        <span
+          className={`inline-flex min-w-12 justify-center rounded-md px-2 py-1 font-mono text-xs font-semibold ${
+            alert.quantity <= 10 ? 'bg-rose-50 text-rose-800 ring-1 ring-rose-600/20' : 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/20'
+          }`}
+        >
+          {alert.quantity}
+        </span>
+      ),
+    },
+    ...(isAuthorizedToAdjust
+      ? [
+          {
+            header: 'Thao Tác',
+            align: 'center' as const,
+            cell: (alert: InventoryAlert) => (
+              <button
+                type="button"
+                onClick={() => handleOpenAdjust(alert.drugId, alert.batchId, alert.quantity)}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-forest hover:bg-mint hover:text-forest cursor-pointer transition-colors"
+              >
+                <Edit3 size={12} />
+                <span>Chỉnh</span>
+              </button>
+            ),
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className="animate-enter">
-      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.13em] text-forest">Quản lý kho chi nhánh</p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-ink">Tồn Kho & Lô Thuốc</h1>
-          <p className="mt-1.5 text-sm text-slate-500">Kiểm soát số lượng khả dụng, cảnh báo cận hạn và điều chỉnh kiểm kê.</p>
+          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
+            Tồn Kho &amp; Lô Thuốc
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Kiểm soát số lượng khả dụng, cảnh báo cận hạn FEFO và điều chỉnh kiểm kê.
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="relative block w-full sm:w-[260px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        {isAuthorizedToAdjust && (
+          <button
+            type="button"
+            onClick={() => handleOpenAdjust()}
+            className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-forest/90 cursor-pointer"
+          >
+            <SlidersHorizontal size={15} />
+            <span>Điều chỉnh tồn kho</span>
+          </button>
+        )}
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <StatCard
+          title="Tổng đơn vị tồn kho"
+          value={totalUnits.toLocaleString('vi-VN')}
+          icon={Boxes}
+          badge={{ text: 'Thực tế tại quầy', variant: 'info' }}
+        />
+        <StatCard
+          title="Lô sắp hết hàng"
+          value={`${lowStockCount} lô`}
+          icon={AlertTriangle}
+          badge={{ text: 'Dưới 10 đơn vị', variant: lowStockCount > 0 ? 'warning' : 'success' }}
+        />
+      </div>
+
+      {/* Alerts */}
+      <AlertBanner type="success" message={successNotice} onClose={() => setSuccessNotice('')} />
+      <AlertBanner type="error" message={error} onClose={() => setError('')} />
+
+      {/* Tab Switcher & Search Toolbar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('all')}
+            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
+              activeTab === 'all' ? 'bg-forest text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Boxes size={15} />
+            <span>Tất cả tồn kho ({rows.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('expiring')}
+            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
+              activeTab === 'expiring' ? 'bg-amber-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Clock size={15} />
+            <span>Cảnh báo cận hạn (&le; 90 ngày)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('low')}
+            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
+              activeTab === 'low' ? 'bg-rose-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <AlertTriangle size={15} />
+            <span>Sắp hết hàng (&le; 10 đơn vị)</span>
+          </button>
+        </div>
+
+        <SearchToolbar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Tìm thuốc hoặc số lô..."
+          onRefresh={loadData}
+          loading={loading}
+        />
+      </div>
+
+      {/* Table Section */}
+      {activeTab === 'all' ? (
+        <DataTable
+          columns={allColumns}
+          data={filteredAllRows}
+          keyExtractor={(item) => `${item.drugId}-${item.batchId}`}
+          loading={loading}
+          loadingText="Đang tải dữ liệu tồn kho chi nhánh..."
+          emptyMessage={rows.length ? 'Không tìm thấy dòng khớp từ khóa tìm kiếm.' : 'Chưa có bản ghi tồn kho nào.'}
+        />
+      ) : (
+        <DataTable
+          columns={alertColumns}
+          data={filteredAlertRows}
+          keyExtractor={(item) => `${item.drugId}-${item.batchId}`}
+          loading={loading}
+          loadingText="Đang tải danh sách cảnh báo tồn kho..."
+          emptyMessage="Không có thuốc nào thuộc diện cảnh báo này. Tình trạng tồn kho an toàn!"
+        />
+      )}
+
+      {/* Modal Điều Chỉnh Tồn Kho */}
+      <Modal
+        isOpen={isAdjustModalOpen}
+        onClose={() => setIsAdjustModalOpen(false)}
+        title="Điều Chỉnh Tồn Kho Lô"
+        subtitle="Cập nhật số lượng kiểm kê thực tế tại chi nhánh và ghi vết kiểm toán."
+        icon={SlidersHorizontal}
+        maxWidth="md"
+      >
+        <form onSubmit={handleAdjustSubmit} className="space-y-4">
+          <AlertBanner type="error" message={adjustError} onClose={() => setAdjustError('')} />
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">Mã Thuốc</label>
             <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm thuốc hoặc số lô..."
-              className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-xs text-ink placeholder:text-slate-400 focus:border-forest focus:outline-none"
+              type="text"
+              required
+              value={adjustDrugId}
+              onChange={(e) => setAdjustDrugId(e.target.value)}
+              placeholder="ví dụ: dr-00000000-0000-0000-0000-000000000001"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono focus:border-forest focus:outline-hidden"
             />
-          </label>
+          </div>
 
-          {isAuthorizedToAdjust && (
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">Mã Lô Hạn</label>
+            <input
+              type="text"
+              required
+              value={adjustBatchId}
+              onChange={(e) => setAdjustBatchId(e.target.value)}
+              placeholder="ví dụ: bt-00000000-0000-0000-0000-000000000001"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono focus:border-forest focus:outline-hidden"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">Số Lượng Thực Tế Sau Điều Chỉnh</label>
+            <input
+              type="number"
+              min="0"
+              required
+              value={adjustNewQuantity}
+              onChange={(e) => setAdjustNewQuantity(Number(e.target.value))}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono font-bold text-forest focus:border-forest focus:outline-hidden"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">Lý Do Điều Chỉnh (Ghi sổ kiểm kê)</label>
+            <textarea
+              required
+              rows={3}
+              value={adjustReason}
+              onChange={(e) => setAdjustReason(e.target.value)}
+              placeholder="ví dụ: Kiểm kê định kỳ phát hiện vỡ 1 vỉ, hoặc điều chỉnh hao hụt..."
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-ink placeholder:text-slate-400 focus:border-forest focus:outline-hidden"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <button
-              onClick={() => handleOpenAdjust()}
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-forest px-4 text-xs font-bold text-white shadow-sm hover:bg-[#1c594b] transition-colors"
+              type="button"
+              onClick={() => setIsAdjustModalOpen(false)}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
             >
-              <SlidersHorizontal size={15} /> Điều chỉnh tồn kho
+              Hủy
             </button>
-          )}
-        </div>
-      </div>
-
-      {successNotice && (
-        <div role="status" className="mb-5 flex items-center gap-3 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
-          <span>{successNotice}</span>
-        </div>
-      )}
-
-      {error && <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div>}
-
-      <div className="mb-5 grid gap-3 sm:grid-cols-2">
-        <div className="flex items-center gap-3 rounded-md border border-line bg-white px-4 py-4">
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-mint text-forest"><Boxes size={17} /></span>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">Tổng đơn vị tồn kho</p>
-            <p className="mt-1 font-mono text-lg font-semibold text-ink">{totalUnits.toLocaleString()}</p>
+            <button
+              type="submit"
+              disabled={isSubmittingAdjust}
+              className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-forest/90 disabled:opacity-50"
+            >
+              {isSubmittingAdjust ? <LoaderCircle size={14} className="animate-spin" /> : <SlidersHorizontal size={14} />}
+              <span>{isSubmittingAdjust ? 'Đang cập nhật...' : 'Xác Nhận Điều Chỉnh'}</span>
+            </button>
           </div>
-        </div>
-        <div className="flex items-center gap-3 rounded-md border border-line bg-white px-4 py-4">
-          <span className={`grid h-9 w-9 place-items-center rounded-md ${lowStockCount ? 'bg-amber-50 text-amber-700' : 'bg-[#f3f6f4] text-slate-500'}`}>
-            <span className="font-mono text-xs font-bold">{lowStockCount}</span>
-          </span>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">Lô sắp hết hàng</p>
-            <p className="mt-1 text-xs text-slate-600">Dưới hoặc bằng 10 đơn vị</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-6 flex flex-wrap gap-2 border-b border-line pb-2">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`flex items-center gap-2 rounded-md px-3.5 py-2 text-xs font-bold transition-colors ${
-            activeTab === 'all' ? 'bg-forest text-white' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Boxes size={15} /> Tất cả tồn kho ({rows.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('expiring')}
-          className={`flex items-center gap-2 rounded-md px-3.5 py-2 text-xs font-bold transition-colors ${
-            activeTab === 'expiring' ? 'bg-amber-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Clock size={15} /> Cảnh báo cận hạn (&le; 90 ngày)
-        </button>
-
-        <button
-          onClick={() => setActiveTab('low')}
-          className={`flex items-center gap-2 rounded-md px-3.5 py-2 text-xs font-bold transition-colors ${
-            activeTab === 'low' ? 'bg-rose-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <AlertTriangle size={15} /> Sắp hết hàng (&le; 10 đơn vị)
-        </button>
-      </div>
-
-      <section className="overflow-hidden rounded-md border border-line bg-white shadow-panel">
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="font-display text-sm font-extrabold text-ink">
-            {activeTab === 'all' && 'Danh sách tồn kho theo lô'}
-            {activeTab === 'expiring' && 'Danh sách lô thuốc cận hạn sử dụng'}
-            {activeTab === 'low' && 'Danh sách thuốc có lượng tồn dưới ngưỡng'}
-          </h2>
-          <span className="text-[11px] text-slate-500">
-            {activeTab === 'all' ? `${filteredAllRows.length} dòng` : `${filteredAlertRows.length} cảnh báo`}
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          {activeTab === 'all' ? (
-            <table className="w-full min-w-[650px] border-collapse text-left">
-              <thead>
-                <tr className="bg-[#f8faf9] text-[10px] uppercase tracking-[0.1em] text-slate-500">
-                  <th className="px-5 py-3 font-bold">Thuốc</th>
-                  <th className="px-4 py-3 font-bold">Mã Thuốc</th>
-                  <th className="px-4 py-3 font-bold">Mã Lô</th>
-                  <th className="px-5 py-3 text-right font-bold">Tồn Khả Dụng</th>
-                  {isAuthorizedToAdjust && <th className="px-4 py-3 text-center font-bold">Thao tác</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {loading ? (
-                  <tr>
-                    <td colSpan={5} className="h-36 text-center text-sm text-slate-500">
-                      <span className="inline-flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" /> Đang tải dữ liệu tồn kho...</span>
-                    </td>
-                  </tr>
-                ) : !filteredAllRows.length ? (
-                  <tr>
-                    <td colSpan={5} className="h-36 text-center text-sm text-slate-500">
-                      {rows.length ? 'Không tìm thấy dòng khớp từ khóa tìm kiếm.' : 'Chưa có bản ghi tồn kho nào.'}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredAllRows.map((row) => (
-                    <tr key={`${row.drugId}-${row.batchId}`} className="hover:bg-[#fbfcfb]">
-                      <td className="px-5 py-4 text-xs font-bold text-ink">{drugNames[row.drugId] ?? 'Đang nạp...'}</td>
-                      <td className="px-4 py-4 font-mono text-[10px] text-slate-500">{row.drugId}</td>
-                      <td className="px-4 py-4 font-mono text-[10px] text-slate-500">{row.batchId}</td>
-                      <td className="px-5 py-4 text-right">
-                        <span className={`inline-flex min-w-12 justify-center rounded px-2 py-1 font-mono text-xs font-semibold ${
-                          row.quantity <= 10 ? 'bg-amber-50 text-amber-800' : 'bg-[#f0f7f3] text-forest'
-                        }`}>
-                          {row.quantity}
-                        </span>
-                      </td>
-                      {isAuthorizedToAdjust && (
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => handleOpenAdjust(row.drugId, row.batchId, row.quantity)}
-                            className="inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-forest hover:bg-mint hover:text-forest"
-                            title="Điều chỉnh số lượng lô này"
-                          >
-                            <Edit3 size={12} /> Chỉnh
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full min-w-[720px] border-collapse text-left">
-              <thead>
-                <tr className="bg-[#f8faf9] text-[10px] uppercase tracking-[0.1em] text-slate-500">
-                  <th className="px-5 py-3 font-bold">Thuốc</th>
-                  <th className="px-4 py-3 font-bold">Mã Thuốc</th>
-                  <th className="px-4 py-3 font-bold">Số Lô</th>
-                  <th className="px-4 py-3 font-bold">Hạn Sử Dụng</th>
-                  <th className="px-5 py-3 text-right font-bold">Tồn Khả Dụng</th>
-                  {isAuthorizedToAdjust && <th className="px-4 py-3 text-center font-bold">Thao tác</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="h-36 text-center text-sm text-slate-500">
-                      <span className="inline-flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" /> Đang tải danh sách cảnh báo...</span>
-                    </td>
-                  </tr>
-                ) : !filteredAlertRows.length ? (
-                  <tr>
-                    <td colSpan={6} className="h-36 text-center text-sm text-slate-500">
-                      Không có thuốc nào thuộc diện cảnh báo này. Tình trạng tốt!
-                    </td>
-                  </tr>
-                ) : (
-                  filteredAlertRows.map((alert) => (
-                    <tr key={`${alert.drugId}-${alert.batchId}`} className="hover:bg-[#fbfcfb]">
-                      <td className="px-5 py-4 text-xs font-bold text-ink">{alert.drugName}</td>
-                      <td className="px-4 py-4 font-mono text-[10px] text-slate-500">{alert.drugCode}</td>
-                      <td className="px-4 py-4 font-mono text-[11px] text-slate-600">{alert.batchNo}</td>
-                      <td className="px-4 py-4 text-xs text-slate-600">
-                        {new Date(alert.expiryDate).toLocaleDateString('vi-VN')}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <span className={`inline-flex min-w-12 justify-center rounded px-2 py-1 font-mono text-xs font-semibold ${
-                          alert.quantity <= 10 ? 'bg-rose-50 text-rose-800' : 'bg-amber-50 text-amber-800'
-                        }`}>
-                          {alert.quantity}
-                        </span>
-                      </td>
-                      {isAuthorizedToAdjust && (
-                        <td className="px-4 py-4 text-center">
-                          <button
-                            onClick={() => handleOpenAdjust(alert.drugId, alert.batchId, alert.quantity)}
-                            className="inline-flex items-center gap-1 rounded border border-line px-2 py-1 text-[11px] font-semibold text-slate-700 hover:border-forest hover:bg-mint hover:text-forest"
-                          >
-                            <Edit3 size={12} /> Chỉnh
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
-
-      {/* MODAL ĐIỀU CHỈNH TỒN KHO */}
-      {isAdjustModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="animate-enter w-full max-w-md rounded-lg border border-line bg-white p-6 shadow-2xl">
-            <div className="mb-5 flex items-center justify-between border-b border-line pb-3">
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal size={18} className="text-forest" />
-                <h3 className="font-display text-base font-extrabold text-ink">Điều Chỉnh Tồn Kho</h3>
-              </div>
-              <button
-                onClick={() => setIsAdjustModalOpen(false)}
-                className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-slate-100 hover:text-ink"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {adjustError && (
-              <div role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
-                {adjustError}
-              </div>
-            )}
-
-            <form onSubmit={handleAdjustSubmit} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700">Mã Thuốc (Drug ID)</label>
-                <input
-                  required
-                  value={adjustDrugId}
-                  onChange={(e) => setAdjustDrugId(e.target.value)}
-                  placeholder="Ví dụ: DRUG_001"
-                  className="h-10 w-full rounded border border-line px-3 text-xs text-ink focus:border-forest focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700">Mã Lô (Batch ID)</label>
-                <input
-                  required
-                  value={adjustBatchId}
-                  onChange={(e) => setAdjustBatchId(e.target.value)}
-                  placeholder="Ví dụ: BATCH_001"
-                  className="h-10 w-full rounded border border-line px-3 text-xs text-ink focus:border-forest focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700">Số Lượng Tồn Thực Tế Mới</label>
-                <input
-                  type="number"
-                  min={0}
-                  required
-                  value={adjustNewQuantity}
-                  onChange={(e) => setAdjustNewQuantity(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                  className="h-10 w-full rounded border border-line px-3 font-mono text-sm text-ink focus:border-forest focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-bold text-slate-700">Lý Do Điều Chỉnh</label>
-                <textarea
-                  required
-                  rows={2}
-                  value={adjustReason}
-                  onChange={(e) => setAdjustReason(e.target.value)}
-                  placeholder="Ví dụ: Kiểm kê định kỳ phát hiện chênh lệch, thuốc vỡ hỏng..."
-                  className="w-full rounded border border-line p-2.5 text-xs text-ink focus:border-forest focus:outline-none"
-                />
-              </div>
-
-              <div className="mt-6 flex items-center justify-end gap-2 border-t border-line pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsAdjustModalOpen(false)}
-                  className="h-9 rounded border border-line px-4 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingAdjust}
-                  className="inline-flex h-9 items-center gap-1.5 rounded bg-forest px-4 text-xs font-bold text-white hover:bg-[#1c594b] disabled:opacity-50"
-                >
-                  {isSubmittingAdjust ? <LoaderCircle size={14} className="animate-spin" /> : null}
-                  Xác nhận lưu
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

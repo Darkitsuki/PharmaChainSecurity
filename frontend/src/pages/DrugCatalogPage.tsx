@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react';
-import { 
-  CheckCircle2, 
-  ChevronLeft, 
-  ChevronRight, 
-  CircleAlert, 
-  Edit3, 
-  LoaderCircle, 
-  Pill, 
-  Plus, 
-  PowerOff, 
-  RefreshCw, 
-  Search, 
-  Tag, 
-  X 
+import {
+  CheckCircle2,
+  Edit3,
+  LoaderCircle,
+  Pill,
+  Plus,
+  PowerOff,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError, apiClient } from '../services/apiClient';
 import type { CreateDrugPayload, Drug, PageResult, UpdateDrugPayload } from '../types';
+import {
+  Modal,
+  DataTable,
+  SearchToolbar,
+  AlertBanner,
+  StatCard,
+  type Column,
+} from '../components/common';
 
 const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 
@@ -42,7 +43,7 @@ export function DrugCatalogPage() {
     name: '',
     activeIngredient: '',
     unit: 'Hộp',
-    price: 0
+    price: 0,
   });
 
   // Edit Modal
@@ -54,7 +55,7 @@ export function DrugCatalogPage() {
     activeIngredient: '',
     unit: 'Hộp',
     price: 0,
-    isActive: true
+    isActive: true,
   });
 
   // Deactivate
@@ -100,17 +101,16 @@ export function DrugCatalogPage() {
           name: newDrug.name.trim(),
           activeIngredient: newDrug.activeIngredient?.trim() || null,
           unit: newDrug.unit.trim(),
-          price: Number(newDrug.price)
-        })
+          price: Number(newDrug.price),
+        }),
       });
 
       setShowCreateModal(false);
       setNewDrug({ drugCode: '', name: '', activeIngredient: '', unit: 'Hộp', price: 0 });
-      setSuccessMsg('Thêm thuốc mới vào danh mục thành công!');
-      setTimeout(() => setSuccessMsg(''), 4000);
+      setSuccessMsg(`Đã thêm mới biệt dược '${newDrug.name}' vào hệ thống.`);
       await loadDrugs();
     } catch (err) {
-      setCreateError(err instanceof ApiError ? err.detail || err.message : 'Thêm thuốc thất bại.');
+      setCreateError(err instanceof ApiError ? err.detail || err.message : 'Không thể tạo mới thuốc.');
     } finally {
       setCreating(false);
     }
@@ -118,14 +118,14 @@ export function DrugCatalogPage() {
 
   function handleOpenEdit(drug: Drug) {
     setEditingDrug(drug);
+    setEditError('');
     setEditForm({
       name: drug.name,
       activeIngredient: drug.activeIngredient || '',
       unit: drug.unit,
       price: drug.price,
-      isActive: drug.isActive ?? true
+      isActive: drug.isActive ?? true,
     });
-    setEditError('');
   }
 
   async function handleUpdateDrug(e: React.FormEvent) {
@@ -151,51 +151,134 @@ export function DrugCatalogPage() {
           activeIngredient: editForm.activeIngredient?.trim() || null,
           unit: editForm.unit.trim(),
           price: Number(editForm.price),
-          isActive: editForm.isActive
-        })
+          isActive: editForm.isActive,
+        }),
       });
 
       setEditingDrug(null);
-      setSuccessMsg('Cập nhật thông tin thuốc và giá niêm yết thành công!');
-      setTimeout(() => setSuccessMsg(''), 4000);
+      setSuccessMsg(`Đã cập nhật thông tin thuốc '${editForm.name}'.`);
       await loadDrugs();
     } catch (err) {
-      setEditError(err instanceof ApiError ? err.detail || err.message : 'Cập nhật thất bại.');
+      setEditError(err instanceof ApiError ? err.detail || err.message : 'Cập nhật thuốc thất bại.');
     } finally {
       setUpdating(false);
     }
   }
 
   async function handleDeactivate(drugId: string) {
-    if (!confirm('Bạn có chắc muốn tạm ngừng kinh doanh thuốc này?')) return;
+    if (!window.confirm('Bạn có chắc chắn muốn tạm ngừng kinh doanh loại thuốc này?')) return;
     setDeactivatingId(drugId);
+    setError('');
     try {
-      await apiClient(`/drugs/${encodeURIComponent(drugId)}`, { method: 'DELETE' });
-      setSuccessMsg('Đã tạm ngừng kinh doanh thuốc.');
-      setTimeout(() => setSuccessMsg(''), 4000);
+      await apiClient(`/drugs/${encodeURIComponent(drugId)}/deactivate`, { method: 'PATCH' });
+      setSuccessMsg('Đã chuyển trạng thái thuốc sang Tạm ngưng kinh doanh.');
       await loadDrugs();
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể tạm ngừng thuốc.');
+      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể ngừng kinh doanh thuốc.');
     } finally {
       setDeactivatingId(null);
     }
   }
 
   const items = result?.items || [];
-  const filteredItems = items.filter(drug => {
-    const active = drug.isActive ?? true;
-    if (statusFilter === 'ACTIVE') return active;
-    if (statusFilter === 'INACTIVE') return !active;
+  const filteredItems = items.filter((d) => {
+    if (statusFilter === 'ACTIVE') return d.isActive ?? true;
+    if (statusFilter === 'INACTIVE') return !(d.isActive ?? true);
     return true;
   });
 
-  const totalCount = result?.totalCount || 0;
-  const activeCount = items.filter(d => (d.isActive ?? true)).length;
-  const inactiveCount = items.filter(d => (d.isActive ?? true) === false).length;
+  const totalCount = result?.totalCount ?? 0;
+  const activeCount = items.filter((d) => d.isActive ?? true).length;
+  const inactiveCount = items.filter((d) => !(d.isActive ?? true)).length;
+
+  const columns: Column<Drug>[] = [
+    {
+      header: 'Mã Thuốc',
+      cell: (d) => <span className="font-mono font-bold text-ink">{d.drugCode}</span>,
+    },
+    {
+      header: 'Tên Biệt Dược',
+      cell: (d) => <span className="font-semibold text-slate-900">{d.name}</span>,
+    },
+    {
+      header: 'Hoạt Chất Chính',
+      cell: (d) => <span className="text-slate-500">{d.activeIngredient || '—'}</span>,
+    },
+    {
+      header: 'Đơn Vị',
+      accessorKey: 'unit',
+      className: 'text-slate-600',
+    },
+    {
+      header: 'Giá Bán Niêm Yết',
+      align: 'right',
+      cell: (d) => (
+        <span className="font-display text-[13px] font-bold text-forest">
+          {money.format(d.price)}
+        </span>
+      ),
+    },
+    {
+      header: 'Trạng Thái',
+      align: 'center',
+      cell: (d) => {
+        const active = d.isActive ?? true;
+        return (
+          <span
+            className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+              active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+            }`}
+          >
+            {active ? 'Đang kinh doanh' : 'Tạm ngưng'}
+          </span>
+        );
+      },
+    },
+    ...(isOwner
+      ? [
+          {
+            header: 'Hành Động',
+            align: 'right' as const,
+            cell: (d: Drug) => {
+              const active = d.isActive ?? true;
+              return (
+                <div className="inline-flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(d)}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 shadow-2xs hover:bg-slate-50 hover:text-ink cursor-pointer"
+                    title="Chỉnh sửa thông tin & giá bán"
+                  >
+                    <Edit3 size={13} />
+                    <span>Sửa</span>
+                  </button>
+                  {active && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeactivate(d.drugId)}
+                      disabled={deactivatingId === d.drugId}
+                      className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 font-medium text-rose-600 shadow-2xs hover:bg-rose-50 disabled:opacity-50 cursor-pointer"
+                      title="Tạm ngừng kinh doanh"
+                    >
+                      {deactivatingId === d.drugId ? (
+                        <LoaderCircle size={13} className="animate-spin" />
+                      ) : (
+                        <PowerOff size={13} />
+                      )}
+                      <span>Ngừng</span>
+                    </button>
+                  )}
+                </div>
+              );
+            },
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className="mx-auto max-w-7xl p-4 lg:p-8">
-      {/* Header */}
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+      {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
@@ -208,11 +291,12 @@ export function DrugCatalogPage() {
 
         {isOwner && (
           <button
+            type="button"
             onClick={() => {
               setCreateError('');
               setShowCreateModal(true);
             }}
-            className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-forest/90"
+            className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-forest/90 cursor-pointer"
           >
             <Plus size={16} />
             <span>Thêm Thuốc Mới</span>
@@ -221,448 +305,287 @@ export function DrugCatalogPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-line bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tổng danh mục</span>
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-mint text-forest">
-              <Pill size={17} />
-            </div>
-          </div>
-          <p className="mt-2 font-display text-2xl font-bold text-ink">{totalCount} loại</p>
-        </div>
-
-        <div className="rounded-xl border border-line bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Đang kinh doanh</span>
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
-              <CheckCircle2 size={17} />
-            </div>
-          </div>
-          <p className="mt-2 font-display text-2xl font-bold text-emerald-700">{activeCount}</p>
-        </div>
-
-        <div className="rounded-xl border border-line bg-white p-5 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tạm ngưng</span>
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-slate-500">
-              <PowerOff size={17} />
-            </div>
-          </div>
-          <p className="mt-2 font-display text-2xl font-bold text-slate-600">{inactiveCount}</p>
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          title="Tổng danh mục"
+          value={`${totalCount} loại`}
+          icon={Pill}
+          badge={{ text: 'Toàn chuỗi', variant: 'info' }}
+        />
+        <StatCard
+          title="Đang kinh doanh"
+          value={activeCount}
+          icon={CheckCircle2}
+          badge={{ text: 'Khả dụng', variant: 'success' }}
+        />
+        <StatCard
+          title="Tạm ngưng"
+          value={inactiveCount}
+          icon={PowerOff}
+          badge={{ text: 'Dừng bán', variant: 'warning' }}
+        />
       </div>
 
-      {/* Notifications */}
-      {successMsg && (
-        <div className="mt-6 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
-          <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
-          <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg('')} className="ml-auto text-emerald-500 hover:text-emerald-700">
-            <X size={15} />
-          </button>
-        </div>
-      )}
+      {/* Alerts */}
+      <AlertBanner type="success" message={successMsg} onClose={() => setSuccessMsg('')} />
+      <AlertBanner type="error" message={error} onClose={() => setError('')} />
 
-      {error && (
-        <div className="mt-6 flex items-center gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800">
-          <CircleAlert size={16} className="shrink-0 text-rose-600" />
-          <span>{error}</span>
-          <button onClick={() => setError('')} className="ml-auto text-rose-500 hover:text-rose-700">
-            <X size={15} />
-          </button>
-        </div>
-      )}
-
-      {/* Search & Filter Bar */}
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative max-w-sm flex-1">
-          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={e => {
-              setSearchTerm(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Tìm theo tên thuốc, mã thuốc, hoạt chất..."
-            className="w-full rounded-lg border border-line bg-white pl-9 pr-3.5 py-2 text-xs text-ink placeholder:text-slate-400 focus:border-forest focus:outline-hidden focus:ring-1 focus:ring-forest"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Status filter buttons */}
-          <div className="inline-flex rounded-lg border border-line bg-white p-1 shadow-2xs">
-            <button
-              onClick={() => setStatusFilter('ALL')}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${statusFilter === 'ALL' ? 'bg-mint text-forest font-bold' : 'text-slate-500 hover:text-ink'}`}
-            >
-              Tất cả
-            </button>
-            <button
-              onClick={() => setStatusFilter('ACTIVE')}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${statusFilter === 'ACTIVE' ? 'bg-mint text-forest font-bold' : 'text-slate-500 hover:text-ink'}`}
-            >
-              Đang bán
-            </button>
-            <button
-              onClick={() => setStatusFilter('INACTIVE')}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${statusFilter === 'INACTIVE' ? 'bg-mint text-forest font-bold' : 'text-slate-500 hover:text-ink'}`}
-            >
-              Tạm ngưng
-            </button>
-          </div>
-
-          <button
-            onClick={loadDrugs}
-            disabled={loading}
-            className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-2xs hover:bg-slate-50 disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Làm mới</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Drugs Table */}
-      <div className="mt-4 overflow-hidden rounded-xl border border-line bg-white shadow-xs">
-        {loading ? (
-          <div className="flex h-64 items-center justify-center gap-2 text-xs font-medium text-slate-500">
-            <LoaderCircle size={18} className="animate-spin text-forest" />
-            <span>Đang tải danh mục thuốc...</span>
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="flex h-64 flex-col items-center justify-center p-6 text-center">
-            <Pill size={36} className="text-slate-300" />
-            <p className="mt-2 text-sm font-semibold text-ink">Không tìm thấy thuốc nào</p>
-            <p className="mt-1 text-xs text-slate-400">Thử thay đổi từ khóa tìm kiếm hoặc bấm Thêm Thuốc Mới.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-line bg-slate-50/80 font-semibold text-slate-600">
-                  <th className="px-4 py-3.5">Mã Thuốc</th>
-                  <th className="px-4 py-3.5">Tên Biệt Dược</th>
-                  <th className="px-4 py-3.5">Hoạt Chất Chính</th>
-                  <th className="px-4 py-3.5">Đơn Vị</th>
-                  <th className="px-4 py-3.5 text-right">Giá Bán Niêm Yết</th>
-                  <th className="px-4 py-3.5 text-center">Trạng Thái</th>
-                  {isOwner && <th className="px-4 py-3.5 text-right">Hành Động</th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {filteredItems.map(d => {
-                  const active = d.isActive ?? true;
-                  return (
-                    <tr key={d.drugId} className="transition-colors hover:bg-slate-50/60">
-                      <td className="px-4 py-3 font-mono font-bold text-ink">{d.drugCode}</td>
-                      <td className="px-4 py-3 font-semibold text-slate-900">{d.name}</td>
-                      <td className="px-4 py-3 text-slate-500">{d.activeIngredient || '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">{d.unit}</td>
-                      <td className="px-4 py-3 text-right font-display text-[13px] font-bold text-forest">
-                        {money.format(d.price)}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {active ? 'Đang kinh doanh' : 'Tạm ngưng'}
-                        </span>
-                      </td>
-                      {isOwner && (
-                        <td className="px-4 py-3 text-right">
-                          <div className="inline-flex items-center gap-1.5">
-                            <button
-                              onClick={() => handleOpenEdit(d)}
-                              className="inline-flex items-center gap-1 rounded-md border border-line bg-white px-2.5 py-1.5 font-medium text-slate-600 shadow-2xs hover:bg-slate-50 hover:text-ink"
-                              title="Chỉnh sửa thông tin & giá bán"
-                            >
-                              <Edit3 size={13} />
-                              <span>Sửa</span>
-                            </button>
-                            {active && (
-                              <button
-                                onClick={() => handleDeactivate(d.drugId)}
-                                disabled={deactivatingId === d.drugId}
-                                className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 font-medium text-rose-600 shadow-2xs hover:bg-rose-50 disabled:opacity-50"
-                                title="Tạm ngừng kinh doanh"
-                              >
-                                {deactivatingId === d.drugId ? (
-                                  <LoaderCircle size={13} className="animate-spin" />
-                                ) : (
-                                  <PowerOff size={13} />
-                                )}
-                                <span>Ngừng</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination Bar */}
-        {result && result.totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-line px-4 py-3 text-xs text-slate-500">
-            <span>
-              Hiển thị trang <strong className="text-ink">{result.page}</strong> / {result.totalPages} ({result.totalCount} thuốc)
-            </span>
-            <div className="flex items-center gap-2">
+      {/* Search & Filter Toolbar */}
+      <SearchToolbar
+        searchValue={searchTerm}
+        onSearchChange={(v) => {
+          setSearchTerm(v);
+          setPage(1);
+        }}
+        searchPlaceholder="Tìm theo tên thuốc, mã thuốc, hoạt chất..."
+        onRefresh={loadDrugs}
+        loading={loading}
+        filterSlot={
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-2xs">
+            {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map((filter) => (
               <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page <= 1 || loading}
-                className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 hover:bg-slate-50 disabled:opacity-40"
+                key={filter}
+                type="button"
+                onClick={() => setStatusFilter(filter)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
+                  statusFilter === filter
+                    ? 'bg-mint text-forest font-bold'
+                    : 'text-slate-500 hover:text-ink'
+                }`}
               >
-                <ChevronLeft size={14} />
-                <span>Trước</span>
+                {filter === 'ALL' ? 'Tất cả' : filter === 'ACTIVE' ? 'Đang bán' : 'Tạm ngưng'}
               </button>
-              <button
-                onClick={() => setPage(p => Math.min(result.totalPages, p + 1))}
-                disabled={page >= result.totalPages || loading}
-                className="inline-flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 hover:bg-slate-50 disabled:opacity-40"
+            ))}
+          </div>
+        }
+      />
+
+      {/* Drugs DataTable */}
+      <DataTable
+        columns={columns}
+        data={filteredItems}
+        keyExtractor={(item) => item.drugId}
+        loading={loading}
+        loadingText="Đang tải danh mục thuốc..."
+        emptyMessage="Không tìm thấy thuốc nào phù hợp với điều kiện tìm kiếm."
+        pagination={{
+          page,
+          totalPages: result?.totalPages ?? 1,
+          totalCount: result?.totalCount,
+          onPageChange: setPage,
+          itemLabel: 'loại thuốc',
+        }}
+      />
+
+      {/* Create Drug Modal */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Thêm Biệt Dược Mới"
+        subtitle="Khai báo thuốc mới vào danh mục tiêu chuẩn toàn chuỗi."
+        icon={Pill}
+        maxWidth="lg"
+      >
+        <form onSubmit={handleCreateDrug} className="space-y-4">
+          <AlertBanner type="error" message={createError} onClose={() => setCreateError('')} />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">
+                Mã Thuốc <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={newDrug.drugCode}
+                onChange={(e) => setNewDrug((p) => ({ ...p, drugCode: e.target.value.toUpperCase() }))}
+                placeholder="ví dụ: THUOC099"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono uppercase focus:border-forest focus:outline-hidden"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">
+                Đơn Vị Tính <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={newDrug.unit}
+                onChange={(e) => setNewDrug((p) => ({ ...p, unit: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
               >
-                <span>Sau</span>
-                <ChevronRight size={14} />
-              </button>
+                <option value="Hộp">Hộp</option>
+                <option value="Vỉ">Vỉ</option>
+                <option value="Viên">Viên</option>
+                <option value="Chai">Chai</option>
+                <option value="Ống">Ống</option>
+                <option value="Gói">Gói</option>
+                <option value="Tuýp">Tuýp</option>
+              </select>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* ========================================================================= */}
-      {/* MODAL: THÊM THUỐC MỚI (CHO CHỦ NHÀ THUỐC)                                */}
-      {/* ========================================================================= */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl border border-line bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-line px-6 py-4.5">
-              <div className="flex items-center gap-2.5">
-                <div className="grid h-8 w-8 place-items-center rounded-lg bg-mint text-forest">
-                  <Pill size={17} />
-                </div>
-                <div>
-                  <h2 className="font-display text-sm font-bold text-ink">Thêm Thuốc Mới Vào Danh Mục</h2>
-                  <p className="text-[11px] text-slate-500">Thuốc mới sẽ được cập nhật niêm yết cho toàn hệ thống.</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-ink"
-              >
-                <X size={17} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateDrug} className="p-6">
-              {createError && (
-                <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
-                  {createError}
-                </div>
-              )}
-
-              <div className="space-y-4 text-xs">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700">Mã Thuốc <span className="text-rose-500">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      value={newDrug.drugCode}
-                      onChange={e => setNewDrug(prev => ({ ...prev, drugCode: e.target.value }))}
-                      placeholder="VD: THUOC005"
-                      className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 uppercase text-ink focus:border-forest focus:outline-hidden"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700">Đơn Vị Tính <span className="text-rose-500">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      value={newDrug.unit}
-                      onChange={e => setNewDrug(prev => ({ ...prev, unit: e.target.value }))}
-                      placeholder="Hộp, Chai, Vỉ, Tuýp"
-                      className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-ink focus:border-forest focus:outline-hidden"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700">Tên Biệt Dược <span className="text-rose-500">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    value={newDrug.name}
-                    onChange={e => setNewDrug(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="VD: Kháng sinh Cefixim 200mg"
-                    className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-ink focus:border-forest focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700">Hoạt Chất Chính</label>
-                  <input
-                    type="text"
-                    value={newDrug.activeIngredient || ''}
-                    onChange={e => setNewDrug(prev => ({ ...prev, activeIngredient: e.target.value }))}
-                    placeholder="VD: Cefixime trihydrate"
-                    className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-ink focus:border-forest focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700">Giá Bán Niêm Yết (VND) <span className="text-rose-500">*</span></label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="500"
-                    required
-                    value={newDrug.price}
-                    onChange={e => setNewDrug(prev => ({ ...prev, price: Number(e.target.value) }))}
-                    className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 font-display text-sm font-bold text-forest focus:border-forest focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  disabled={creating}
-                  className="rounded-lg border border-line px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white hover:bg-forest/90 disabled:opacity-50"
-                >
-                  {creating && <LoaderCircle size={14} className="animate-spin" />}
-                  <span>Lưu Thuốc Mới</span>
-                </button>
-              </div>
-            </form>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">
+              Tên Biệt Dược <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={newDrug.name}
+              onChange={(e) => setNewDrug((p) => ({ ...p, name: e.target.value }))}
+              placeholder="ví dụ: Panadol Extra Đỏ"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
+            />
           </div>
-        </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* MODAL: CHỈNH SỬA THUỐC VÀ CẬP NHẬT GIÁ                                    */}
-      {/* ========================================================================= */}
-      {editingDrug && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-2xl border border-line bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-line px-6 py-4.5">
-              <div className="flex items-center gap-2.5">
-                <div className="grid h-8 w-8 place-items-center rounded-lg bg-blue-50 text-blue-700">
-                  <Tag size={17} />
-                </div>
-                <div>
-                  <h2 className="font-display text-sm font-bold text-ink">Chỉnh Sửa Thuốc & Giá Bán</h2>
-                  <p className="font-mono text-[11px] text-slate-500">{editingDrug.drugCode}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setEditingDrug(null)}
-                className="grid h-8 w-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-ink"
-              >
-                <X size={17} />
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateDrug} className="p-6">
-              {editError && (
-                <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
-                  {editError}
-                </div>
-              )}
-
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="block font-semibold text-slate-700">Tên Biệt Dược <span className="text-rose-500">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    value={editForm.name}
-                    onChange={e => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-ink focus:border-forest focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700">Hoạt Chất Chính</label>
-                  <input
-                    type="text"
-                    value={editForm.activeIngredient || ''}
-                    onChange={e => setEditForm(prev => ({ ...prev, activeIngredient: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-ink focus:border-forest focus:outline-hidden"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700">Đơn Vị Tính <span className="text-rose-500">*</span></label>
-                    <input
-                      type="text"
-                      required
-                      value={editForm.unit}
-                      onChange={e => setEditForm(prev => ({ ...prev, unit: e.target.value }))}
-                      className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-ink focus:border-forest focus:outline-hidden"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700">Giá Bán Niêm Yết (VND) <span className="text-rose-500">*</span></label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="500"
-                      required
-                      value={editForm.price}
-                      onChange={e => setEditForm(prev => ({ ...prev, price: Number(e.target.value) }))}
-                      className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 font-display text-sm font-bold text-forest focus:border-forest focus:outline-hidden"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editForm.isActive}
-                      onChange={e => setEditForm(prev => ({ ...prev, isActive: e.target.checked }))}
-                      className="h-4 w-4 rounded border-line text-forest focus:ring-forest"
-                    />
-                    <span className="font-semibold text-slate-800">Đang kinh doanh (Kích hoạt bán tại quầy POS)</span>
-                  </label>
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setEditingDrug(null)}
-                  disabled={updating}
-                  className="rounded-lg border border-line px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white hover:bg-forest/90 disabled:opacity-50"
-                >
-                  {updating && <LoaderCircle size={14} className="animate-spin" />}
-                  <span>Lưu Thay Đổi</span>
-                </button>
-              </div>
-            </form>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">Hoạt Chất & Hàm Lượng</label>
+            <input
+              type="text"
+              value={newDrug.activeIngredient || ''}
+              onChange={(e) => setNewDrug((p) => ({ ...p, activeIngredient: e.target.value }))}
+              placeholder="ví dụ: Paracetamol 500mg, Caffeine 65mg"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
+            />
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">
+              Giá Bán Niêm Yết (VNĐ) <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="500"
+              required
+              value={newDrug.price || ''}
+              onChange={(e) => setNewDrug((p) => ({ ...p, price: Number(e.target.value) }))}
+              placeholder="45000"
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-display font-bold text-forest focus:border-forest focus:outline-hidden"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={creating}
+              className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-forest/90 disabled:opacity-50"
+            >
+              {creating ? <LoaderCircle size={14} className="animate-spin" /> : <Plus size={14} />}
+              <span>{creating ? 'Đang thêm...' : 'Lưu Danh Mục'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Drug Modal */}
+      <Modal
+        isOpen={editingDrug !== null}
+        onClose={() => setEditingDrug(null)}
+        title={`Chỉnh Sửa: ${editingDrug?.name || ''}`}
+        subtitle={`Mã thuốc: ${editingDrug?.drugCode || ''}`}
+        icon={Edit3}
+        maxWidth="lg"
+      >
+        <form onSubmit={handleUpdateDrug} className="space-y-4">
+          <AlertBanner type="error" message={editError} onClose={() => setEditError('')} />
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">
+              Tên Biệt Dược <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={editForm.name}
+              onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">
+                Đơn Vị Tính <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={editForm.unit}
+                onChange={(e) => setEditForm((p) => ({ ...p, unit: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
+              >
+                <option value="Hộp">Hộp</option>
+                <option value="Vỉ">Vỉ</option>
+                <option value="Viên">Viên</option>
+                <option value="Chai">Chai</option>
+                <option value="Ống">Ống</option>
+                <option value="Gói">Gói</option>
+                <option value="Tuýp">Tuýp</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">
+                Giá Bán Niêm Yết (VNĐ) <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="500"
+                required
+                value={editForm.price}
+                onChange={(e) => setEditForm((p) => ({ ...p, price: Number(e.target.value) }))}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-display font-bold text-forest focus:border-forest focus:outline-hidden"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">Hoạt Chất Chính</label>
+            <input
+              type="text"
+              value={editForm.activeIngredient || ''}
+              onChange={(e) => setEditForm((p) => ({ ...p, activeIngredient: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="isActiveToggle"
+              checked={editForm.isActive ?? true}
+              onChange={(e) => setEditForm((p) => ({ ...p, isActive: e.target.checked }))}
+              className="rounded text-forest focus:ring-forest cursor-pointer"
+            />
+            <label htmlFor="isActiveToggle" className="text-xs font-semibold text-slate-700 cursor-pointer">
+              Đang kinh doanh (Bỏ chọn nếu muốn tạm ngưng bán)
+            </label>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setEditingDrug(null)}
+              className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={updating}
+              className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-forest/90 disabled:opacity-50"
+            >
+              {updating ? <LoaderCircle size={14} className="animate-spin" /> : <Edit3 size={14} />}
+              <span>{updating ? 'Đang lưu...' : 'Lưu Thay Đổi'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
