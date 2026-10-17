@@ -1,13 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Boxes, FileText, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, ShoppingCart, Users } from 'lucide-react';
+import { Boxes, FileText, HeartHandshake, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, ShoppingCart, Truck, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const navigation = [
   { label: 'Bán hàng tại quầy', to: '/checkout', icon: ShoppingCart },
   { label: 'Hóa đơn bán hàng', to: '/invoices', icon: FileText },
+  { label: 'Khách hàng & Tích điểm', to: '/customers', icon: HeartHandshake, roles: ['OWNER', 'SALES'] },
   { label: 'Tồn kho chi nhánh', to: '/inventory', icon: Boxes },
   { label: 'Nhập kho thuốc', to: '/goods-receipts', icon: PackagePlus, roles: ['OWNER', 'WAREHOUSE'] },
+  { label: 'Nhà cung cấp', to: '/suppliers', icon: Truck, roles: ['OWNER', 'WAREHOUSE'] },
   { label: 'Danh mục thuốc', to: '/drugs', icon: Pill, roles: ['OWNER'] },
   { label: 'Quản lý nhân viên', to: '/users', icon: Users, roles: ['OWNER'] },
   { label: 'Tổng quan chi nhánh', to: '/reports', icon: LayoutDashboard, roles: ['OWNER'] },
