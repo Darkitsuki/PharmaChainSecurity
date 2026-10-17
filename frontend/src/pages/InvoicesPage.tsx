@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
 import type { Invoice, InvoiceDetail, InvoiceVerificationResult, PageResult } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { ReceiptPrintModal, type ReceiptData } from '../components/invoices/ReceiptPrintModal';
 import {
   Modal,
   DataTable,
@@ -21,6 +23,7 @@ const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND
 const dateTime = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
 
 export function InvoicesPage() {
+  const { currentUser } = useAuth();
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<PageResult<Invoice> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +35,10 @@ export function InvoicesPage() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState('');
+
+  // Print Receipt State
+  const [printData, setPrintData] = useState<ReceiptData | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -85,8 +92,33 @@ export function InvoicesPage() {
     }
   }
 
-  function handlePrint() {
-    window.print();
+  async function handleOpenPrint(invoiceId: string) {
+    try {
+      const detail = await apiClient<InvoiceDetail>(`/invoices/${encodeURIComponent(invoiceId)}`);
+      setPrintData({
+        invoiceNumber: detail.invoiceNumber,
+        invoiceId: detail.invoiceId,
+        createdDate: detail.createdDate,
+        branchName: currentUser?.branchName,
+        cashierName: detail.cashierId,
+        customerName: detail.customerName,
+        customerPhone: detail.customerPhone,
+        items: detail.items.map(it => ({
+          drugName: it.drugName,
+          drugCode: it.drugCode,
+          batchNo: it.batchId,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          subTotal: it.subTotal,
+        })),
+        totalAmount: detail.totalAmount,
+        signatureHash: detail.signature?.hashValueSha256,
+        certSerial: detail.signature?.certificateSerial,
+      });
+      setShowPrintModal(true);
+    } catch {
+      setError('Không thể lấy dữ liệu để in hóa đơn.');
+    }
   }
 
   const columns: Column<Invoice>[] = [
@@ -129,6 +161,15 @@ export function InvoicesPage() {
       align: 'right',
       cell: (invoice) => (
         <div className="inline-flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleOpenPrint(invoice.invoiceId)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors"
+            title="In hóa đơn bán lẻ K80"
+          >
+            <Printer size={13} className="text-forest" />
+            <span>In K80</span>
+          </button>
           <button
             type="button"
             onClick={() => handleViewDetail(invoice.invoiceId)}
@@ -225,11 +266,11 @@ export function InvoicesPage() {
             <div className="flex items-center justify-between w-full">
               <button
                 type="button"
-                onClick={handlePrint}
+                onClick={() => handleOpenPrint(selectedInvoice.invoiceId)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
                 <Printer size={15} />
-                <span>In Bản Sao</span>
+                <span>In Bản Sao (K80)</span>
               </button>
               <div className="flex items-center gap-2">
                 <button
@@ -356,6 +397,13 @@ export function InvoicesPage() {
           </div>
         )}
       </Modal>
+
+      {/* Modal In hóa đơn bán lẻ K80 */}
+      <ReceiptPrintModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        data={printData}
+      />
     </div>
   );
 }
