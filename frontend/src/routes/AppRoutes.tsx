@@ -12,6 +12,7 @@ import { UsersPage } from '../pages/UsersPage';
 import { ReportsPage } from '../pages/ReportsPage';
 import { CustomersPage } from '../pages/CustomersPage';
 import { SuppliersPage } from '../pages/SuppliersPage';
+import { BranchesPage } from '../pages/BranchesPage';
 
 function getRoleDefaultPath(role?: string) {
   if (role === 'WAREHOUSE') return '/inventory';
@@ -57,6 +58,7 @@ export function AppRoutes() {
           </Route>
           <Route element={<RequireAuth allowedRoles={['OWNER']} />}>
             <Route path="drugs" element={<DrugCatalogPage />} />
+            <Route path="branches" element={<BranchesPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="reports" element={<ReportsPage />} />
           </Route>

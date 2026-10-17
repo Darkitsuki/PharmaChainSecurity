@@ -318,4 +318,24 @@ export interface UpdateCustomerPayload {
   isActive?: boolean;
 }
 
+export interface Branch {
+  id: string;
+  branchName: string;
+  address: string | null;
+  activeUsersCount: number;
+  totalInvoicesCount: number;
+}
+
+export interface CreateBranchPayload {
+  id: string;
+  branchName: string;
+  address?: string;
+}
+
+export interface UpdateBranchPayload {
+  branchName: string;
+  address?: string;
+}
+
+
 
