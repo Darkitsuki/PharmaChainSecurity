@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, LoaderCircle, Plus, Search, ShoppingBag, User, UserPlus, X } from 'lucide-react';
+import { Check, ChevronDown, LoaderCircle, Plus, Printer, Search, ShoppingBag, User, UserPlus, X } from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
 import type { CheckoutResponse, Drug, DrugBatch, PageResult, Customer, CreateCustomerPayload } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { ReceiptPrintModal, type ReceiptData } from '../components/invoices/ReceiptPrintModal';
 
 interface CartLine {
   drug: Drug;
@@ -12,6 +14,7 @@ interface CartLine {
 const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
 
 export function CheckoutPage() {
+  const { currentUser } = useAuth();
   const [search, setSearch] = useState('');
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [selectedDrug, setSelectedDrug] = useState<Drug | null>(null);
@@ -24,6 +27,8 @@ export function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<CheckoutResponse | null>(null);
+  const [printReceiptData, setPrintReceiptData] = useState<ReceiptData | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
   const idempotencyKey = useRef(crypto.randomUUID());
 
   // Customer State
@@ -153,6 +158,29 @@ export function CheckoutPage() {
           })),
         }),
       });
+
+      // Lưu dữ liệu để in hóa đơn bán lẻ K80
+      setPrintReceiptData({
+        invoiceNumber: response.invoiceNumber,
+        invoiceId: response.invoiceId,
+        createdDate: new Date().toISOString(),
+        branchName: currentUser?.branchName,
+        cashierName: currentUser?.fullName || currentUser?.username,
+        customerName: response.customerName || selectedCustomer?.fullName,
+        customerPhone: selectedCustomer?.phoneNumber,
+        items: cart.map(line => ({
+          drugName: line.drug.name,
+          drugCode: line.drug.drugCode,
+          batchNo: line.batch.batchNo,
+          unit: line.drug.unit,
+          quantity: line.quantity,
+          unitPrice: line.drug.price,
+          subTotal: line.drug.price * line.quantity,
+        })),
+        totalAmount: response.totalAmount,
+        signatureHash: response.hashValueSha256,
+      });
+
       setReceipt(response);
       setCart([]);
       idempotencyKey.current = crypto.randomUUID();
@@ -643,17 +671,31 @@ export function CheckoutPage() {
                 </div>
               </div>
             </div>
-            <div className="border-t border-line px-6 py-4">
+            <div className="border-t border-line px-6 py-4 flex items-center gap-3">
+              <button
+                onClick={() => setShowPrintModal(true)}
+                className="h-10 flex-1 flex items-center justify-center gap-2 rounded-md bg-forest text-xs font-bold text-white hover:bg-forest/90 cursor-pointer shadow-sm"
+              >
+                <Printer size={15} />
+                <span>In hóa đơn (K80)</span>
+              </button>
               <button
                 onClick={() => setReceipt(null)}
-                className="h-10 w-full rounded-md bg-forest text-xs font-bold text-white hover:bg-forest/90"
+                className="h-10 px-5 rounded-md border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
-                Hoàn tất
+                Đóng
               </button>
             </div>
           </section>
         </div>
       )}
+
+      {/* Modal In hóa đơn bán lẻ K80 */}
+      <ReceiptPrintModal
+        isOpen={showPrintModal}
+        onClose={() => setShowPrintModal(false)}
+        data={printReceiptData}
+      />
     </div>
   );
 }
