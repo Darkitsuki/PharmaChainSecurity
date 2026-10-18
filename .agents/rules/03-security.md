@@ -140,8 +140,7 @@ JWT
 → User
 → Branch
 → Backend Authorization
-→ Database Context
-→ SQL Server RLS
+→ Oracle VPD (Row-Level Security)
 → Query
 → Result
 

@@ -8,9 +8,9 @@
 ## 2. Directory Layout
 - `migrations/`: Deterministic, version-controlled incremental schema evolution scripts.
 - `scripts/security/`: Column-level encryption, least-privileged database users, and roles.
-- `scripts/rls/`: Oracle Row-Level Security (RLS) security predicates and policies evaluating `SESSION_CONTEXT(N'BranchId')`.
+- `scripts/rls/`: Oracle Virtual Private Database (VPD / DBMS_RLS) security predicates and policies evaluating `SYS_CONTEXT('PHARMA_CTX', 'BRANCH_ID')`.
 - `scripts/seed/`: Idempotent seed data for system roles, permissions, and initial reference catalogs.
-- `scripts/maintenance/`: Index defragmentation, consistency checks (`CHECK TABLE`), and maintenance jobs.
+- `scripts/maintenance/`: Index rebuilds, optimizer statistics (`DBMS_STATS`), and consistency checks (`DBMS_HM`).
 - `backups/`: Destination directory and verification procedures for automated backup drills.
 
 ## 3. Governance Rules

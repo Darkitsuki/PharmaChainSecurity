@@ -56,8 +56,7 @@ ReactJS Web (Vite + TypeScript)        Flutter Mobile (Dart)
 ## 5. Database Architecture
 - **Location**: `database/`
 - **Target Engine**: Oracle Database 23ai.
-- **Integrity**: Enforces Primary Keys, Foreign Keys (`NO ACTION`/`RESTRICT`), `CHECK` constraints for monetary and quantity domains, and composite unique keys.
-- **Isolation**: Tenant isolation backed by database-level Row-Level Security (RLS) policies evaluating `SESSION_CONTEXT(N'BranchId')`.
+- **Isolation**: Tenant isolation backed by database-level Oracle Virtual Private Database (VPD / DBMS_RLS) policies evaluating `SYS_CONTEXT('PHARMA_CTX', 'BRANCH_ID')`.
 
 ---
 
