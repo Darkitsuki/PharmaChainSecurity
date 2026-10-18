@@ -10,9 +10,7 @@ builder.Services.AddControllers();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
 var app = builder.Build();
-
 // Configure the HTTP request pipeline.
-// Configure the HTTP request pipeline
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseHttpsRedirection();
 
