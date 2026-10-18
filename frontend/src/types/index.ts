@@ -288,3 +288,54 @@ export interface SalesSummaryReport {
   dailySales: DailySalesItem[];
 }
 
+export interface Customer {
+  id: string;
+  customerCode: string;
+  fullName: string;
+  phoneNumber: string;
+  email: string | null;
+  address: string | null;
+  branchId: string | null;
+  totalSpent: number;
+  points: number;
+  isActive: boolean;
+  createdDate: string;
+}
+
+export interface CreateCustomerPayload {
+  fullName: string;
+  phoneNumber: string;
+  customerCode?: string;
+  email?: string;
+  address?: string;
+}
+
+export interface UpdateCustomerPayload {
+  fullName: string;
+  phoneNumber: string;
+  email?: string;
+  address?: string;
+  isActive?: boolean;
+}
+
+export interface Branch {
+  id: string;
+  branchName: string;
+  address: string | null;
+  activeUsersCount: number;
+  totalInvoicesCount: number;
+}
+
+export interface CreateBranchPayload {
+  id: string;
+  branchName: string;
+  address?: string;
+}
+
+export interface UpdateBranchPayload {
+  branchName: string;
+  address?: string;
+}
+
+
+

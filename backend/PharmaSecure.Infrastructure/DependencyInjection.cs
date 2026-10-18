@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IReportService, ReportService>();
+        services.AddScoped<PharmaSecure.Application.Features.Branches.IBranchService, BranchService>();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
