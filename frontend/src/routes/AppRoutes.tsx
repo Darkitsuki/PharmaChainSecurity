@@ -13,6 +13,7 @@ import { ReportsPage } from '../pages/ReportsPage';
 import { CustomersPage } from '../pages/CustomersPage';
 import { SuppliersPage } from '../pages/SuppliersPage';
 import { BranchesPage } from '../pages/BranchesPage';
+import { ReturnsPage } from '../pages/ReturnsPage';
 
 function getRoleDefaultPath(role?: string) {
   if (role === 'WAREHOUSE') return '/inventory';
@@ -51,6 +52,7 @@ export function AppRoutes() {
           {/* Role-guarded routes */}
           <Route element={<RequireAuth allowedRoles={['OWNER', 'SALES']} />}>
             <Route path="customers" element={<CustomersPage />} />
+            <Route path="returns" element={<ReturnsPage />} />
           </Route>
           <Route element={<RequireAuth allowedRoles={['OWNER', 'WAREHOUSE']} />}>
             <Route path="goods-receipts" element={<GoodsReceiptPage />} />

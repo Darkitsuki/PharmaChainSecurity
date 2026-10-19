@@ -12,7 +12,8 @@ DECLARE
         'INVENTORY_TRANSACTIONS',
         'GOODS_RECEIPTS',
         'USERS',
-        'CUSTOMERS'
+        'CUSTOMERS',
+        'RETURNS'
     );
     v_policy_name VARCHAR2(100);
     v_count NUMBER;

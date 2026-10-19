@@ -337,5 +337,75 @@ export interface UpdateBranchPayload {
   address?: string;
 }
 
+// -------------------------------------------------------------
+// Returns & Refunds (Package P1.1)
+// -------------------------------------------------------------
+export interface ReturnItem {
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  batchId: string;
+  batchNo: string;
+  quantity: number;
+  refundPrice: number;
+  subTotal: number;
+  actionType: 'RESTOCK' | 'DISCARD';
+}
+
+export interface ReturnOrder {
+  id: string;
+  returnNo: string;
+  invoiceId: string;
+  invoiceNo: string;
+  branchId: string;
+  cashierId: string;
+  cashierName: string;
+  customerId: string | null;
+  customerName: string | null;
+  totalRefundAmount: number;
+  reason: string;
+  status: 'COMPLETED' | 'REJECTED';
+  createdDate: string;
+  items: ReturnItem[];
+}
+
+export interface CreateReturnItemPayload {
+  drugId: string;
+  batchId: string;
+  quantity: number;
+  refundPrice: number;
+  actionType: 'RESTOCK' | 'DISCARD';
+}
+
+export interface CreateReturnPayload {
+  invoiceId: string;
+  reason: string;
+  items: CreateReturnItemPayload[];
+}
+
+export interface ReturnableInvoiceItem {
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  batchId: string;
+  batchNo: string;
+  originalQuantity: number;
+  returnedQuantity: number;
+  availableToReturnQuantity: number;
+  unitPrice: number;
+}
+
+export interface ReturnableInvoice {
+  invoiceId: string;
+  invoiceNumber: string;
+  createdDate: string;
+  totalAmount: number;
+  branchId: string;
+  customerId: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  items: ReturnableInvoiceItem[];
+}
+
 
 
