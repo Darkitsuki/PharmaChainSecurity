@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Boxes, Building, ClipboardCheck, FileText, HeartHandshake, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, RotateCcw, ShoppingCart, Truck, Users } from 'lucide-react';
+import { ArrowLeftRight, Boxes, Building, ClipboardCheck, FileText, HeartHandshake, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, RotateCcw, ShoppingCart, Truck, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,6 +11,7 @@ const navigation = [
   { label: 'Tồn kho chi nhánh', to: '/inventory', icon: Boxes },
   { label: 'Nhập kho thuốc', to: '/goods-receipts', icon: PackagePlus, roles: ['OWNER', 'WAREHOUSE'] },
   { label: 'Kiểm kê kho', to: '/inventory-audits', icon: ClipboardCheck, roles: ['OWNER', 'WAREHOUSE'] },
+  { label: 'Điều chuyển kho', to: '/stock-transfers', icon: ArrowLeftRight, roles: ['OWNER', 'WAREHOUSE'] },
   { label: 'Nhà cung cấp', to: '/suppliers', icon: Truck, roles: ['OWNER', 'WAREHOUSE'] },
   { label: 'Danh mục thuốc', to: '/drugs', icon: Pill, roles: ['OWNER'] },
   { label: 'Mạng lưới chi nhánh', to: '/branches', icon: Building, roles: ['OWNER'] },

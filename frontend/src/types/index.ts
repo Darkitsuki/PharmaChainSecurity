@@ -465,5 +465,58 @@ export interface ReconcileAuditPayload {
   reason?: string;
 }
 
+export type StockTransferStatus = 'PENDING' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+
+export interface StockTransfer {
+  id: string;
+  transferNo: string;
+  fromBranchId: string;
+  fromBranchName: string;
+  toBranchId: string;
+  toBranchName: string;
+  createdById: string;
+  createdByName: string;
+  shippedById: string | null;
+  shippedByName: string | null;
+  receivedById: string | null;
+  receivedByName: string | null;
+  status: StockTransferStatus;
+  totalItemsCount: number;
+  totalQuantity: number;
+  shippedDate: string | null;
+  receivedDate: string | null;
+  notes: string | null;
+  createdDate: string;
+}
+
+export interface StockTransferItem {
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  unit: string;
+  batchId: string;
+  batchNumber: string;
+  expiryDate: string;
+  quantity: number;
+  notes: string | null;
+}
+
+export interface StockTransferDetail extends StockTransfer {
+  items: StockTransferItem[];
+}
+
+export interface CreateStockTransferItemPayload {
+  drugId: string;
+  batchId: string;
+  quantity: number;
+  notes?: string;
+}
+
+export interface CreateStockTransferPayload {
+  toBranchId: string;
+  notes?: string;
+  items: CreateStockTransferItemPayload[];
+}
+
 
 

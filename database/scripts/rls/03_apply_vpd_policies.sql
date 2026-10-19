@@ -54,8 +54,36 @@ BEGIN
         DBMS_OUTPUT.PUT_LINE('Successfully registered VPD policy: ' || v_policy_name || ' on table: ' || v_tables(i));
     END LOOP;
 
+    -- 3. Register cross-branch VPD policy for STOCK_TRANSFERS (using FN_TRANSFER_SECURITY_PREDICATE)
+    SELECT COUNT(*) INTO v_count
+    FROM ALL_POLICIES
+    WHERE OBJECT_NAME = 'STOCK_TRANSFERS'
+      AND POLICY_NAME = 'POL_BRANCH_STOCK_TRANSFERS';
+
+    IF v_count > 0 THEN
+        DBMS_RLS.DROP_POLICY(
+            object_schema => USER,
+            object_name   => 'STOCK_TRANSFERS',
+            policy_name   => 'POL_BRANCH_STOCK_TRANSFERS'
+        );
+        DBMS_OUTPUT.PUT_LINE('Dropped existing policy: POL_BRANCH_STOCK_TRANSFERS');
+    END IF;
+
+    DBMS_RLS.ADD_POLICY(
+        object_schema   => USER,
+        object_name     => 'STOCK_TRANSFERS',
+        policy_name     => 'POL_BRANCH_STOCK_TRANSFERS',
+        function_schema => USER,
+        policy_function => 'FN_TRANSFER_SECURITY_PREDICATE',
+        statement_types => 'SELECT,INSERT,UPDATE,DELETE',
+        update_check    => TRUE,
+        enable          => TRUE
+    );
+    DBMS_OUTPUT.PUT_LINE('Successfully registered VPD policy: POL_BRANCH_STOCK_TRANSFERS on table: STOCK_TRANSFERS');
+
     DBMS_OUTPUT.PUT_LINE('=====================================================');
     DBMS_OUTPUT.PUT_LINE('All branch-scoped tables are now protected by Oracle VPD.');
     DBMS_OUTPUT.PUT_LINE('=====================================================');
 END;
 /
+

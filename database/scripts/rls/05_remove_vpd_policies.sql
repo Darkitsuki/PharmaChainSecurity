@@ -14,7 +14,8 @@ DECLARE
         'USERS',
         'CUSTOMERS',
         'RETURNS',
-        'INVENTORY_AUDITS'
+        'INVENTORY_AUDITS',
+        'STOCK_TRANSFERS'
     );
     v_policy_name VARCHAR2(100);
 BEGIN
