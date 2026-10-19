@@ -158,6 +158,39 @@ public sealed class InvoicesController : ControllerBase
 
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
+
+    [HttpPost("{id}/cancel")]
+    [Authorize(Roles = "OWNER")]
+    public async Task<ActionResult<InvoiceDetailResponse>> CancelAsync(
+        string id,
+        [FromBody] CancelInvoiceRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Mã hóa đơn không được rỗng.");
+
+        if (string.IsNullOrWhiteSpace(request?.Reason))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Lý do hủy hóa đơn là bắt buộc.");
+
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId) || string.IsNullOrWhiteSpace(currentUserContext.UserId))
+            return Unauthorized();
+
+        try
+        {
+            var cancelled = await invoiceQueryService.CancelInvoiceAsync(
+                currentUserContext.BranchId,
+                id,
+                currentUserContext.UserId,
+                request,
+                cancellationToken);
+
+            return Ok(cancelled);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
+        }
+    }
 }
 
 public sealed record CheckoutRequestBody(

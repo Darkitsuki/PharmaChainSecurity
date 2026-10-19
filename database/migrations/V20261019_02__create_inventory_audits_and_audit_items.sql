@@ -1,0 +1,49 @@
+-- Migration: V20261019_02__create_inventory_audits_and_audit_items.sql
+-- Description: Tạo bảng INVENTORY_AUDITS và INVENTORY_AUDIT_ITEMS cho phân hệ kiểm kê định kỳ & cân đối tồn kho (Package P1.2)
+
+-- 1. BẢNG ĐỢT KIỂM KÊ KHO (INVENTORY_AUDITS)
+CREATE TABLE INVENTORY_AUDITS (
+    id                   VARCHAR2(50)     NOT NULL,
+    AuditNo              VARCHAR2(50)     NOT NULL,
+    BranchId             VARCHAR2(50)     NOT NULL,
+    CreatedBy            VARCHAR2(50)     NOT NULL,
+    ApprovedBy           VARCHAR2(50),
+    AuditDate            TIMESTAMP        DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    ApprovedDate         TIMESTAMP,
+    Status               VARCHAR2(20)     DEFAULT 'IN_PROGRESS' NOT NULL CHECK (Status IN ('IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
+    TotalItemsCount      NUMBER(10)       DEFAULT 0 NOT NULL CHECK (TotalItemsCount >= 0),
+    MatchedCount         NUMBER(10)       DEFAULT 0 NOT NULL CHECK (MatchedCount >= 0),
+    DiscrepancyCount     NUMBER(10)       DEFAULT 0 NOT NULL CHECK (DiscrepancyCount >= 0),
+    TotalDiscrepancyValue NUMBER(15, 2)   DEFAULT 0.00 NOT NULL,
+    Notes                VARCHAR2(500),
+    CreatedDate          TIMESTAMP        DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT PK_INVENTORY_AUDITS PRIMARY KEY (id),
+    CONSTRAINT UQ_INVENTORY_AUDITS_NO UNIQUE (AuditNo),
+    CONSTRAINT FK_AUDITS_BRANCHES FOREIGN KEY (BranchId) REFERENCES BRANCHES(id),
+    CONSTRAINT FK_AUDITS_CREATED_BY FOREIGN KEY (CreatedBy) REFERENCES USERS(id),
+    CONSTRAINT FK_AUDITS_APPROVED_BY FOREIGN KEY (ApprovedBy) REFERENCES USERS(id)
+);
+
+CREATE INDEX IDX_AUDITS_BRANCH ON INVENTORY_AUDITS(BranchId);
+CREATE INDEX IDX_AUDITS_STATUS ON INVENTORY_AUDITS(Status);
+CREATE INDEX IDX_AUDITS_DATE ON INVENTORY_AUDITS(AuditDate);
+
+-- 2. BẢNG CHI TIẾT MẶT HÀNG KIỂM ĐẾM (INVENTORY_AUDIT_ITEMS)
+CREATE TABLE INVENTORY_AUDIT_ITEMS (
+    AuditId             VARCHAR2(50)     NOT NULL,
+    DrugId              VARCHAR2(50)     NOT NULL,
+    BatchId             VARCHAR2(50)     NOT NULL,
+    SystemQuantity      NUMBER(10)       NOT NULL CHECK (SystemQuantity >= 0),
+    ActualQuantity      NUMBER(10)       NOT NULL CHECK (ActualQuantity >= 0),
+    DiscrepancyQuantity NUMBER(10)       NOT NULL,
+    UnitPrice           NUMBER(15, 2)    DEFAULT 0.00 NOT NULL CHECK (UnitPrice >= 0),
+    DiscrepancyValue    NUMBER(15, 2)    DEFAULT 0.00 NOT NULL,
+    Reason              VARCHAR2(255),
+    CONSTRAINT PK_INV_AUDIT_ITEMS PRIMARY KEY (AuditId, DrugId, BatchId),
+    CONSTRAINT FK_AUDIT_ITEMS_AUDIT FOREIGN KEY (AuditId) REFERENCES INVENTORY_AUDITS(id) ON DELETE CASCADE,
+    CONSTRAINT FK_AUDIT_ITEMS_DRUG FOREIGN KEY (DrugId) REFERENCES DRUGS(id),
+    CONSTRAINT FK_AUDIT_ITEMS_BATCH FOREIGN KEY (BatchId) REFERENCES DRUG_BATCHES(id)
+);
+
+CREATE INDEX IDX_AUDIT_ITEMS_DRUG ON INVENTORY_AUDIT_ITEMS(DrugId);
+CREATE INDEX IDX_AUDIT_ITEMS_BATCH ON INVENTORY_AUDIT_ITEMS(BatchId);

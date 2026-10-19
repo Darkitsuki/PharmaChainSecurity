@@ -83,6 +83,11 @@ export interface Invoice {
   totalAmount: number;
   branchId: string;
   cashierId: string;
+  status?: 'COMPLETED' | 'CANCELLED';
+  cancelledById?: string | null;
+  cancelledByName?: string | null;
+  cancelledDate?: string | null;
+  cancelReason?: string | null;
 }
 
 export interface CheckoutResponse {
@@ -131,6 +136,9 @@ export interface InvoiceSignature {
   signatureData: string;
   certificateSerial: string;
   signedAt: string;
+  status?: 'VALID' | 'REVOKED';
+  revokedAt?: string | null;
+  revokedReason?: string | null;
 }
 
 export interface InvoiceDetail {
@@ -145,6 +153,15 @@ export interface InvoiceDetail {
   customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  status?: 'COMPLETED' | 'CANCELLED';
+  cancelledById?: string | null;
+  cancelledByName?: string | null;
+  cancelledDate?: string | null;
+  cancelReason?: string | null;
+}
+
+export interface CancelInvoicePayload {
+  reason: string;
 }
 
 export interface Customer {
@@ -335,6 +352,187 @@ export interface CreateBranchPayload {
 export interface UpdateBranchPayload {
   branchName: string;
   address?: string;
+}
+
+// -------------------------------------------------------------
+// Returns & Refunds (Package P1.1)
+// -------------------------------------------------------------
+export interface ReturnItem {
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  batchId: string;
+  batchNo: string;
+  quantity: number;
+  refundPrice: number;
+  subTotal: number;
+  actionType: 'RESTOCK' | 'DISCARD';
+}
+
+export interface ReturnOrder {
+  id: string;
+  returnNo: string;
+  invoiceId: string;
+  invoiceNo: string;
+  branchId: string;
+  cashierId: string;
+  cashierName: string;
+  customerId: string | null;
+  customerName: string | null;
+  totalRefundAmount: number;
+  reason: string;
+  status: 'COMPLETED' | 'REJECTED';
+  createdDate: string;
+  items: ReturnItem[];
+}
+
+export interface CreateReturnItemPayload {
+  drugId: string;
+  batchId: string;
+  quantity: number;
+  refundPrice: number;
+  actionType: 'RESTOCK' | 'DISCARD';
+}
+
+export interface CreateReturnPayload {
+  invoiceId: string;
+  reason: string;
+  items: CreateReturnItemPayload[];
+}
+
+export interface ReturnableInvoiceItem {
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  batchId: string;
+  batchNo: string;
+  originalQuantity: number;
+  returnedQuantity: number;
+  availableToReturnQuantity: number;
+  unitPrice: number;
+}
+
+export interface ReturnableInvoice {
+  invoiceId: string;
+  invoiceNumber: string;
+  createdDate: string;
+  totalAmount: number;
+  branchId: string;
+  customerId: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  items: ReturnableInvoiceItem[];
+}
+
+export type InventoryAuditStatus = 'DANG_KIEM' | 'CAN_BANG' | 'DA_HUY';
+
+export interface InventoryAudit {
+  id: string;
+  code: string;
+  branchId: string;
+  createdById: string;
+  createdByName: string;
+  reconciledById: string | null;
+  reconciledByName: string | null;
+  status: InventoryAuditStatus;
+  note: string | null;
+  createdAt: string;
+  reconciledAt: string | null;
+  totalItems: number;
+  discrepantItems: number;
+}
+
+export interface InventoryAuditItem {
+  id: string;
+  inventoryId: string;
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  unit: string;
+  batchId: string;
+  batchNumber: string;
+  expiryDate: string;
+  systemQuantity: number;
+  actualQuantity: number;
+  differenceQuantity: number;
+  unitPrice: number;
+  differenceValue: number;
+  reason: string | null;
+}
+
+export interface InventoryAuditDetail extends InventoryAudit {
+  items: InventoryAuditItem[];
+}
+
+export interface CreateInventoryAuditPayload {
+  note?: string;
+}
+
+export interface UpdateAuditItemEntry {
+  itemId: string;
+  actualQuantity: number;
+  reason?: string;
+}
+
+export interface UpdateAuditItemsPayload {
+  items: UpdateAuditItemEntry[];
+}
+
+export interface ReconcileAuditPayload {
+  reason?: string;
+}
+
+export type StockTransferStatus = 'PENDING' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+
+export interface StockTransfer {
+  id: string;
+  transferNo: string;
+  fromBranchId: string;
+  fromBranchName: string;
+  toBranchId: string;
+  toBranchName: string;
+  createdById: string;
+  createdByName: string;
+  shippedById: string | null;
+  shippedByName: string | null;
+  receivedById: string | null;
+  receivedByName: string | null;
+  status: StockTransferStatus;
+  totalItemsCount: number;
+  totalQuantity: number;
+  shippedDate: string | null;
+  receivedDate: string | null;
+  notes: string | null;
+  createdDate: string;
+}
+
+export interface StockTransferItem {
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  unit: string;
+  batchId: string;
+  batchNumber: string;
+  expiryDate: string;
+  quantity: number;
+  notes: string | null;
+}
+
+export interface StockTransferDetail extends StockTransfer {
+  items: StockTransferItem[];
+}
+
+export interface CreateStockTransferItemPayload {
+  drugId: string;
+  batchId: string;
+  quantity: number;
+  notes?: string;
+}
+
+export interface CreateStockTransferPayload {
+  toBranchId: string;
+  notes?: string;
+  items: CreateStockTransferItemPayload[];
 }
 
 

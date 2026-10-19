@@ -43,3 +43,36 @@ EXCEPTION
         RETURN '1=2';
 END FN_BRANCH_SECURITY_PREDICATE;
 /
+
+-- 5. Predicate Function cho Điều chuyển kho liên chi nhánh (STOCK_TRANSFERS)
+-- Cho phép truy cập nếu chi nhánh của phiên làm việc là Chi nhánh Gửi (FromBranchId) HOẶC Chi nhánh Nhận (ToBranchId)
+CREATE OR REPLACE FUNCTION FN_TRANSFER_SECURITY_PREDICATE (
+    p_schema IN VARCHAR2,
+    p_object IN VARCHAR2
+) RETURN VARCHAR2
+AS
+    v_is_global VARCHAR2(10);
+    v_branch_id VARCHAR2(50);
+BEGIN
+    v_is_global := SYS_CONTEXT('PHARMA_CTX', 'IS_GLOBAL');
+    IF UPPER(TRIM(v_is_global)) = 'TRUE' THEN
+        RETURN NULL;
+    END IF;
+
+    v_branch_id := SYS_CONTEXT('PHARMA_CTX', 'BRANCH_ID');
+    IF v_branch_id IS NULL THEN
+        v_branch_id := SYS_CONTEXT('USERENV', 'CLIENT_IDENTIFIER');
+    END IF;
+
+    IF v_branch_id IS NULL OR TRIM(v_branch_id) IS NULL THEN
+        RETURN '1=2';
+    END IF;
+
+    RETURN '(FromBranchId = NVL(SYS_CONTEXT(''PHARMA_CTX'', ''BRANCH_ID''), SYS_CONTEXT(''USERENV'', ''CLIENT_IDENTIFIER'')) OR ToBranchId = NVL(SYS_CONTEXT(''PHARMA_CTX'', ''BRANCH_ID''), SYS_CONTEXT(''USERENV'', ''CLIENT_IDENTIFIER'')))';
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN '1=2';
+END FN_TRANSFER_SECURITY_PREDICATE;
+/
+
