@@ -1,11 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  AlertTriangle,
   BadgeCheck,
+  Ban,
   Eye,
   FileText,
   LoaderCircle,
   Printer,
   ShieldCheck,
+  XCircle,
 } from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
 import type { Invoice, InvoiceDetail, InvoiceVerificationResult, PageResult } from '../types';
@@ -36,31 +39,36 @@ export function InvoicesPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState('');
 
+  // Cancel Modal State
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+
   // Print Receipt State
   const [printData, setPrintData] = useState<ReceiptData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
 
-  useEffect(() => {
-    let active = true;
+  const fetchInvoices = useCallback((pageNum: number) => {
     setLoading(true);
     setError('');
-    apiClient<PageResult<Invoice>>(`/invoices?page=${page}&pageSize=20`)
+    apiClient<PageResult<Invoice>>(`/invoices?page=${pageNum}&pageSize=20`)
       .then((data) => {
-        if (active) setResult(data);
+        setResult(data);
       })
       .catch((requestError) => {
-        if (active)
-          setError(
-            requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách hóa đơn.'
-          );
+        setError(
+          requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách hóa đơn.'
+        );
       })
       .finally(() => {
-        if (active) setLoading(false);
+        setLoading(false);
       });
-    return () => {
-      active = false;
-    };
-  }, [page]);
+  }, []);
+
+  useEffect(() => {
+    fetchInvoices(page);
+  }, [page, fetchInvoices]);
 
   async function handleViewDetail(invoiceId: string) {
     setLoadingDetail(true);
@@ -121,6 +129,65 @@ export function InvoicesPage() {
     }
   }
 
+  async function handleCancelInvoice() {
+    if (!selectedInvoice) return;
+    if (cancelReason.trim().length < 5) {
+      setCancelError('Lý do hủy phải có ít nhất 5 ký tự.');
+      return;
+    }
+
+    setCancelling(true);
+    setCancelError('');
+    try {
+      const res = await apiClient<{ message: string; invoiceId: string }>(
+        `/invoices/${encodeURIComponent(selectedInvoice.invoiceId)}/cancel`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ reason: cancelReason.trim() }),
+        }
+      );
+
+      // Update local state of detail
+      setSelectedInvoice((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'CANCELLED',
+              cancelReason: cancelReason.trim(),
+              cancelledByName: currentUser?.fullName || currentUser?.username,
+              cancelledDate: new Date().toISOString(),
+              signature: prev.signature
+                ? {
+                    ...prev.signature,
+                    status: 'REVOKED',
+                    revokedAt: new Date().toISOString(),
+                    revokedReason: cancelReason.trim(),
+                  }
+                : null,
+            }
+          : null
+      );
+
+      setShowCancelModal(false);
+      setCancelReason('');
+      fetchInvoices(page);
+      setNotice({
+        isValid: false,
+        message: res.message || 'Hóa đơn đã được hủy bỏ thành công. Toàn bộ số lượng thuốc đã được hoàn tồn kho.',
+        invoiceId: selectedInvoice.invoiceId,
+        invoiceNumber: selectedInvoice.invoiceNumber,
+        signedAt: selectedInvoice.createdDate,
+        certificateSerial: selectedInvoice.signature?.certificateSerial || 'HSM-REVOKED',
+        storedHashSha256: selectedInvoice.signature?.hashValueSha256 || 'REVOKED',
+        calculatedHashSha256: selectedInvoice.signature?.hashValueSha256 || 'REVOKED',
+      });
+    } catch (err) {
+      setCancelError(err instanceof ApiError ? err.detail || err.message : 'Hủy hóa đơn thất bại.');
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   const columns: Column<Invoice>[] = [
     {
       header: 'Số Hóa Đơn',
@@ -144,8 +211,28 @@ export function InvoicesPage() {
       cell: (invoice) => <span className="font-mono text-slate-600">{invoice.cashierId}</span>,
     },
     {
+      header: 'Trạng Thái',
+      cell: (invoice) => {
+        const isCancelled = invoice.status === 'CANCELLED';
+        return (
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+              isCancelled
+                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${isCancelled ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+            {isCancelled ? 'Đã hủy' : 'Đã thanh toán'}
+          </span>
+        );
+      },
+    },
+    {
       header: 'Chứng Thực HSM',
-      cell: () => <HsmSignatureBadge status="valid" />,
+      cell: (invoice) => (
+        <HsmSignatureBadge status={invoice.status === 'CANCELLED' ? 'revoked' : 'valid'} />
+      ),
     },
     {
       header: 'Tổng Tiền',
@@ -196,6 +283,8 @@ export function InvoicesPage() {
     },
   ];
 
+  const isOwner = currentUser?.role === 'OWNER';
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
       {/* Page Header */}
@@ -221,7 +310,7 @@ export function InvoicesPage() {
           type={notice.isValid ? 'success' : 'error'}
           message={
             <div>
-              <p className="font-bold">{notice.isValid ? 'Chữ ký số hợp lệ — Chứng từ nguyên vẹn' : 'Cảnh báo: Kiểm tra chữ ký số thất bại'}</p>
+              <p className="font-bold">{notice.isValid ? 'Chữ ký số hợp lệ — Chứng từ nguyên vẹn' : 'Cảnh báo: Kiểm tra chữ ký số / Trạng thái hóa đơn'}</p>
               <p className="mt-0.5 opacity-90">{notice.message}</p>
               <p className="mt-1 font-mono text-[10px] text-slate-500">Cert: {notice.certificateSerial} | Ký lúc: {dateTime.format(new Date(notice.signedAt))}</p>
             </div>
@@ -263,15 +352,31 @@ export function InvoicesPage() {
         maxWidth="2xl"
         footer={
           selectedInvoice && (
-            <div className="flex items-center justify-between w-full">
-              <button
-                type="button"
-                onClick={() => handleOpenPrint(selectedInvoice.invoiceId)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
-              >
-                <Printer size={15} />
-                <span>In Bản Sao (K80)</span>
-              </button>
+            <div className="flex flex-wrap items-center justify-between w-full gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleOpenPrint(selectedInvoice.invoiceId)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  <Printer size={15} />
+                  <span>In Bản Sao (K80)</span>
+                </button>
+                {isOwner && selectedInvoice.status !== 'CANCELLED' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCancelReason('');
+                      setCancelError('');
+                      setShowCancelModal(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 cursor-pointer transition-colors"
+                  >
+                    <XCircle size={15} />
+                    <span>Hủy Hóa Đơn &amp; Hoàn Kho</span>
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -309,6 +414,30 @@ export function InvoicesPage() {
 
         {selectedInvoice && (
           <div className="space-y-5">
+            {/* Banner Cảnh Báo Nếu Hóa Đơn Bị Hủy */}
+            {selectedInvoice.status === 'CANCELLED' && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-4 text-xs">
+                <div className="flex items-center gap-2 font-bold text-rose-800">
+                  <XCircle size={16} className="text-rose-600" />
+                  <span>HÓA ĐƠN ĐÃ HỦY BỎ — TOÀN BỘ SỐ LƯỢNG THUỐC ĐÃ HOÀN TỒN KHO</span>
+                </div>
+                <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px] text-rose-700">
+                  <div>
+                    <span className="font-bold">Người thực hiện hủy: </span>
+                    <span>{selectedInvoice.cancelledByName || selectedInvoice.cancelledById || 'Chủ nhà thuốc'}</span>
+                  </div>
+                  <div>
+                    <span className="font-bold">Thời gian hủy: </span>
+                    <span>{selectedInvoice.cancelledDate ? dateTime.format(new Date(selectedInvoice.cancelledDate)) : '—'}</span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="font-bold">Lý do hủy: </span>
+                    <span className="font-sans italic">{selectedInvoice.cancelReason || 'Không ghi rõ lý do'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Metadata Summary */}
             <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs sm:grid-cols-4">
               <div>
@@ -376,10 +505,31 @@ export function InvoicesPage() {
 
             {/* Digital Signature Card */}
             {selectedInvoice.signature && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 text-xs">
-                <div className="flex items-center gap-2 text-emerald-800 font-bold">
-                  <BadgeCheck size={16} className="text-emerald-600" />
-                  <span>Chứng Thư Số Điện Tử Gốc (SHA-256 HSM)</span>
+              <div
+                className={`rounded-xl border p-4 text-xs ${
+                  selectedInvoice.signature.status === 'REVOKED' || selectedInvoice.status === 'CANCELLED'
+                    ? 'border-rose-200 bg-rose-50/50'
+                    : 'border-emerald-200 bg-emerald-50/50'
+                }`}
+              >
+                <div
+                  className={`flex items-center gap-2 font-bold ${
+                    selectedInvoice.signature.status === 'REVOKED' || selectedInvoice.status === 'CANCELLED'
+                      ? 'text-rose-800'
+                      : 'text-emerald-800'
+                  }`}
+                >
+                  {selectedInvoice.signature.status === 'REVOKED' || selectedInvoice.status === 'CANCELLED' ? (
+                    <>
+                      <Ban size={16} className="text-rose-600" />
+                      <span>Chữ Ký Số Đã Bị Thu Hồi (Revoked HSM Signature)</span>
+                    </>
+                  ) : (
+                    <>
+                      <BadgeCheck size={16} className="text-emerald-600" />
+                      <span>Chứng Thư Số Điện Tử Gốc (SHA-256 HSM)</span>
+                    </>
+                  )}
                 </div>
                 <div className="mt-2.5 space-y-1.5 font-mono text-[11px] text-slate-600">
                   <p>
@@ -391,11 +541,83 @@ export function InvoicesPage() {
                   <p>
                     <span className="font-bold text-slate-700">Thời điểm ký:</span> {dateTime.format(new Date(selectedInvoice.signature.signedAt))}
                   </p>
+                  {(selectedInvoice.signature.revokedAt || selectedInvoice.status === 'CANCELLED') && (
+                    <p className="text-rose-700 font-semibold">
+                      <span className="font-bold">Thời điểm thu hồi:</span>{' '}
+                      {selectedInvoice.signature.revokedAt
+                        ? dateTime.format(new Date(selectedInvoice.signature.revokedAt))
+                        : (selectedInvoice.cancelledDate ? dateTime.format(new Date(selectedInvoice.cancelledDate)) : '—')}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
           </div>
         )}
+      </Modal>
+
+      {/* MODAL XÁC NHẬN HỦY HÓA ĐƠN & HOÀN TỒN KHO */}
+      <Modal
+        isOpen={showCancelModal}
+        onClose={() => !cancelling && setShowCancelModal(false)}
+        title="Xác Nhận Hủy Hóa Đơn Bán Hàng"
+        subtitle={selectedInvoice ? `Chứng từ: ${selectedInvoice.invoiceNumber}` : undefined}
+        icon={AlertTriangle}
+        maxWidth="md"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={() => setShowCancelModal(false)}
+              className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 cursor-pointer disabled:opacity-50"
+            >
+              Hủy Bỏ
+            </button>
+            <button
+              type="button"
+              disabled={cancelling || cancelReason.trim().length < 5}
+              onClick={handleCancelInvoice}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 cursor-pointer disabled:opacity-50"
+            >
+              {cancelling ? <LoaderCircle size={15} className="animate-spin" /> : <XCircle size={15} />}
+              <span>Xác Nhận Hủy &amp; Hoàn Tồn</span>
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4 text-xs">
+          <AlertBanner type="error" message={cancelError} onClose={() => setCancelError('')} />
+
+          <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-amber-900 space-y-1.5">
+            <p className="font-bold flex items-center gap-1.5">
+              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+              Cảnh báo quan trọng về pháp lý &amp; số liệu kho:
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-800/90 pl-1">
+              <li>Hóa đơn sẽ chuyển sang trạng thái <strong>Đã hủy (CANCELLED)</strong> vĩnh viễn.</li>
+              <li>Chữ ký số HSM tương ứng sẽ bị <strong>Thu hồi (REVOKED)</strong>.</li>
+              <li>Toàn bộ số lượng thuốc trong hóa đơn sẽ được <strong>tự động hoàn trả về tồn kho</strong>.</li>
+              <li>Lịch sử thẻ kho sẽ ghi nhận giao dịch <code>HOAN_HUY</code> phục vụ thanh tra.</li>
+            </ul>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-ink mb-1.5">
+              Lý do hủy hóa đơn <span className="text-rose-500">*</span>
+            </label>
+            <textarea
+              rows={3}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Nhập lý do chi tiết (ví dụ: Khách trả lại ngay sau khi xuất đơn, quét nhầm thuốc... tối thiểu 5 ký tự)"
+              className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-ink placeholder:text-slate-400 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Độ dài: {cancelReason.trim().length}/5 ký tự tối thiểu.
+            </p>
+          </div>
+        </div>
       </Modal>
 
       {/* Modal In hóa đơn bán lẻ K80 */}

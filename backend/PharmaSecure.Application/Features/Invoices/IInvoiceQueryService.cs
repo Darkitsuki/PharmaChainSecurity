@@ -2,13 +2,20 @@ using PharmaSecure.Application.Common;
 
 namespace PharmaSecure.Application.Features.Invoices;
 
+public sealed record CancelInvoiceRequest(string Reason);
+
 public sealed record InvoiceResponse(
     string InvoiceId,
     string InvoiceNumber,
     DateTime CreatedDate,
     decimal TotalAmount,
     string BranchId,
-    string CashierId);
+    string CashierId,
+    string Status = "COMPLETED",
+    string? CancelledById = null,
+    string? CancelledByName = null,
+    DateTime? CancelledDate = null,
+    string? CancelReason = null);
 
 public sealed record InvoiceItemResponse(
     string DrugId,
@@ -23,7 +30,10 @@ public sealed record InvoiceSignatureResponse(
     string HashValueSha256,
     string SignatureData,
     string CertificateSerial,
-    DateTime SignedAt);
+    DateTime SignedAt,
+    string Status = "VALID",
+    DateTime? RevokedAt = null,
+    string? RevokedReason = null);
 
 public sealed record InvoiceDetailResponse(
     string InvoiceId,
@@ -36,7 +46,12 @@ public sealed record InvoiceDetailResponse(
     InvoiceSignatureResponse? Signature,
     string? CustomerId = null,
     string? CustomerName = null,
-    string? CustomerPhone = null);
+    string? CustomerPhone = null,
+    string Status = "COMPLETED",
+    string? CancelledById = null,
+    string? CancelledByName = null,
+    DateTime? CancelledDate = null,
+    string? CancelReason = null);
 
 public sealed record InvoiceVerificationResult(
     string InvoiceId,
@@ -69,5 +84,12 @@ public interface IInvoiceQueryService
     Task<InvoiceVerificationResult?> VerifyInvoiceSignatureAsync(
         string branchId,
         string invoiceId,
+        CancellationToken cancellationToken = default);
+
+    Task<InvoiceDetailResponse> CancelInvoiceAsync(
+        string branchId,
+        string invoiceId,
+        string ownerId,
+        CancelInvoiceRequest request,
         CancellationToken cancellationToken = default);
 }

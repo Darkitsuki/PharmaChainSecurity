@@ -2,7 +2,7 @@ import React from 'react';
 import { CheckCircle2, AlertCircle, Clock, ShieldCheck, Loader2 } from 'lucide-react';
 
 export interface HsmSignatureBadgeProps {
-  status?: 'valid' | 'pending' | 'invalid' | 'unknown';
+  status?: 'valid' | 'pending' | 'invalid' | 'unknown' | 'revoked';
   hashSha256?: string;
   signerName?: string;
   showHashPreview?: boolean;
@@ -40,6 +40,13 @@ export const HsmSignatureBadge: React.FC<HsmSignatureBadgeProps> = ({
         return {
           icon: AlertCircle,
           text: 'Sai lệch chữ ký',
+          containerClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/60',
+          dotClass: 'bg-rose-500',
+        };
+      case 'revoked':
+        return {
+          icon: AlertCircle,
+          text: 'Đã thu hồi chữ ký',
           containerClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/60',
           dotClass: 'bg-rose-500',
         };

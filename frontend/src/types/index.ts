@@ -83,6 +83,11 @@ export interface Invoice {
   totalAmount: number;
   branchId: string;
   cashierId: string;
+  status?: 'COMPLETED' | 'CANCELLED';
+  cancelledById?: string | null;
+  cancelledByName?: string | null;
+  cancelledDate?: string | null;
+  cancelReason?: string | null;
 }
 
 export interface CheckoutResponse {
@@ -131,6 +136,9 @@ export interface InvoiceSignature {
   signatureData: string;
   certificateSerial: string;
   signedAt: string;
+  status?: 'VALID' | 'REVOKED';
+  revokedAt?: string | null;
+  revokedReason?: string | null;
 }
 
 export interface InvoiceDetail {
@@ -145,6 +153,15 @@ export interface InvoiceDetail {
   customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  status?: 'COMPLETED' | 'CANCELLED';
+  cancelledById?: string | null;
+  cancelledByName?: string | null;
+  cancelledDate?: string | null;
+  cancelReason?: string | null;
+}
+
+export interface CancelInvoicePayload {
+  reason: string;
 }
 
 export interface Customer {
