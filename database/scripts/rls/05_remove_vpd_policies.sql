@@ -13,7 +13,8 @@ DECLARE
         'GOODS_RECEIPTS',
         'USERS',
         'CUSTOMERS',
-        'RETURNS'
+        'RETURNS',
+        'INVENTORY_AUDITS'
     );
     v_policy_name VARCHAR2(100);
 BEGIN

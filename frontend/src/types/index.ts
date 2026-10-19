@@ -407,5 +407,63 @@ export interface ReturnableInvoice {
   items: ReturnableInvoiceItem[];
 }
 
+export type InventoryAuditStatus = 'DANG_KIEM' | 'CAN_BANG' | 'DA_HUY';
+
+export interface InventoryAudit {
+  id: string;
+  code: string;
+  branchId: string;
+  createdById: string;
+  createdByName: string;
+  reconciledById: string | null;
+  reconciledByName: string | null;
+  status: InventoryAuditStatus;
+  note: string | null;
+  createdAt: string;
+  reconciledAt: string | null;
+  totalItems: number;
+  discrepantItems: number;
+}
+
+export interface InventoryAuditItem {
+  id: string;
+  inventoryId: string;
+  drugId: string;
+  drugCode: string;
+  drugName: string;
+  unit: string;
+  batchId: string;
+  batchNumber: string;
+  expiryDate: string;
+  systemQuantity: number;
+  actualQuantity: number;
+  differenceQuantity: number;
+  unitPrice: number;
+  differenceValue: number;
+  reason: string | null;
+}
+
+export interface InventoryAuditDetail extends InventoryAudit {
+  items: InventoryAuditItem[];
+}
+
+export interface CreateInventoryAuditPayload {
+  note?: string;
+}
+
+export interface UpdateAuditItemEntry {
+  itemId: string;
+  actualQuantity: number;
+  reason?: string;
+}
+
+export interface UpdateAuditItemsPayload {
+  items: UpdateAuditItemEntry[];
+}
+
+export interface ReconcileAuditPayload {
+  reason?: string;
+}
+
 
 
