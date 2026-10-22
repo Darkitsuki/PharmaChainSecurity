@@ -1,6 +1,10 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using PharmaSecure.Application.Features.Security;
 using PharmaSecure.WebApi.Controllers;
@@ -51,6 +55,58 @@ public class DrugsControllerTests
         var returned = Assert.IsType<DrugResponse>(createdAtResult.Value);
         Assert.Equal("dr-005", returned.DrugId);
         Assert.Equal("THUOC005", returned.DrugCode);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenResultExecuted_Returns201WithValidLocation()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Testing",
+            ApplicationName = typeof(DrugsController).Assembly.GetName().Name
+        });
+        builder.Services.AddControllers().AddApplicationPart(typeof(DrugsController).Assembly);
+        await using var app = builder.Build();
+        app.MapControllers();
+        app.UseRouting();
+        app.UseEndpoints(_ => { });
+
+        var endpoint = app.Services.GetRequiredService<EndpointDataSource>().Endpoints.Single(endpoint =>
+        {
+            var action = endpoint.Metadata.GetMetadata<ControllerActionDescriptor>();
+            return action?.ControllerTypeInfo.AsType() == typeof(DrugsController) && action.ActionName == "Create";
+        });
+        var actionDescriptor = endpoint.Metadata.GetMetadata<ControllerActionDescriptor>()!;
+        var request = new CreateDrugRequest("THUOC005", "Berberin 100mg", "Berberin", "Lo", 20000m);
+        var created = new DrugResponse("dr-005", "THUOC005", "Berberin 100mg", "Berberin", "Lo", 20000m, true);
+        drugQueryServiceMock.Setup(s => s.CreateDrugAsync("branch-01", request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(created);
+
+        await using var scope = app.Services.CreateAsyncScope();
+        using var responseBody = new MemoryStream();
+        var controller = CreateController();
+        var httpContext = controller.HttpContext;
+        httpContext.RequestServices = scope.ServiceProvider;
+        httpContext.Request.Scheme = "https";
+        httpContext.Request.Host = new HostString("localhost");
+        httpContext.Request.Path = "/api/v1/drugs";
+        httpContext.Request.Method = HttpMethods.Post;
+        httpContext.Response.Body = responseBody;
+        httpContext.SetEndpoint(endpoint);
+        var routeData = new RouteData();
+        routeData.Values["controller"] = "Drugs";
+        routeData.Values["action"] = actionDescriptor.ActionName;
+        controller.ControllerContext = new ControllerContext(new ActionContext(httpContext, routeData, actionDescriptor));
+
+        // Act
+        var result = await controller.CreateAsync(request);
+        await result.Result!.ExecuteResultAsync(controller.ControllerContext);
+
+        // Assert
+        Assert.Equal(StatusCodes.Status201Created, httpContext.Response.StatusCode);
+        Assert.Equal("https://localhost/api/v1/drugs/dr-005", httpContext.Response.Headers.Location.ToString());
+        drugQueryServiceMock.Verify(s => s.CreateDrugAsync("branch-01", request, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

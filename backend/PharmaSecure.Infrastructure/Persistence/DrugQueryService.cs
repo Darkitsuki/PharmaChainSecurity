@@ -174,7 +174,7 @@ public sealed class DrugQueryService : IDrugQueryService
             if (count > 0)
                 throw new InvalidOperationException($"Thuốc có mã '{request.DrugCode}' đã tồn tại trong hệ thống.");
 
-            var newId = $"dr-{Guid.NewGuid():N}"[..36];
+            var newId = $"dr-{Guid.NewGuid():N}";
             await using var insertCmd = CreateCommand("""
                 INSERT INTO DRUGS (id, DrugCode, Name, ActiveIngredient, Unit, Price, IsActive, CreatedDate)
                 VALUES (:id, :code, :name, :activeIngredient, :unit, :price, 1, SYSTIMESTAMP)

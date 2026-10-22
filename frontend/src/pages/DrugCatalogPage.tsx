@@ -170,7 +170,9 @@ export function DrugCatalogPage() {
     setDeactivatingId(drugId);
     setError('');
     try {
-      await apiClient(`/drugs/${encodeURIComponent(drugId)}/deactivate`, { method: 'PATCH' });
+      await apiClient(`/drugs/${encodeURIComponent(drugId)}`, {
+        method: 'DELETE'
+      });
       setSuccessMsg('Đã chuyển trạng thái thuốc sang Tạm ngưng kinh doanh.');
       await loadDrugs();
     } catch (err) {
