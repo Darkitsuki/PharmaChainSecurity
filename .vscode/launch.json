@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Mobile — PharmaPhone (Local HTTPS)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "${workspaceFolder}/mobile",
+      "program": "${workspaceFolder}/mobile/lib/main.dart",
+      "emulatorId": "PharmaPhone",
+      "flutterMode": "debug",
+      "preLaunchTask": "mobile: prepare PharmaPhone HTTPS",
+      "toolArgs": [
+        "--dart-define=API_BASE_URL=https://localhost:55198/api/v1",
+        "--dart-define=TRUST_LOCAL_DEV_CA=true"
+      ]
+    }
+  ]
+}
