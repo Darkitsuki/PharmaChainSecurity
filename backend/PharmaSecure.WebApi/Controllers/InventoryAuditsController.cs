@@ -90,7 +90,7 @@ public sealed class InventoryAuditsController : ControllerBase
 
         try
         {
-            var updated = await auditService.UpdateCountedItemsAsync(id, branchId, request, cancellationToken);
+            var updated = await auditService.UpdateCountedItemsAsync(id, request, branchId, cancellationToken);
             return Ok(updated);
         }
         catch (InvalidOperationException ex)
@@ -119,7 +119,7 @@ public sealed class InventoryAuditsController : ControllerBase
 
         try
         {
-            var result = await auditService.ReconcileAsync(id, branchId, ownerId, request?.Reason, cancellationToken);
+            var result = await auditService.ReconcileAsync(id, branchId, ownerId, request ?? new ReconcileAuditRequest(null), cancellationToken);
             return Ok(result);
         }
         catch (InvalidOperationException ex)
@@ -140,9 +140,14 @@ public sealed class InventoryAuditsController : ControllerBase
         if (string.IsNullOrWhiteSpace(branchId))
             return Forbid();
 
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst("sub")?.Value
+            ?? "us-system";
+
         try
         {
-            var result = await auditService.CancelAuditAsync(id, branchId, cancellationToken);
+            await auditService.CancelAuditAsync(id, branchId, userId, cancellationToken);
+            var result = await auditService.GetByIdAsync(id, branchId, cancellationToken);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

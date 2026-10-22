@@ -8,11 +8,11 @@ namespace PharmaSecure.Infrastructure.Persistence;
 
 public sealed class StockTransferService : IStockTransferService
 {
-    private readonly OracleConnectionFactory connectionFactory;
+    private readonly IOracleConnectionFactory connectionFactory;
     private readonly ILogger<StockTransferService> logger;
 
     public StockTransferService(
-        OracleConnectionFactory connectionFactory,
+        IOracleConnectionFactory connectionFactory,
         ILogger<StockTransferService> logger)
     {
         this.connectionFactory = connectionFactory;

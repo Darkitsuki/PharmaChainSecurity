@@ -90,7 +90,7 @@ public sealed class DrugsController : ControllerBase
         try
         {
             var created = await drugQueryService.CreateDrugAsync(branchId, request, cancellationToken);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = created.DrugId }, created);
+            return CreatedAtAction("GetById", new { id = created.DrugId }, created);
         }
         catch (InvalidOperationException ex)
         {

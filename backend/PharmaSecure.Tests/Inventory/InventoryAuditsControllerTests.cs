@@ -45,7 +45,8 @@ public class InventoryAuditsControllerTests
         // Arrange
         var list = new List<InventoryAuditResponse>
         {
-            new("ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", null, null, "CAN_BANG", "Kiểm kê định kỳ", DateTime.UtcNow, DateTime.UtcNow, 10, 2)
+            new("ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", null, null,
+                DateTime.UtcNow, DateTime.UtcNow, "CAN_BANG", 10, 8, 2, 0m, "Kiểm kê định kỳ", DateTime.UtcNow)
         };
         auditServiceMock.Setup(s => s.GetByBranchAsync(TestBranchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(list);
@@ -97,8 +98,8 @@ public class InventoryAuditsControllerTests
     {
         // Arrange
         var detail = new InventoryAuditDetailResponse(
-            "ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", null, null, "DANG_KIEM", "Ghi chú",
-            DateTime.UtcNow, null, 5, 0, Array.Empty<InventoryAuditItemDto>()
+            "ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", null, null,
+            DateTime.UtcNow, null, "DANG_KIEM", 5, 5, 0, 0m, "Ghi chú", DateTime.UtcNow, Array.Empty<InventoryAuditItemDto>()
         );
         auditServiceMock.Setup(s => s.GetByIdAsync("ia-1", TestBranchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(detail);
@@ -111,7 +112,7 @@ public class InventoryAuditsControllerTests
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returned = Assert.IsType<InventoryAuditDetailResponse>(okResult.Value);
-        Assert.Equal("KK001", returned.Code);
+        Assert.Equal("KK001", returned.AuditNo);
     }
 
     [Fact]
@@ -120,8 +121,8 @@ public class InventoryAuditsControllerTests
         // Arrange
         var request = new CreateInventoryAuditRequest("Kiểm kê tháng 10");
         var detail = new InventoryAuditDetailResponse(
-            "ia-new", "KK002", TestBranchId, TestUserId, "Thủ kho", null, null, "DANG_KIEM", "Kiểm kê tháng 10",
-            DateTime.UtcNow, null, 10, 0, Array.Empty<InventoryAuditItemDto>()
+            "ia-new", "KK002", TestBranchId, TestUserId, "Thủ kho", null, null,
+            DateTime.UtcNow, null, "DANG_KIEM", 10, 10, 0, 0m, "Kiểm kê tháng 10", DateTime.UtcNow, Array.Empty<InventoryAuditItemDto>()
         );
         auditServiceMock.Setup(s => s.CreateAuditAsync(request, TestBranchId, TestUserId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(detail);
@@ -141,15 +142,15 @@ public class InventoryAuditsControllerTests
     public async Task UpdateCountedItems_WhenValid_ReturnsOk()
     {
         // Arrange
-        var request = new UpdateAuditItemsRequest(new List<UpdateAuditItemEntry>
+        var request = new UpdateAuditItemsRequest(new List<CountedItemInput>
         {
-            new("iai-1", 15, "Đếm lại thừa 2")
+            new("drug-1", "batch-1", 15, "Đếm lại thừa 2")
         });
         var detail = new InventoryAuditDetailResponse(
-            "ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", null, null, "DANG_KIEM", "Ghi chú",
-            DateTime.UtcNow, null, 1, 1, Array.Empty<InventoryAuditItemDto>()
+            "ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", null, null,
+            DateTime.UtcNow, null, "DANG_KIEM", 1, 0, 1, 0m, "Ghi chú", DateTime.UtcNow, Array.Empty<InventoryAuditItemDto>()
         );
-        auditServiceMock.Setup(s => s.UpdateCountedItemsAsync("ia-1", TestBranchId, request, It.IsAny<CancellationToken>()))
+        auditServiceMock.Setup(s => s.UpdateCountedItemsAsync("ia-1", request, TestBranchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(detail);
 
         var controller = CreateController();
@@ -160,7 +161,7 @@ public class InventoryAuditsControllerTests
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returned = Assert.IsType<InventoryAuditDetailResponse>(okResult.Value);
-        Assert.Equal("KK001", returned.Code);
+        Assert.Equal("KK001", returned.AuditNo);
     }
 
     [Fact]
@@ -169,10 +170,10 @@ public class InventoryAuditsControllerTests
         // Arrange
         var request = new ReconcileAuditRequest("Duyệt cân đối chênh lệch");
         var detail = new InventoryAuditDetailResponse(
-            "ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", TestUserId, "Chủ nhà thuốc", "CAN_BANG", "Ghi chú",
-            DateTime.UtcNow, DateTime.UtcNow, 1, 1, Array.Empty<InventoryAuditItemDto>()
+            "ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", TestUserId, "Chủ nhà thuốc",
+            DateTime.UtcNow, DateTime.UtcNow, "CAN_BANG", 1, 0, 1, 0m, "Ghi chú", DateTime.UtcNow, Array.Empty<InventoryAuditItemDto>()
         );
-        auditServiceMock.Setup(s => s.ReconcileAsync("ia-1", TestBranchId, TestUserId, "Duyệt cân đối chênh lệch", It.IsAny<CancellationToken>()))
+        auditServiceMock.Setup(s => s.ReconcileAsync("ia-1", TestBranchId, TestUserId, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(detail);
 
         var controller = CreateController(role: "OWNER");
@@ -191,10 +192,12 @@ public class InventoryAuditsControllerTests
     {
         // Arrange
         var detail = new InventoryAuditDetailResponse(
-            "ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", null, null, "DA_HUY", "Ghi chú",
-            DateTime.UtcNow, null, 1, 0, Array.Empty<InventoryAuditItemDto>()
+            "ia-1", "KK001", TestBranchId, TestUserId, "Thủ kho", null, null,
+            DateTime.UtcNow, null, "DA_HUY", 1, 1, 0, 0m, "Ghi chú", DateTime.UtcNow, Array.Empty<InventoryAuditItemDto>()
         );
-        auditServiceMock.Setup(s => s.CancelAuditAsync("ia-1", TestBranchId, It.IsAny<CancellationToken>()))
+        auditServiceMock.Setup(s => s.CancelAuditAsync("ia-1", TestBranchId, TestUserId, It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        auditServiceMock.Setup(s => s.GetByIdAsync("ia-1", TestBranchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(detail);
 
         var controller = CreateController();
@@ -206,5 +209,6 @@ public class InventoryAuditsControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returned = Assert.IsType<InventoryAuditDetailResponse>(okResult.Value);
         Assert.Equal("DA_HUY", returned.Status);
+        auditServiceMock.Verify(s => s.CancelAuditAsync("ia-1", TestBranchId, TestUserId, It.IsAny<CancellationToken>()), Times.Once);
     }
 }
