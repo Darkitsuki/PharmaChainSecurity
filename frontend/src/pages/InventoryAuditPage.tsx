@@ -76,7 +76,7 @@ export function InventoryAuditPage() {
     setError('');
     try {
       const data = await apiClient<InventoryAudit[]>('/inventory-audits');
-      setAudits(data);
+      setAudits(Array.isArray(data) ? data : []);
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.detail || err.message);
@@ -230,12 +230,21 @@ export function InventoryAuditPage() {
 
   // Filter & Pagination for Main Table
   const filteredAudits = useMemo(() => {
+    if (!Array.isArray(audits)) return [];
+    const term = (searchTerm ?? '').toLowerCase();
+
     return audits.filter(a => {
       const matchSearch =
-        a.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.createdByName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (a.note && a.note.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchStatus = statusFilter === 'ALL' || a.status === statusFilter;
+        (a?.code ?? '').toLowerCase().includes(term) ||
+        (a?.auditNo ?? '').toLowerCase().includes(term) ||
+        (a?.createdByName ?? '').toLowerCase().includes(term) ||
+        (a?.creatorName ?? '').toLowerCase().includes(term) ||
+        (a?.note ?? '').toLowerCase().includes(term) ||
+        (a?.notes ?? '').toLowerCase().includes(term);
+
+      const status = a?.status ?? '';
+      const matchStatus = statusFilter === 'ALL' || status === statusFilter;
+
       return matchSearch && matchStatus;
     });
   }, [audits, searchTerm, statusFilter]);
@@ -248,14 +257,14 @@ export function InventoryAuditPage() {
 
   // Filtered items in detail modal
   const filteredDetailItems = useMemo(() => {
-    if (!selectedAudit) return [];
+    if (!selectedAudit || !Array.isArray(selectedAudit.items)) return [];
     if (!itemSearchTerm.trim()) return selectedAudit.items;
-    const q = itemSearchTerm.toLowerCase();
+    const q = (itemSearchTerm ?? '').toLowerCase();
     return selectedAudit.items.filter(
       item =>
-        item.drugName.toLowerCase().includes(q) ||
-        item.drugCode.toLowerCase().includes(q) ||
-        item.batchNumber.toLowerCase().includes(q)
+        (item?.drugName ?? '').toLowerCase().includes(q) ||
+        (item?.drugCode ?? '').toLowerCase().includes(q) ||
+        (item?.batchNumber ?? '').toLowerCase().includes(q)
     );
   }, [selectedAudit, itemSearchTerm]);
 
@@ -292,7 +301,7 @@ export function InventoryAuditPage() {
       header: 'Mã đợt kiểm',
       cell: audit => (
         <span className="font-mono font-bold text-ink">
-          {audit.code}
+          {audit?.code || audit?.auditNo || '—'}
         </span>
       ),
     },
@@ -300,13 +309,13 @@ export function InventoryAuditPage() {
       header: 'Ngày tạo',
       cell: audit => (
         <span className="text-xs text-slate-600">
-          {new Date(audit.createdAt).toLocaleString('vi-VN')}
+          {new Date(audit?.createdAt || audit?.createdDate || (audit as any)?.auditDate || Date.now()).toLocaleString('vi-VN')}
         </span>
       ),
     },
     {
       header: 'Người lập',
-      cell: audit => <span className="font-medium text-slate-700">{audit.createdByName}</span>,
+      cell: audit => <span className="font-medium text-slate-700">{audit?.createdByName || audit?.creatorName || '—'}</span>,
     },
     {
       header: 'Trạng thái',
@@ -338,17 +347,17 @@ export function InventoryAuditPage() {
     {
       header: 'Tổng số mục',
       align: 'center',
-      cell: audit => <span className="text-center font-semibold text-slate-700">{audit.totalItems}</span>,
+      cell: audit => <span className="text-center font-semibold text-slate-700">{audit?.totalItems ?? audit?.totalItemsCount ?? 0}</span>,
     },
     {
       header: 'Chênh lệch',
       cell: audit => (
         <span
           className={`font-semibold ${
-            audit.discrepantItems > 0 ? 'text-rose-600' : 'text-emerald-600'
+            (audit?.discrepantItems ?? audit?.discrepancyCount ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600'
           }`}
         >
-          {audit.discrepantItems > 0 ? `${audit.discrepantItems} mục lệch` : 'Khớp 100%'}
+          {(audit?.discrepantItems ?? audit?.discrepancyCount ?? 0) > 0 ? `${audit?.discrepantItems ?? audit?.discrepancyCount ?? 0} mục lệch` : 'Khớp 100%'}
         </span>
       ),
     },
@@ -356,10 +365,10 @@ export function InventoryAuditPage() {
       header: 'Người duyệt cân đối',
       cell: audit => (
         <span className="text-xs text-slate-500">
-          {audit.reconciledByName ? (
+          {(audit?.reconciledByName || audit?.approverName) ? (
             <>
-              <div className="font-medium text-slate-700">{audit.reconciledByName}</div>
-              {audit.reconciledAt && <div>{new Date(audit.reconciledAt).toLocaleDateString('vi-VN')}</div>}
+              <div className="font-medium text-slate-700">{audit?.reconciledByName || audit?.approverName}</div>
+              {(audit?.reconciledAt || audit?.approvedDate) && <div>{new Date(audit?.reconciledAt || audit?.approvedDate || Date.now()).toLocaleDateString('vi-VN')}</div>}
             </>
           ) : (
             '—'
@@ -412,28 +421,28 @@ export function InventoryAuditPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Tổng đợt kiểm kê"
-          value={audits.length}
+          value={Array.isArray(audits) ? audits.length : 0}
           subValue="Tất cả các đợt"
           icon={FileSpreadsheet}
           colorTheme="blue"
         />
         <StatCard
           title="Đang kiểm kê"
-          value={audits.filter(a => a.status === 'DANG_KIEM').length}
+          value={Array.isArray(audits) ? audits.filter(a => a?.status === 'DANG_KIEM').length : 0}
           subValue="Chờ kiểm đếm / cân đối"
           icon={ClipboardCheck}
           colorTheme="amber"
         />
         <StatCard
           title="Đã cân bằng"
-          value={audits.filter(a => a.status === 'CAN_BANG').length}
+          value={Array.isArray(audits) ? audits.filter(a => a?.status === 'CAN_BANG').length : 0}
           subValue="Đã chốt tồn kho hợp lệ"
           icon={CheckCircle2}
           colorTheme="emerald"
         />
         <StatCard
           title="Đợt có chênh lệch"
-          value={audits.filter(a => a.discrepantItems > 0).length}
+          value={Array.isArray(audits) ? audits.filter(a => (a?.discrepantItems ?? a?.discrepancyCount ?? 0) > 0).length : 0}
           subValue="Có sản phẩm thừa / thiếu"
           icon={SlidersHorizontal}
           colorTheme="purple"

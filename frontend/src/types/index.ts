@@ -429,17 +429,26 @@ export type InventoryAuditStatus = 'DANG_KIEM' | 'CAN_BANG' | 'DA_HUY';
 export interface InventoryAudit {
   id: string;
   code: string;
+  auditNo?: string;
   branchId: string;
   createdById: string;
+  createdBy?: string;
   createdByName: string;
+  creatorName?: string;
   reconciledById: string | null;
   reconciledByName: string | null;
+  approverName?: string | null;
   status: InventoryAuditStatus;
   note: string | null;
+  notes?: string | null;
   createdAt: string;
+  createdDate?: string;
   reconciledAt: string | null;
+  approvedDate?: string | null;
   totalItems: number;
+  totalItemsCount?: number;
   discrepantItems: number;
+  discrepancyCount?: number;
 }
 
 export interface InventoryAuditItem {
