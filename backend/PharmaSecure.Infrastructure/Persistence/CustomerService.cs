@@ -17,7 +17,8 @@ public sealed class CustomerService : ICustomerService
     }
 
     private string GetActiveBranchId() =>
-        branchContextAccessor.BranchId ?? "br-00000000-0000-0000-0000-000000000001";
+        branchContextAccessor.BranchId
+        ?? throw new InvalidOperationException("An authenticated branch context is required for customer operations.");
 
     public async Task<IReadOnlyList<CustomerResponse>> GetCustomersAsync(
         string? search = null,
@@ -148,6 +149,12 @@ public sealed class CustomerService : ICustomerService
             throw new ArgumentException("Customer full name is required.", nameof(request));
         if (string.IsNullOrWhiteSpace(request.PhoneNumber))
             throw new ArgumentException("Customer phone number is required.", nameof(request));
+        if (string.IsNullOrWhiteSpace(branchId))
+            throw new InvalidOperationException("An authenticated branch context is required to create a customer.");
+
+        var authenticatedBranchId = GetActiveBranchId();
+        if (!string.Equals(authenticatedBranchId, branchId, StringComparison.Ordinal))
+            throw new InvalidOperationException("The customer branch does not match the authenticated branch context.");
 
         var cleanPhone = request.PhoneNumber.Trim();
         var code = string.IsNullOrWhiteSpace(request.CustomerCode)

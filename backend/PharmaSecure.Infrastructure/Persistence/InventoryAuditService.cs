@@ -140,14 +140,14 @@ public sealed class InventoryAuditService : IInventoryAuditService
                 itemCommand.BindByName = true;
                 itemCommand.CommandText = """
                     SELECT ai.DrugId, d.DrugCode, d.Name, d.ActiveIngredient, d.Unit,
-                           ai.BatchId, b.BatchNumber, b.ExpiryDate,
+                           ai.BatchId, b.BatchNo, b.ExpiryDate,
                            ai.SystemQuantity, ai.ActualQuantity, ai.DiscrepancyQuantity,
                            ai.UnitPrice, ai.DiscrepancyValue, ai.Reason
                     FROM INVENTORY_AUDIT_ITEMS ai
                     JOIN DRUGS d ON ai.DrugId = d.id
                     JOIN DRUG_BATCHES b ON ai.BatchId = b.id
                     WHERE ai.AuditId = :AuditId
-                    ORDER BY d.Name, b.BatchNumber
+                    ORDER BY d.Name, b.BatchNo
                     """;
                 itemCommand.Parameters.Add(new OracleParameter("AuditId", OracleDbType.Varchar2, audit.Id, ParameterDirection.Input));
 
@@ -225,12 +225,12 @@ public sealed class InventoryAuditService : IInventoryAuditService
                 snapshotCmd.BindByName = true;
                 snapshotCmd.CommandText = """
                     SELECT inv.DrugId, d.DrugCode, d.Name, d.ActiveIngredient, d.Unit,
-                           inv.BatchId, b.BatchNumber, b.ExpiryDate, inv.Quantity, d.Price
+                           inv.BatchId, b.BatchNo, b.ExpiryDate, inv.Quantity, d.Price
                     FROM INVENTORIES inv
                     JOIN DRUGS d ON inv.DrugId = d.id
                     JOIN DRUG_BATCHES b ON inv.BatchId = b.id
                     WHERE inv.BranchId = :BranchId AND d.IsActive = 1
-                    ORDER BY d.Name, b.BatchNumber
+                    ORDER BY d.Name, b.BatchNo
                     """;
                 snapshotCmd.Parameters.Add(new OracleParameter("BranchId", OracleDbType.Varchar2, branchId, ParameterDirection.Input));
 
@@ -490,16 +490,16 @@ public sealed class InventoryAuditService : IInventoryAuditService
                     insertTxCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                     insertTxCmd.BindByName = true;
                     insertTxCmd.CommandText = """
-                        INSERT INTO INVENTORY_TRANSACTIONS (id, BranchId, DrugId, BatchId, TransactionType, QuantityChange, BalanceAfter, ReferenceId, Note, CreatedDate)
-                        VALUES (:id, :BranchId, :DrugId, :BatchId, 'DIEU_CHINH', :QuantityChange, :BalanceAfter, :ReferenceId, :Note, :CreatedDate)
+                        INSERT INTO INVENTORY_TRANSACTIONS (id, BranchId, DrugId, BatchId, TransactionType, QuantityChange, RemainingQuantity, CreatedBy, Note, CreatedDate)
+                        VALUES (:id, :BranchId, :DrugId, :BatchId, 'DIEU_CHINH', :QuantityChange, :RemainingQuantity, :CreatedBy, :Note, :CreatedDate)
                         """;
                     insertTxCmd.Parameters.Add(new OracleParameter("id", OracleDbType.Varchar2, $"tx-{Guid.NewGuid():N}", ParameterDirection.Input));
                     insertTxCmd.Parameters.Add(new OracleParameter("BranchId", OracleDbType.Varchar2, branchId, ParameterDirection.Input));
                     insertTxCmd.Parameters.Add(new OracleParameter("DrugId", OracleDbType.Varchar2, drugId, ParameterDirection.Input));
                     insertTxCmd.Parameters.Add(new OracleParameter("BatchId", OracleDbType.Varchar2, batchId, ParameterDirection.Input));
                     insertTxCmd.Parameters.Add(new OracleParameter("QuantityChange", OracleDbType.Int32, diff, ParameterDirection.Input));
-                    insertTxCmd.Parameters.Add(new OracleParameter("BalanceAfter", OracleDbType.Int32, actualQty, ParameterDirection.Input));
-                    insertTxCmd.Parameters.Add(new OracleParameter("ReferenceId", OracleDbType.Varchar2, id, ParameterDirection.Input));
+                    insertTxCmd.Parameters.Add(new OracleParameter("RemainingQuantity", OracleDbType.Int32, actualQty, ParameterDirection.Input));
+                    insertTxCmd.Parameters.Add(new OracleParameter("CreatedBy", OracleDbType.Varchar2, ownerId, ParameterDirection.Input));
                     insertTxCmd.Parameters.Add(new OracleParameter("Note", OracleDbType.Varchar2, $"Cân đối kho theo phiếu kiểm kê {auditNo}", ParameterDirection.Input));
                     insertTxCmd.Parameters.Add(new OracleParameter("CreatedDate", OracleDbType.TimeStamp, now, ParameterDirection.Input));
 

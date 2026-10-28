@@ -399,8 +399,7 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                 // Increase stock in INVENTORIES
                 await using var restoreStockCmd = CreateCommand("""
                     UPDATE INVENTORIES
-                    SET Quantity = Quantity + :quantity,
-                        UpdatedDate = CURRENT_TIMESTAMP
+                    SET Quantity = Quantity + :quantity
                     WHERE BranchId = :branchId AND DrugId = :drugId AND BatchId = :batchId
                     """);
                 restoreStockCmd.Parameters.Add("quantity", OracleDbType.Int32).Value = item.Quantity;

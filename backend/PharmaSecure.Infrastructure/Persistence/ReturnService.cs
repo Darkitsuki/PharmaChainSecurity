@@ -133,7 +133,7 @@ public sealed class ReturnService : IReturnService
                 itemCommand.BindByName = true;
                 itemCommand.CommandText = """
                     SELECT ri.DrugId, d.DrugCode, d.Name AS DrugName,
-                           ri.BatchId, b.BatchNumber,
+                           ri.BatchId, b.BatchNo,
                            ri.Quantity, ri.RefundPrice, ri.SubTotal, ri.ActionType
                     FROM RETURN_ITEMS ri
                     JOIN DRUGS d ON ri.DrugId = d.id
@@ -221,7 +221,7 @@ public sealed class ReturnService : IReturnService
                 itemCommand.BindByName = true;
                 itemCommand.CommandText = """
                     SELECT ii.DrugId, d.DrugCode, d.Name AS DrugName,
-                           ii.BatchId, b.BatchNumber,
+                           ii.BatchId, b.BatchNo,
                            ii.Quantity AS OriginalQuantity,
                            NVL((SELECT SUM(ri.Quantity)
                                 FROM RETURNS r
@@ -329,7 +329,7 @@ public sealed class ReturnService : IReturnService
                     checkCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                     checkCmd.BindByName = true;
                     checkCmd.CommandText = """
-                        SELECT ii.Quantity, ii.UnitPrice, d.DrugCode, d.Name, b.BatchNumber,
+                        SELECT ii.Quantity, ii.UnitPrice, d.DrugCode, d.Name, b.BatchNo,
                                NVL((SELECT SUM(ri.Quantity)
                                     FROM RETURNS r
                                     JOIN RETURN_ITEMS ri ON r.id = ri.ReturnId
@@ -457,17 +457,17 @@ public sealed class ReturnService : IReturnService
                         txCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                         txCmd.BindByName = true;
                         txCmd.CommandText = """
-                            INSERT INTO INVENTORY_TRANSACTIONS (id, BranchId, DrugId, BatchId, TransactionType, QuantityChange, BalanceAfter, ReferenceId, Note, CreatedDate)
+                            INSERT INTO INVENTORY_TRANSACTIONS (id, BranchId, DrugId, BatchId, TransactionType, QuantityChange, RemainingQuantity, CreatedBy, Note, CreatedDate)
                             VALUES (:id, :BranchId, :DrugId, :BatchId, 'TRA_HANG', :QuantityChange,
                                     (SELECT Quantity FROM INVENTORIES WHERE BranchId = :BranchId AND DrugId = :DrugId AND BatchId = :BatchId),
-                                    :ReferenceId, :Note, :CreatedDate)
+                                    :CreatedBy, :Note, :CreatedDate)
                             """;
                         txCmd.Parameters.Add(new OracleParameter("id", OracleDbType.Varchar2, $"tx-{Guid.NewGuid():N}", ParameterDirection.Input));
                         txCmd.Parameters.Add(new OracleParameter("BranchId", OracleDbType.Varchar2, branchId, ParameterDirection.Input));
                         txCmd.Parameters.Add(new OracleParameter("DrugId", OracleDbType.Varchar2, item.DrugId, ParameterDirection.Input));
                         txCmd.Parameters.Add(new OracleParameter("BatchId", OracleDbType.Varchar2, item.BatchId, ParameterDirection.Input));
                         txCmd.Parameters.Add(new OracleParameter("QuantityChange", OracleDbType.Int32, item.Quantity, ParameterDirection.Input));
-                        txCmd.Parameters.Add(new OracleParameter("ReferenceId", OracleDbType.Varchar2, returnId, ParameterDirection.Input));
+                        txCmd.Parameters.Add(new OracleParameter("CreatedBy", OracleDbType.Varchar2, cashierId, ParameterDirection.Input));
                         txCmd.Parameters.Add(new OracleParameter("Note", OracleDbType.Varchar2, $"Nhập lại kho từ phiếu đổi trả {returnNo} (HĐ: {invoiceNo})", ParameterDirection.Input));
                         txCmd.Parameters.Add(new OracleParameter("CreatedDate", OracleDbType.TimeStamp, createdDate, ParameterDirection.Input));
 
