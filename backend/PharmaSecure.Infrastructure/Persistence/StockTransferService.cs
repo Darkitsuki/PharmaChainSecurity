@@ -21,7 +21,8 @@ public sealed class StockTransferService : IStockTransferService
 
     public async Task<IReadOnlyList<StockTransferResponse>> GetTransfersAsync(string branchId, string? direction = null, CancellationToken cancellationToken = default)
     {
-        using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var sessionContextScope = new OracleSessionContextScope(connectionFactory, connection);
 
         var query = @"
             SELECT t.id, t.TransferNo, t.FromBranchId, fb.BranchName AS FromBranchName,
@@ -66,7 +67,8 @@ public sealed class StockTransferService : IStockTransferService
 
     public async Task<StockTransferDetailResponse?> GetByIdAsync(string id, string branchId, CancellationToken cancellationToken = default)
     {
-        using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var sessionContextScope = new OracleSessionContextScope(connectionFactory, connection);
 
         const string queryHeader = @"
             SELECT t.id, t.TransferNo, t.FromBranchId, fb.BranchName AS FromBranchName,
@@ -152,7 +154,8 @@ public sealed class StockTransferService : IStockTransferService
         if (request.Items is null || request.Items.Count == 0)
             throw new InvalidOperationException("Danh sách mặt hàng điều chuyển không được rỗng.");
 
-        using var connection = await connectionFactory.CreateOpenConnectionAsync(fromBranchId, cancellationToken);
+        await using var connection = await connectionFactory.CreateOpenConnectionAsync(fromBranchId, cancellationToken);
+        await using var sessionContextScope = new OracleSessionContextScope(connectionFactory, connection);
         using var tx = connection.BeginTransaction();
 
         try
@@ -241,7 +244,8 @@ public sealed class StockTransferService : IStockTransferService
 
     public async Task<StockTransferDetailResponse> ShipTransferAsync(string id, string branchId, string userId, CancellationToken cancellationToken = default)
     {
-        using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var sessionContextScope = new OracleSessionContextScope(connectionFactory, connection);
         using var tx = connection.BeginTransaction();
 
         try
@@ -382,7 +386,8 @@ public sealed class StockTransferService : IStockTransferService
 
     public async Task<StockTransferDetailResponse> ReceiveTransferAsync(string id, string branchId, string userId, CancellationToken cancellationToken = default)
     {
-        using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var sessionContextScope = new OracleSessionContextScope(connectionFactory, connection);
         using var tx = connection.BeginTransaction();
 
         try
@@ -543,7 +548,8 @@ public sealed class StockTransferService : IStockTransferService
 
     public async Task<StockTransferDetailResponse> CancelTransferAsync(string id, string branchId, string userId, CancellationToken cancellationToken = default)
     {
-        using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        await using var sessionContextScope = new OracleSessionContextScope(connectionFactory, connection);
         using var tx = connection.BeginTransaction();
 
         try

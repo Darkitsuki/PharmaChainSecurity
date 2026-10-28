@@ -17,7 +17,8 @@ public sealed class BranchService : IBranchService
     }
 
     private string GetActiveBranchId() =>
-        branchContextAccessor.BranchId ?? "br-00000000-0000-0000-0000-000000000001";
+        branchContextAccessor.BranchId
+        ?? throw new InvalidOperationException("An authenticated branch context is required.");
 
     public async Task<IReadOnlyList<BranchResponse>> GetAllAsync(CancellationToken cancellationToken = default)
     {

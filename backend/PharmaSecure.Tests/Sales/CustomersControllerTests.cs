@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using Moq;
 using PharmaSecure.Application.Features.Customers;
@@ -132,6 +133,35 @@ public class CustomersControllerTests
         var conflictResult = Assert.IsType<ConflictObjectResult>(result);
         var problem = Assert.IsType<ProblemDetails>(conflictResult.Value);
         Assert.Equal(StatusCodes.Status409Conflict, problem.Status);
+    }
+
+    [Fact]
+    public async Task Create_WhenAuthenticatedBranchIsMissing_ReturnsForbidden()
+    {
+        var request = new CreateCustomerRequest("Le Van An", "0933333333");
+        var controller = CreateController();
+        userContextMock.Setup(u => u.BranchId).Returns((string?)null);
+
+        var result = await controller.Create(request, CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(result);
+        customerServiceMock.Verify(
+            service => service.CreateAsync(
+                It.IsAny<CreateCustomerRequest>(),
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public void ControllerAuthorization_DoesNotGrantWarehouseCustomerAccess()
+    {
+        var authorize = Assert.Single(
+            typeof(CustomersController).GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+                .Cast<AuthorizeAttribute>());
+
+        Assert.Equal("SALES,OWNER", authorize.Roles);
+        Assert.DoesNotContain("WAREHOUSE", authorize.Roles ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Theory]

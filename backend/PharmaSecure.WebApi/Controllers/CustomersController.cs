@@ -91,6 +91,9 @@ public sealed class CustomersController : ControllerBase
         try
         {
             var branchId = currentUserContext.BranchId;
+            if (string.IsNullOrWhiteSpace(branchId))
+                return Forbid();
+
             var created = await customerService.CreateAsync(request, branchId, cancellationToken);
             return StatusCode(StatusCodes.Status201Created, created);
         }
