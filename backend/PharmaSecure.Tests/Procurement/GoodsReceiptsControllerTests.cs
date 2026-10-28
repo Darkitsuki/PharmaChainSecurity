@@ -1,6 +1,10 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using PharmaSecure.Application.Features.Procurement;
 using PharmaSecure.WebApi.Controllers;
@@ -138,6 +142,73 @@ public class GoodsReceiptsControllerTests
     }
 
     [Fact]
+    public async Task CreateAsync_WhenResultExecuted_Returns201WithValidLocation()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = "Testing",
+            ApplicationName = typeof(GoodsReceiptsController).Assembly.GetName().Name
+        });
+        builder.Services.AddControllers().AddApplicationPart(typeof(GoodsReceiptsController).Assembly);
+        await using var app = builder.Build();
+        app.MapControllers();
+        app.UseRouting();
+        app.UseEndpoints(_ => { });
+
+        var endpoint = app.Services.GetRequiredService<EndpointDataSource>().Endpoints.Single(endpoint =>
+        {
+            var action = endpoint.Metadata.GetMetadata<ControllerActionDescriptor>();
+            return action?.ControllerTypeInfo.AsType() == typeof(GoodsReceiptsController) && action.ActionName == "Create";
+        });
+        var actionDescriptor = endpoint.Metadata.GetMetadata<ControllerActionDescriptor>()!;
+        var request = new CreateGoodsReceiptRequest(
+            "sup-1",
+            "Nhap kho test",
+            new[] { new CreateGoodsReceiptItemRequest("drug-1", "BATCH01", DateTime.UtcNow.AddYears(2), null, 50, 25000m) });
+        var created = new GoodsReceiptResponse(
+            "rc-new",
+            "PN20261004-99",
+            "branch-01",
+            "sup-1",
+            "DHG",
+            "staff-01",
+            null,
+            1250000m,
+            "Nhap kho test",
+            "COMPLETED",
+            DateTime.UtcNow,
+            Array.Empty<GoodsReceiptItemResponse>());
+        receiptServiceMock.Setup(s => s.CreateReceiptAsync("branch-01", "staff-01", request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(created);
+
+        await using var scope = app.Services.CreateAsyncScope();
+        using var responseBody = new MemoryStream();
+        var controller = CreateController("branch-01", "staff-01");
+        var httpContext = controller.HttpContext;
+        httpContext.RequestServices = scope.ServiceProvider;
+        httpContext.Request.Scheme = "https";
+        httpContext.Request.Host = new HostString("localhost");
+        httpContext.Request.Path = "/api/v1/goods-receipts";
+        httpContext.Request.Method = HttpMethods.Post;
+        httpContext.Response.Body = responseBody;
+        httpContext.SetEndpoint(endpoint);
+        var routeData = new RouteData();
+        routeData.Values["controller"] = "GoodsReceipts";
+        routeData.Values["action"] = actionDescriptor.ActionName;
+        controller.ControllerContext = new ControllerContext(new ActionContext(httpContext, routeData, actionDescriptor));
+
+        // Act
+        var result = await controller.CreateAsync(request);
+        await result.Result!.ExecuteResultAsync(controller.ControllerContext);
+
+        // Assert
+        Assert.Equal(StatusCodes.Status201Created, httpContext.Response.StatusCode);
+        Assert.Equal("https://localhost/api/v1/goods-receipts/rc-new", httpContext.Response.Headers.Location.ToString());
+        receiptServiceMock.Verify(s => s.CreateReceiptAsync("branch-01", "staff-01", request, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task CreateAsync_WhenItemsEmpty_ReturnsBadRequestProblem()
     {
         // Arrange
@@ -151,6 +222,26 @@ public class GoodsReceiptsControllerTests
         var problemResult = Assert.IsType<ObjectResult>(result.Result);
         var details = Assert.IsType<ProblemDetails>(problemResult.Value);
         Assert.Equal(StatusCodes.Status400BadRequest, details.Status);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenMissingUserIdClaim_ReturnsForbid()
+    {
+        // Arrange
+        var request = new CreateGoodsReceiptRequest(
+            "sup-1",
+            null,
+            new[] { new CreateGoodsReceiptItemRequest("drug-1", "BATCH01", DateTime.UtcNow.AddYears(1), null, 10, 50000m) });
+        var controller = CreateController("branch-01", userId: "");
+
+        // Act
+        var result = await controller.CreateAsync(request);
+
+        // Assert
+        Assert.IsType<ForbidResult>(result.Result);
+        receiptServiceMock.Verify(
+            s => s.CreateReceiptAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CreateGoodsReceiptRequest>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]
