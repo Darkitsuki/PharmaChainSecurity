@@ -210,11 +210,29 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
                 throw new InvalidOperationException("Nhà cung cấp không tồn tại hoặc đã ngừng hoạt động.");
             var supplierName = (string)supplierNameObj;
 
-            var receiptId = $"rc-{Guid.NewGuid():N}"[..36];
+            var receiptId = $"rc-{Guid.NewGuid():N}";
             var receiptNo = $"PN{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..18].ToUpperInvariant();
             var now = DateTime.UtcNow;
-            decimal totalAmount = 0;
+            var totalAmount = request.Items.Sum(item => item.Quantity * item.ImportPrice);
             var responseItems = new List<GoodsReceiptItemResponse>();
+
+            // Insert the parent receipt before its items to satisfy the immediate foreign key.
+            await using var receiptInsertCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
+            receiptInsertCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+            receiptInsertCmd.BindByName = true;
+            receiptInsertCmd.CommandText = """
+                INSERT INTO GOODS_RECEIPTS (id, ReceiptNo, BranchId, SupplierId, WarehouseStaffId, TotalAmount, Note, Status, CreatedDate)
+                VALUES (:id, :no, :branchId, :supplierId, :staffId, :total, :note, 'COMPLETED', :createdDate)
+                """;
+            receiptInsertCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = receiptId;
+            receiptInsertCmd.Parameters.Add("no", OracleDbType.Varchar2, 50).Value = receiptNo;
+            receiptInsertCmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+            receiptInsertCmd.Parameters.Add("supplierId", OracleDbType.Varchar2, 50).Value = request.SupplierId;
+            receiptInsertCmd.Parameters.Add("staffId", OracleDbType.Varchar2, 50).Value = warehouseStaffId;
+            receiptInsertCmd.Parameters.Add("total", OracleDbType.Decimal).Value = totalAmount;
+            receiptInsertCmd.Parameters.Add("note", OracleDbType.Varchar2, 500).Value = (object?)request.Note?.Trim() ?? DBNull.Value;
+            receiptInsertCmd.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = now;
+            await receiptInsertCmd.ExecuteNonQueryAsync(cancellationToken);
 
             // 2. Process each item
             foreach (var item in request.Items)
@@ -248,7 +266,7 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
                 }
                 else
                 {
-                    batchId = $"bt-{Guid.NewGuid():N}"[..36];
+                    batchId = $"bt-{Guid.NewGuid():N}";
                     await using var batchInsertCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
                     batchInsertCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                     batchInsertCmd.BindByName = true;
@@ -315,7 +333,7 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
                 }
 
                 // Insert into INVENTORY_TRANSACTIONS (Audit)
-                var txId = $"tx-{Guid.NewGuid():N}"[..36];
+                var txId = $"tx-{Guid.NewGuid():N}";
                 await using var txCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
                 txCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 txCmd.BindByName = true;
@@ -336,9 +354,8 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
                 await txCmd.ExecuteNonQueryAsync(cancellationToken);
 
                 // Insert into GOODS_RECEIPT_ITEMS
-                var itemId = $"ri-{Guid.NewGuid():N}"[..36];
+                var itemId = $"ri-{Guid.NewGuid():N}";
                 var subtotal = item.Quantity * item.ImportPrice;
-                totalAmount += subtotal;
 
                 await using var itemInsertCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
                 itemInsertCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
@@ -371,24 +388,6 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
                     item.ImportPrice,
                     subtotal));
             }
-
-            // 3. Insert GOODS_RECEIPTS header
-            await using var receiptInsertCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
-            receiptInsertCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
-            receiptInsertCmd.BindByName = true;
-            receiptInsertCmd.CommandText = """
-                INSERT INTO GOODS_RECEIPTS (id, ReceiptNo, BranchId, SupplierId, WarehouseStaffId, TotalAmount, Note, Status, CreatedDate)
-                VALUES (:id, :no, :branchId, :supplierId, :staffId, :total, :note, 'COMPLETED', :createdDate)
-                """;
-            receiptInsertCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = receiptId;
-            receiptInsertCmd.Parameters.Add("no", OracleDbType.Varchar2, 50).Value = receiptNo;
-            receiptInsertCmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
-            receiptInsertCmd.Parameters.Add("supplierId", OracleDbType.Varchar2, 50).Value = request.SupplierId;
-            receiptInsertCmd.Parameters.Add("staffId", OracleDbType.Varchar2, 50).Value = warehouseStaffId;
-            receiptInsertCmd.Parameters.Add("total", OracleDbType.Decimal).Value = totalAmount;
-            receiptInsertCmd.Parameters.Add("note", OracleDbType.Varchar2, 500).Value = (object?)request.Note?.Trim() ?? DBNull.Value;
-            receiptInsertCmd.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = now;
-            await receiptInsertCmd.ExecuteNonQueryAsync(cancellationToken);
 
             // Commit atomic transaction
             await unitOfWork.CommitAsync(cancellationToken);

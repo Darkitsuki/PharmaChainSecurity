@@ -62,13 +62,14 @@ public sealed class GoodsReceiptsController : ControllerBase
             return Forbid();
 
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                     ?? User.FindFirst("sub")?.Value
-                     ?? "us-00000000-0000-0000-0000-000000000002";
+                     ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         try
         {
             var created = await goodsReceiptService.CreateReceiptAsync(branchId, userId, request, cancellationToken);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = created.Id }, created);
+            return CreatedAtAction("GetById", new { id = created.Id }, created);
         }
         catch (ArgumentException ex)
         {
