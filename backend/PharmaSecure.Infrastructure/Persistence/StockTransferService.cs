@@ -104,14 +104,14 @@ public sealed class StockTransferService : IStockTransferService
 
         // Fetch Items
         const string queryItems = @"
-            SELECT i.DrugId, d.DrugCode, d.DrugName, d.Unit,
-                   i.BatchId, b.BatchNumber, b.ExpiryDate,
+            SELECT i.DrugId, d.DrugCode, d.Name, d.Unit,
+                   i.BatchId, b.BatchNo, b.ExpiryDate,
                    i.Quantity, i.Notes
             FROM STOCK_TRANSFER_ITEMS i
             INNER JOIN DRUGS d ON i.DrugId = d.id
             INNER JOIN DRUG_BATCHES b ON i.BatchId = b.id
             WHERE i.TransferId = :transferId
-            ORDER BY d.DrugName ASC";
+            ORDER BY d.Name ASC";
 
         using var cmdItems = connection.CreateCommand();
         cmdItems.CommandText = queryItems;
@@ -300,7 +300,7 @@ public sealed class StockTransferService : IStockTransferService
             foreach (var item in transferItems)
             {
                 const string lockInvSql = @"
-                    SELECT id, Quantity FROM INVENTORIES
+                    SELECT Quantity FROM INVENTORIES
                     WHERE BranchId = :fromBranchId AND DrugId = :drugId AND BatchId = :batchId FOR UPDATE";
 
                 using var lockCmd = connection.CreateCommand();
@@ -310,15 +310,13 @@ public sealed class StockTransferService : IStockTransferService
                 lockCmd.Parameters.Add(new OracleParameter("drugId", item.DrugId));
                 lockCmd.Parameters.Add(new OracleParameter("batchId", item.BatchId));
 
-                string invId;
                 int currentQty;
                 using (var reader = await lockCmd.ExecuteReaderAsync(cancellationToken))
                 {
                     if (!await reader.ReadAsync(cancellationToken))
                         throw new InvalidOperationException("Không tìm thấy dữ liệu tồn kho của lô thuốc cần chuyển.");
 
-                    invId = reader.GetString(0);
-                    currentQty = Convert.ToInt32(reader.GetValue(1));
+                    currentQty = Convert.ToInt32(reader.GetValue(0));
                 }
 
                 if (currentQty < item.Quantity)
@@ -326,24 +324,26 @@ public sealed class StockTransferService : IStockTransferService
 
                 const string deductSql = @"
                     UPDATE INVENTORIES
-                    SET Quantity = Quantity - :deductQty, UpdatedDate = CURRENT_TIMESTAMP
-                    WHERE id = :invId";
+                    SET Quantity = Quantity - :deductQty
+                    WHERE BranchId = :branchId AND DrugId = :drugId AND BatchId = :batchId";
 
                 using var deductCmd = connection.CreateCommand();
                 deductCmd.Transaction = tx;
                 deductCmd.CommandText = deductSql;
                 deductCmd.Parameters.Add(new OracleParameter("deductQty", item.Quantity));
-                deductCmd.Parameters.Add(new OracleParameter("invId", invId));
+                deductCmd.Parameters.Add(new OracleParameter("branchId", fromBranchId));
+                deductCmd.Parameters.Add(new OracleParameter("drugId", item.DrugId));
+                deductCmd.Parameters.Add(new OracleParameter("batchId", item.BatchId));
                 await deductCmd.ExecuteNonQueryAsync(cancellationToken);
 
                 // Add INVENTORY_TRANSACTION
                 const string txLogSql = @"
                     INSERT INTO INVENTORY_TRANSACTIONS (
                         id, BranchId, DrugId, BatchId, TransactionType,
-                        Quantity, BalanceAfter, ReferenceType, ReferenceId, Notes, CreatedDate
+                        QuantityChange, RemainingQuantity, CreatedBy, Note, CreatedDate
                     ) VALUES (
                         :id, :branchId, :drugId, :batchId, 'XUAT_DIEU_CHUYEN',
-                        :quantity, :balanceAfter, 'STOCK_TRANSFER', :refId, 'Xuất kho chuyển hàng chi nhánh', CURRENT_TIMESTAMP
+                        :quantity, :remainingQuantity, :createdBy, :note, CURRENT_TIMESTAMP
                     )";
 
                 using var txCmd = connection.CreateCommand();
@@ -354,8 +354,9 @@ public sealed class StockTransferService : IStockTransferService
                 txCmd.Parameters.Add(new OracleParameter("drugId", item.DrugId));
                 txCmd.Parameters.Add(new OracleParameter("batchId", item.BatchId));
                 txCmd.Parameters.Add(new OracleParameter("quantity", item.Quantity));
-                txCmd.Parameters.Add(new OracleParameter("balanceAfter", currentQty - item.Quantity));
-                txCmd.Parameters.Add(new OracleParameter("refId", id));
+                txCmd.Parameters.Add(new OracleParameter("remainingQuantity", currentQty - item.Quantity));
+                txCmd.Parameters.Add(new OracleParameter("createdBy", userId));
+                txCmd.Parameters.Add(new OracleParameter("note", $"Xuất kho theo phiếu điều chuyển {id}"));
                 await txCmd.ExecuteNonQueryAsync(cancellationToken);
             }
 
@@ -442,7 +443,7 @@ public sealed class StockTransferService : IStockTransferService
             foreach (var item in transferItems)
             {
                 const string checkInvSql = @"
-                    SELECT id, Quantity FROM INVENTORIES
+                    SELECT Quantity FROM INVENTORIES
                     WHERE BranchId = :toBranchId AND DrugId = :drugId AND BatchId = :batchId FOR UPDATE";
 
                 using var checkCmd = connection.CreateCommand();
@@ -452,45 +453,42 @@ public sealed class StockTransferService : IStockTransferService
                 checkCmd.Parameters.Add(new OracleParameter("drugId", item.DrugId));
                 checkCmd.Parameters.Add(new OracleParameter("batchId", item.BatchId));
 
-                string? toInvId = null;
+                var inventoryExists = false;
                 int currentQty = 0;
                 using (var reader = await checkCmd.ExecuteReaderAsync(cancellationToken))
                 {
                     if (await reader.ReadAsync(cancellationToken))
                     {
-                        toInvId = reader.GetString(0);
-                        currentQty = Convert.ToInt32(reader.GetValue(1));
+                        inventoryExists = true;
+                        currentQty = Convert.ToInt32(reader.GetValue(0));
                     }
                 }
 
-                if (toInvId is not null)
+                if (inventoryExists)
                 {
                     const string updateInvSql = @"
                         UPDATE INVENTORIES
-                        SET Quantity = Quantity + :incQty, UpdatedDate = CURRENT_TIMESTAMP
-                        WHERE id = :invId";
+                        SET Quantity = Quantity + :incQty
+                        WHERE BranchId = :branchId AND DrugId = :drugId AND BatchId = :batchId";
 
                     using var updateInvCmd = connection.CreateCommand();
                     updateInvCmd.Transaction = tx;
                     updateInvCmd.CommandText = updateInvSql;
                     updateInvCmd.Parameters.Add(new OracleParameter("incQty", item.Quantity));
-                    updateInvCmd.Parameters.Add(new OracleParameter("invId", toInvId));
+                    updateInvCmd.Parameters.Add(new OracleParameter("branchId", toBranchId));
+                    updateInvCmd.Parameters.Add(new OracleParameter("drugId", item.DrugId));
+                    updateInvCmd.Parameters.Add(new OracleParameter("batchId", item.BatchId));
                     await updateInvCmd.ExecuteNonQueryAsync(cancellationToken);
                 }
                 else
                 {
                     const string insertInvSql = @"
-                        INSERT INTO INVENTORIES (
-                            id, BranchId, DrugId, BatchId, Quantity, MinQuantity, MaxQuantity, Location, CreatedDate
-                        ) VALUES (
-                            :id, :branchId, :drugId, :batchId, :quantity, 0, 1000, 'Khu vực nhận chuyển', CURRENT_TIMESTAMP
-                        )";
+                        INSERT INTO INVENTORIES (BranchId, DrugId, BatchId, Quantity)
+                        VALUES (:branchId, :drugId, :batchId, :quantity)";
 
-                    toInvId = $"inv-{Guid.NewGuid():N}";
                     using var insertInvCmd = connection.CreateCommand();
                     insertInvCmd.Transaction = tx;
                     insertInvCmd.CommandText = insertInvSql;
-                    insertInvCmd.Parameters.Add(new OracleParameter("id", toInvId));
                     insertInvCmd.Parameters.Add(new OracleParameter("branchId", toBranchId));
                     insertInvCmd.Parameters.Add(new OracleParameter("drugId", item.DrugId));
                     insertInvCmd.Parameters.Add(new OracleParameter("batchId", item.BatchId));
@@ -502,10 +500,10 @@ public sealed class StockTransferService : IStockTransferService
                 const string txLogSql = @"
                     INSERT INTO INVENTORY_TRANSACTIONS (
                         id, BranchId, DrugId, BatchId, TransactionType,
-                        Quantity, BalanceAfter, ReferenceType, ReferenceId, Notes, CreatedDate
+                        QuantityChange, RemainingQuantity, CreatedBy, Note, CreatedDate
                     ) VALUES (
                         :id, :branchId, :drugId, :batchId, 'NHAP_DIEU_CHUYEN',
-                        :quantity, :balanceAfter, 'STOCK_TRANSFER', :refId, 'Nhập kho từ chuyển hàng chi nhánh', CURRENT_TIMESTAMP
+                        :quantity, :remainingQuantity, :createdBy, :note, CURRENT_TIMESTAMP
                     )";
 
                 using var txCmd = connection.CreateCommand();
@@ -516,8 +514,9 @@ public sealed class StockTransferService : IStockTransferService
                 txCmd.Parameters.Add(new OracleParameter("drugId", item.DrugId));
                 txCmd.Parameters.Add(new OracleParameter("batchId", item.BatchId));
                 txCmd.Parameters.Add(new OracleParameter("quantity", item.Quantity));
-                txCmd.Parameters.Add(new OracleParameter("balanceAfter", currentQty + item.Quantity));
-                txCmd.Parameters.Add(new OracleParameter("refId", id));
+                txCmd.Parameters.Add(new OracleParameter("remainingQuantity", currentQty + item.Quantity));
+                txCmd.Parameters.Add(new OracleParameter("createdBy", userId));
+                txCmd.Parameters.Add(new OracleParameter("note", $"Nhập kho theo phiếu điều chuyển {id}"));
                 await txCmd.ExecuteNonQueryAsync(cancellationToken);
             }
 
