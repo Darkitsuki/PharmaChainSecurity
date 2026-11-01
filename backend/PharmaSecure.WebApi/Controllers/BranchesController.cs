@@ -50,7 +50,7 @@ public sealed class BranchesController : ControllerBase
         try
         {
             var created = await branchService.CreateAsync(request, cancellationToken);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = created.Id }, created);
+            return CreatedAtAction("GetById", new { id = created.Id }, created);
         }
         catch (InvalidOperationException ex)
         {

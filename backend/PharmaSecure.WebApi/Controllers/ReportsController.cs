@@ -40,6 +40,8 @@ public sealed class ReportsController : ControllerBase
         }
 
         var branchId = currentUserContext.BranchId;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
         logger.LogInformation("Generating sales summary report for branch {BranchId} over {Days} days", branchId, days);
 
         var report = await reportService.GetSalesSummaryAsync(branchId, days, cancellationToken);

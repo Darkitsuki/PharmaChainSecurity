@@ -28,6 +28,8 @@ public sealed class UsersController : ControllerBase
     public async Task<IActionResult> GetBranchUsers(CancellationToken cancellationToken)
     {
         var branchId = currentUserContext.BranchId;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
         var users = await userService.GetBranchUsersAsync(branchId, cancellationToken);
         return Ok(users);
     }
@@ -44,6 +46,8 @@ public sealed class UsersController : ControllerBase
             });
 
         var branchId = currentUserContext.BranchId;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
         var user = await userService.GetByIdAsync(id, branchId, cancellationToken);
         if (user is null)
             return NotFound(new ProblemDetails
@@ -104,6 +108,8 @@ public sealed class UsersController : ControllerBase
         try
         {
             var branchId = currentUserContext.BranchId;
+            if (string.IsNullOrWhiteSpace(branchId))
+                return Forbid();
             var created = await userService.CreateUserAsync(request, branchId, cancellationToken);
             return StatusCode(StatusCodes.Status201Created, created);
         }
@@ -151,6 +157,8 @@ public sealed class UsersController : ControllerBase
             });
 
         var branchId = currentUserContext.BranchId;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
         var updated = await userService.UpdateStatusAsync(id, branchId, request.IsActive, cancellationToken);
         if (updated is null)
             return NotFound(new ProblemDetails

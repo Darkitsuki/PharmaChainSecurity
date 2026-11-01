@@ -15,7 +15,7 @@ public class StockTransfersControllerTests
     private const string TargetBranchId = "br-00000000-0000-0000-0000-000000000002";
     private const string TestUserId = "us-00000000-0000-0000-0000-000000000002";
 
-    private StockTransfersController CreateController(bool withUserClaims = true, string role = "WAREHOUSE")
+    private StockTransfersController CreateController(bool withUserClaims = true, string role = "WAREHOUSE", bool withUserId = true)
     {
         var controller = new StockTransfersController(transferServiceMock.Object);
         var httpContext = new DefaultHttpContext();
@@ -25,9 +25,10 @@ public class StockTransfersControllerTests
             var claims = new List<Claim>
             {
                 new("BranchId", TestBranchId),
-                new(ClaimTypes.NameIdentifier, TestUserId),
                 new(ClaimTypes.Role, role)
             };
+            if (withUserId)
+                claims.Add(new Claim(ClaimTypes.NameIdentifier, TestUserId));
             var identity = new ClaimsIdentity(claims, "TestAuth");
             httpContext.User = new ClaimsPrincipal(identity);
         }
@@ -142,6 +143,8 @@ public class StockTransfersControllerTests
         var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
         var returned = Assert.IsType<StockTransferDetailResponse>(createdResult.Value);
         Assert.Equal("st-new", returned.Id);
+        await MvcResultTestHelper.ExecuteCreatedResultAsync(
+            controller, createdResult, "CreateTransfer", "/api/v1/stock-transfers", "https://localhost/api/v1/stock-transfers/st-new");
     }
 
     [Fact]
@@ -211,5 +214,24 @@ public class StockTransfersControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returned = Assert.IsType<StockTransferDetailResponse>(okResult.Value);
         Assert.Equal("CANCELLED", returned.Status);
+    }
+
+    [Fact]
+    public async Task CreateTransfer_WhenUserIdClaimIsMissing_ReturnsForbidWithoutCallingService()
+    {
+        var request = new CreateStockTransferRequest(
+            TargetBranchId,
+            null,
+            new List<CreateStockTransferItemRequest> { new("dr-1", "bat-1", 1, null) });
+        var controller = CreateController(withUserId: false);
+
+        var result = await controller.CreateTransferAsync(request);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        transferServiceMock.Verify(service => service.CreateTransferAsync(
+            It.IsAny<CreateStockTransferRequest>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 }
