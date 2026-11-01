@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Features.Invoices;
@@ -91,7 +91,7 @@ public sealed class InvoicesController : ControllerBase
         if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
             return Unauthorized();
 
-        var result = await invoiceQueryService.VerifyInvoiceSignatureAsync(currentUserContext.BranchId, id, cancellationToken);
+        var result = await invoiceQueryService.VerifyInvoiceSignatureAsync(currentUserContext.BranchId, id, currentUserContext.UserId, cancellationToken);
         if (result is null)
             return Problem(statusCode: StatusCodes.Status404NotFound, title: "Invoice was not found.");
 

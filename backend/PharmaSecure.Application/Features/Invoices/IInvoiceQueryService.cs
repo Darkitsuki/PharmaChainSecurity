@@ -15,7 +15,10 @@ public sealed record InvoiceResponse(
     string? CancelledById = null,
     string? CancelledByName = null,
     DateTime? CancelledDate = null,
-    string? CancelReason = null);
+    string? CancelReason = null,
+    DateTime? LastVerifiedAt = null,
+    string? VerifiedById = null,
+    string? VerifiedByName = null);
 
 public sealed record InvoiceItemResponse(
     string DrugId,
@@ -51,7 +54,10 @@ public sealed record InvoiceDetailResponse(
     string? CancelledById = null,
     string? CancelledByName = null,
     DateTime? CancelledDate = null,
-    string? CancelReason = null);
+    string? CancelReason = null,
+    DateTime? LastVerifiedAt = null,
+    string? VerifiedById = null,
+    string? VerifiedByName = null);
 
 public sealed record InvoiceVerificationResult(
     string InvoiceId,
@@ -61,7 +67,9 @@ public sealed record InvoiceVerificationResult(
     string StoredHashSha256,
     string CertificateSerial,
     DateTime SignedAt,
-    string Message);
+    string Message,
+    DateTime? LastVerifiedAt = null,
+    string? VerifiedByName = null);
 
 public interface IInvoiceQueryService
 {
@@ -84,6 +92,7 @@ public interface IInvoiceQueryService
     Task<InvoiceVerificationResult?> VerifyInvoiceSignatureAsync(
         string branchId,
         string invoiceId,
+        string? verifiedById = null,
         CancellationToken cancellationToken = default);
 
     Task<InvoiceDetailResponse> CancelInvoiceAsync(

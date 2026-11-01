@@ -33,6 +33,7 @@ export function InvoicesPage() {
   const [error, setError] = useState('');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<InvoiceVerificationResult | null>(null);
+  const [verifiedMap, setVerifiedMap] = useState<Record<string, InvoiceVerificationResult>>({});
 
   // Detail Modal State
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
@@ -93,6 +94,36 @@ export function InvoicesPage() {
         { method: 'POST' }
       );
       setNotice(verification);
+      setVerifiedMap((prev) => ({
+        ...prev,
+        [invoice.invoiceId]: verification,
+      }));
+      if (verification.isValid) {
+        setResult((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            items: prev.items.map((item) => {
+              if (item.invoiceId === invoice.invoiceId) {
+                return {
+                  ...item,
+                  lastVerifiedAt: verification.lastVerifiedAt || new Date().toISOString(),
+                  verifiedByName: verification.verifiedByName || currentUser?.fullName || currentUser?.username,
+                };
+              }
+              return item;
+            }),
+          };
+        });
+        setSelectedInvoice((prev) => {
+          if (!prev || prev.invoiceId !== invoice.invoiceId) return prev;
+          return {
+            ...prev,
+            lastVerifiedAt: verification.lastVerifiedAt || new Date().toISOString(),
+            verifiedByName: verification.verifiedByName || currentUser?.fullName || currentUser?.username,
+          };
+        });
+      }
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Xác thực chữ ký số thất bại.');
     } finally {
@@ -230,9 +261,34 @@ export function InvoicesPage() {
     },
     {
       header: 'Chứng Thực HSM',
-      cell: (invoice) => (
-        <HsmSignatureBadge status={invoice.status === 'CANCELLED' ? 'revoked' : 'valid'} />
-      ),
+      cell: (invoice) => {
+        const verification = verifiedMap[invoice.invoiceId];
+        const isVerified = Boolean(invoice.lastVerifiedAt || verification?.isValid);
+        const verifiedName = invoice.verifiedByName || verification?.verifiedByName || 'Người dùng';
+        const verifiedTime = invoice.lastVerifiedAt || verification?.lastVerifiedAt;
+        return (
+          <div className="flex flex-col gap-1 items-start">
+            <HsmSignatureBadge status={invoice.status === 'CANCELLED' ? 'revoked' : 'valid'} />
+            {isVerified ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200"
+                title={`Đã thẩm định toàn vẹn bởi ${verifiedName}${verifiedTime ? ` lúc ${dateTime.format(new Date(verifiedTime))}` : ''}`}
+              >
+                <BadgeCheck size={11} className="text-emerald-600" />
+                <span>Đã thẩm định ✓</span>
+              </span>
+            ) : verification && !verification.isValid ? (
+              <span
+                className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 border border-rose-200"
+                title={verification.message || 'Chữ ký không khớp hoặc đã bị thu hồi'}
+              >
+                <AlertTriangle size={11} className="text-rose-600" />
+                <span>Sai lệch / Thu hồi</span>
+              </span>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       header: 'Tổng Tiền',
@@ -269,14 +325,35 @@ export function InvoicesPage() {
             type="button"
             onClick={() => verify(invoice)}
             disabled={verifyingId === invoice.invoiceId}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-forest/30 bg-mint px-2.5 text-xs font-semibold text-forest hover:bg-forest/15 disabled:opacity-50 cursor-pointer transition-colors"
+            className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold disabled:opacity-50 cursor-pointer transition-colors ${
+              (invoice.lastVerifiedAt || verifiedMap[invoice.invoiceId]?.isValid)
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                : verifiedMap[invoice.invoiceId] && !verifiedMap[invoice.invoiceId]?.isValid
+                ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+            title={
+              invoice.lastVerifiedAt || verifiedMap[invoice.invoiceId]?.isValid
+                ? `Đã thẩm định bởi ${invoice.verifiedByName || verifiedMap[invoice.invoiceId]?.verifiedByName || 'Người dùng'}. Bấm để thẩm định lại`
+                : 'Kiểm tra tính toàn vẹn chữ ký số SHA-256 / RSA'
+            }
           >
             {verifyingId === invoice.invoiceId ? (
               <LoaderCircle size={13} className="animate-spin" />
+            ) : (invoice.lastVerifiedAt || verifiedMap[invoice.invoiceId]?.isValid) ? (
+              <BadgeCheck size={13} className="text-emerald-600" />
+            ) : verifiedMap[invoice.invoiceId] && !verifiedMap[invoice.invoiceId]?.isValid ? (
+              <AlertTriangle size={13} className="text-rose-600" />
             ) : (
               <ShieldCheck size={13} />
             )}
-            <span>Xác thực</span>
+            <span>
+              {(invoice.lastVerifiedAt || verifiedMap[invoice.invoiceId]?.isValid)
+                ? 'Đã thẩm định'
+                : verifiedMap[invoice.invoiceId] && !verifiedMap[invoice.invoiceId]?.isValid
+                ? 'Sai lệch'
+                : 'Xác thực'}
+            </span>
           </button>
         </div>
       ),
@@ -382,14 +459,30 @@ export function InvoicesPage() {
                   type="button"
                   onClick={() => verify(selectedInvoice)}
                   disabled={verifyingId === selectedInvoice.invoiceId}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-forest/30 bg-mint px-3.5 py-2 text-xs font-semibold text-forest hover:bg-forest/15 cursor-pointer disabled:opacity-50"
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors ${
+                    (selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.isValid)
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                      : verifiedMap[selectedInvoice.invoiceId] && !verifiedMap[selectedInvoice.invoiceId]?.isValid
+                      ? 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
                 >
                   {verifyingId === selectedInvoice.invoiceId ? (
                     <LoaderCircle size={15} className="animate-spin" />
+                  ) : (selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.isValid) ? (
+                    <BadgeCheck size={15} className="text-emerald-600" />
+                  ) : verifiedMap[selectedInvoice.invoiceId] && !verifiedMap[selectedInvoice.invoiceId]?.isValid ? (
+                    <AlertTriangle size={15} className="text-rose-600" />
                   ) : (
                     <ShieldCheck size={15} />
                   )}
-                  <span>Xác Thực Chữ Ký</span>
+                  <span>
+                    {(selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.isValid)
+                      ? 'Chứng Từ Hợp Lệ & Nguyên Vẹn ✓'
+                      : verifiedMap[selectedInvoice.invoiceId] && !verifiedMap[selectedInvoice.invoiceId]?.isValid
+                      ? 'Chứng Từ Có Dấu Hiệu Sai Lệch ⚠'
+                      : 'Xác Thực Chữ Ký'}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -548,6 +641,22 @@ export function InvoicesPage() {
                         ? dateTime.format(new Date(selectedInvoice.signature.revokedAt))
                         : (selectedInvoice.cancelledDate ? dateTime.format(new Date(selectedInvoice.cancelledDate)) : '—')}
                     </p>
+                  )}
+                  {(selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.isValid) && (
+                    <div className="mt-3 rounded-lg border border-emerald-200 bg-white/80 p-2.5 text-[11px] text-emerald-900 font-sans space-y-1">
+                      <p className="font-bold flex items-center gap-1.5 text-emerald-800">
+                        <BadgeCheck size={14} className="text-emerald-600" />
+                        <span>Chứng từ đã được thẩm định tính toàn vẹn:</span>
+                      </p>
+                      <p className="pl-5 text-slate-700">
+                        Người thẩm định: <strong className="text-emerald-800">{selectedInvoice.verifiedByName || verifiedMap[selectedInvoice.invoiceId]?.verifiedByName || 'Người quản lý'}</strong>
+                      </p>
+                      {(selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.lastVerifiedAt) && (
+                        <p className="pl-5 text-slate-600 font-mono text-[10px]">
+                          Thời điểm: {dateTime.format(new Date(selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]!.lastVerifiedAt!))}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

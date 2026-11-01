@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Features.Invoices;
@@ -42,9 +42,11 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             await using var command = CreateCommand("""
                 SELECT i.id, i.InvoiceNo, i.CreatedDate, i.TotalAmount, i.BranchId, i.CashierId,
                        NVL(i.Status, 'COMPLETED'), i.CancelledBy, u.FullName AS CancelledByName,
-                       i.CancelledDate, i.CancelReason
+                       i.CancelledDate, i.CancelReason,
+                       i.LastVerifiedAt, i.VerifiedBy, uv.FullName AS VerifiedByName
                 FROM INVOICES i
                 LEFT JOIN USERS u ON i.CancelledBy = u.id
+                LEFT JOIN USERS uv ON i.VerifiedBy = uv.id
                 WHERE i.BranchId = :branchId
                 ORDER BY i.CreatedDate DESC, i.id DESC
                 OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY
@@ -65,8 +67,11 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                     reader.IsDBNull(6) ? "COMPLETED" : reader.GetString(6),
                     reader.IsDBNull(7) ? null : reader.GetString(7),
                     reader.IsDBNull(8) ? null : reader.GetString(8),
-                    reader.IsDBNull(9) ? null : reader.GetDateTime(9),
-                    reader.IsDBNull(10) ? null : reader.GetString(10)
+                    reader.IsDBNull(9) ? null : (DateTime?)reader.GetDateTime(9),
+                    reader.IsDBNull(10) ? null : reader.GetString(10),
+                    reader.IsDBNull(11) ? null : (DateTime?)reader.GetDateTime(11),
+                    reader.IsDBNull(12) ? null : reader.GetString(12),
+                    reader.IsDBNull(13) ? null : reader.GetString(13)
                 ));
             }
 
@@ -93,69 +98,85 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
         await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
         try
         {
-            await using var headerCommand = CreateCommand("""
-                SELECT i.id, i.InvoiceNo, i.CreatedDate, i.TotalAmount, i.BranchId, i.CashierId,
-                       i.CustomerId, c.FullName, c.PhoneNumber,
-                       NVL(i.Status, 'COMPLETED'), i.CancelledBy, uc.FullName AS CancelledByName,
-                       i.CancelledDate, i.CancelReason
-                FROM INVOICES i
-                LEFT JOIN CUSTOMERS c ON i.CustomerId = c.id
-                LEFT JOIN USERS uc ON i.CancelledBy = uc.id
-                WHERE i.id = :id AND i.BranchId = :branchId
-                """);
-            headerCommand.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id;
-            headerCommand.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
-
-            await using var headerReader = await headerCommand.ExecuteReaderAsync(cancellationToken);
-            if (!await headerReader.ReadAsync(cancellationToken))
-            {
-                await unitOfWork.CommitAsync(cancellationToken);
-                return null;
-            }
-
-            var invoiceId = headerReader.GetString(0);
-            var invoiceNo = headerReader.GetString(1);
-            var createdDate = headerReader.GetDateTime(2);
-            var totalAmount = headerReader.GetDecimal(3);
-            var bId = headerReader.GetString(4);
-            var cashierId = headerReader.GetString(5);
-            var custId = headerReader.IsDBNull(6) ? null : headerReader.GetString(6);
-            var custName = headerReader.IsDBNull(7) ? null : headerReader.GetString(7);
-            var custPhone = headerReader.IsDBNull(8) ? null : headerReader.GetString(8);
-            var status = headerReader.IsDBNull(9) ? "COMPLETED" : headerReader.GetString(9);
-            var cancelledById = headerReader.IsDBNull(10) ? null : headerReader.GetString(10);
-            var cancelledByName = headerReader.IsDBNull(11) ? null : headerReader.GetString(11);
-            var cancelledDate = headerReader.IsDBNull(12) ? null : (DateTime?)headerReader.GetDateTime(12);
-            var cancelReason = headerReader.IsDBNull(13) ? null : headerReader.GetString(13);
-            await headerReader.CloseAsync();
-
-            var items = await QueryItemsInternalAsync(invoiceId, cancellationToken);
-            var signature = await QuerySignatureInternalAsync(invoiceId, cancellationToken);
-
+            var result = await GetByIdInternalAsync(branchId, id, cancellationToken);
             await unitOfWork.CommitAsync(cancellationToken);
-            return new InvoiceDetailResponse(
-                invoiceId,
-                invoiceNo,
-                createdDate,
-                totalAmount,
-                bId,
-                cashierId,
-                items,
-                signature,
-                custId,
-                custName,
-                custPhone,
-                status,
-                cancelledById,
-                cancelledByName,
-                cancelledDate,
-                cancelReason);
+            return result;
         }
         catch
         {
             await unitOfWork.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    private async Task<InvoiceDetailResponse?> GetByIdInternalAsync(
+        string branchId,
+        string id,
+        CancellationToken cancellationToken)
+    {
+        await using var headerCommand = CreateCommand("""
+            SELECT i.id, i.InvoiceNo, i.CreatedDate, i.TotalAmount, i.BranchId, i.CashierId,
+                   i.CustomerId, c.FullName, c.PhoneNumber,
+                   NVL(i.Status, 'COMPLETED'), i.CancelledBy, uc.FullName AS CancelledByName,
+                   i.CancelledDate, i.CancelReason,
+                   i.LastVerifiedAt, i.VerifiedBy, uv.FullName AS VerifiedByName
+            FROM INVOICES i
+            LEFT JOIN CUSTOMERS c ON i.CustomerId = c.id
+            LEFT JOIN USERS uc ON i.CancelledBy = uc.id
+            LEFT JOIN USERS uv ON i.VerifiedBy = uv.id
+            WHERE i.id = :id AND i.BranchId = :branchId
+            """);
+        headerCommand.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id;
+        headerCommand.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+        await using var headerReader = await headerCommand.ExecuteReaderAsync(cancellationToken);
+        if (!await headerReader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        var invoiceId = headerReader.GetString(0);
+        var invoiceNo = headerReader.GetString(1);
+        var createdDate = headerReader.GetDateTime(2);
+        var totalAmount = headerReader.GetDecimal(3);
+        var bId = headerReader.GetString(4);
+        var cashierId = headerReader.GetString(5);
+        var custId = headerReader.IsDBNull(6) ? null : headerReader.GetString(6);
+        var custName = headerReader.IsDBNull(7) ? null : headerReader.GetString(7);
+        var custPhone = headerReader.IsDBNull(8) ? null : headerReader.GetString(8);
+        var status = headerReader.IsDBNull(9) ? "COMPLETED" : headerReader.GetString(9);
+        var cancelledById = headerReader.IsDBNull(10) ? null : headerReader.GetString(10);
+        var cancelledByName = headerReader.IsDBNull(11) ? null : headerReader.GetString(11);
+        var cancelledDate = headerReader.IsDBNull(12) ? null : (DateTime?)headerReader.GetDateTime(12);
+        var cancelReason = headerReader.IsDBNull(13) ? null : headerReader.GetString(13);
+        var lastVerifiedAt = headerReader.IsDBNull(14) ? null : (DateTime?)headerReader.GetDateTime(14);
+        var verifiedById = headerReader.IsDBNull(15) ? null : headerReader.GetString(15);
+        var verifiedByName = headerReader.IsDBNull(16) ? null : headerReader.GetString(16);
+        await headerReader.CloseAsync();
+
+        var items = await QueryItemsInternalAsync(invoiceId, cancellationToken);
+        var signature = await QuerySignatureInternalAsync(invoiceId, cancellationToken);
+
+        return new InvoiceDetailResponse(
+            invoiceId,
+            invoiceNo,
+            createdDate,
+            totalAmount,
+            bId,
+            cashierId,
+            items,
+            signature,
+            custId,
+            custName,
+            custPhone,
+            status,
+            cancelledById,
+            cancelledByName,
+            cancelledDate,
+            cancelReason,
+            lastVerifiedAt,
+            verifiedById,
+            verifiedByName);
     }
 
     public async Task<IReadOnlyCollection<InvoiceItemResponse>> GetItemsAsync(
@@ -198,6 +219,7 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
     public async Task<InvoiceVerificationResult?> VerifyInvoiceSignatureAsync(
         string branchId,
         string invoiceId,
+        string? verifiedById = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(branchId))
@@ -303,6 +325,33 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             var isValid = invoice.TotalAmount == storedTotalAmount &&
                 digitalSignatureService.VerifyIntegrity(invoice, digitalSignature);
 
+            DateTime? lastVerifiedAt = null;
+            string? verifiedByName = null;
+            if (isValid && !string.IsNullOrWhiteSpace(verifiedById))
+            {
+                lastVerifiedAt = DateTime.UtcNow;
+                await using var updateVerifiedCmd = CreateCommand("""
+                    UPDATE INVOICES
+                    SET LastVerifiedAt = CURRENT_TIMESTAMP,
+                        VerifiedBy = :verifiedBy
+                    WHERE id = :id AND BranchId = :branchId
+                    """);
+                updateVerifiedCmd.Parameters.Add("verifiedBy", OracleDbType.Varchar2, 50).Value = verifiedById;
+                updateVerifiedCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = invoiceId;
+                updateVerifiedCmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+                await updateVerifiedCmd.ExecuteNonQueryAsync(cancellationToken);
+
+                await using var userCmd = CreateCommand("""
+                    SELECT FullName FROM USERS WHERE id = :userId
+                    """);
+                userCmd.Parameters.Add("userId", OracleDbType.Varchar2, 50).Value = verifiedById;
+                await using var userReader = await userCmd.ExecuteReaderAsync(cancellationToken);
+                if (await userReader.ReadAsync(cancellationToken) && !userReader.IsDBNull(0))
+                {
+                    verifiedByName = userReader.GetString(0);
+                }
+            }
+
             await unitOfWork.CommitAsync(cancellationToken);
             return new InvoiceVerificationResult(
                 invId,
@@ -312,7 +361,9 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                 storedHash,
                 certSerial,
                 signedAt,
-                isValid ? "Digital signature is valid and untampered." : "Invoice data has been tampered with or signature is invalid.");
+                isValid ? "Digital signature is valid and untampered." : "Invoice data has been tampered with or signature is invalid.",
+                lastVerifiedAt,
+                verifiedByName);
         }
         catch
         {
@@ -452,11 +503,12 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             revokeSigCmd.Parameters.Add("invoiceId", OracleDbType.Varchar2, 50).Value = invoiceId;
             await revokeSigCmd.ExecuteNonQueryAsync(cancellationToken);
 
+            var updatedDetail = (await GetByIdInternalAsync(branchId, invoiceId, cancellationToken))!;
+
             await unitOfWork.CommitAsync(cancellationToken);
             logger.LogInformation("Invoice {InvoiceNo} ({InvoiceId}) successfully cancelled by owner {OwnerId}. Stock restored and signature revoked.",
                 invoiceNo, invoiceId, ownerId);
-
-            return (await GetByIdAsync(branchId, invoiceId, cancellationToken))!;
+            return updatedDetail;
         }
         catch
         {

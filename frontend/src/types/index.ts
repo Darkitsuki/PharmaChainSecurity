@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Canonical RBAC Roles matching backend domain (Rule 04).
  */
 export type UserRole = 'OWNER' | 'SALES' | 'WAREHOUSE';
@@ -88,6 +88,9 @@ export interface Invoice {
   cancelledByName?: string | null;
   cancelledDate?: string | null;
   cancelReason?: string | null;
+  lastVerifiedAt?: string | null;
+  verifiedById?: string | null;
+  verifiedByName?: string | null;
 }
 
 export interface CheckoutResponse {
@@ -108,6 +111,8 @@ export interface InvoiceVerificationResult {
   certificateSerial: string;
   signedAt: string;
   message: string;
+  lastVerifiedAt?: string | null;
+  verifiedByName?: string | null;
 }
 
 export interface InventoryAlert {
@@ -158,6 +163,9 @@ export interface InvoiceDetail {
   cancelledByName?: string | null;
   cancelledDate?: string | null;
   cancelReason?: string | null;
+  lastVerifiedAt?: string | null;
+  verifiedById?: string | null;
+  verifiedByName?: string | null;
 }
 
 export interface CancelInvoicePayload {

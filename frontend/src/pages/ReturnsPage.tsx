@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -713,7 +713,7 @@ export function ReturnsPage() {
             <button
               type="submit"
               disabled={submitting || !lookupInvoice || calculatedRefundTotal <= 0}
-              className="px-5 py-2 text-xs font-medium bg-forest hover:bg-forest-dark text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer font-bold shadow-xs"
+              className="px-5 py-2 text-xs font-medium bg-forest hover:bg-forest-dark text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               {submitting ? 'Đang xử lý...' : 'Xác nhận Đổi trả & Hoàn tiền'}
             </button>
