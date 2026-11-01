@@ -99,6 +99,8 @@ public class SuppliersControllerTests
         var createdAtResult = Assert.IsType<CreatedAtActionResult>(result.Result);
         var returned = Assert.IsType<SupplierResponse>(createdAtResult.Value);
         Assert.Equal("sup-new", returned.Id);
+        await MvcResultTestHelper.ExecuteCreatedResultAsync(
+            controller, createdAtResult, "Create", "/api/v1/suppliers", "https://localhost/api/v1/suppliers/sup-new");
     }
 
     [Fact]

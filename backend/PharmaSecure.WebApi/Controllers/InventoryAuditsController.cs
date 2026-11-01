@@ -58,13 +58,14 @@ public sealed class InventoryAuditsController : ControllerBase
             return Forbid();
 
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value
-            ?? "us-system";
+            ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         try
         {
             var audit = await auditService.CreateAuditAsync(request, branchId, userId, cancellationToken);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = audit.Id }, audit);
+            return CreatedAtAction("GetById", new { id = audit.Id }, audit);
         }
         catch (InvalidOperationException ex)
         {
@@ -114,8 +115,9 @@ public sealed class InventoryAuditsController : ControllerBase
             return Forbid();
 
         var ownerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value
-            ?? "us-owner";
+            ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(ownerId))
+            return Forbid();
 
         try
         {
@@ -141,8 +143,9 @@ public sealed class InventoryAuditsController : ControllerBase
             return Forbid();
 
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value
-            ?? "us-system";
+            ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         try
         {

@@ -1,6 +1,6 @@
 import type { ApiProblemDetails } from '../types';
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:55198/api/v1';
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 
 export class ApiError extends Error {
   readonly status: number;

@@ -101,6 +101,8 @@ public class BranchesControllerTests
         Assert.Equal(StatusCodes.Status201Created, createdResult.StatusCode);
         var returned = Assert.IsType<BranchResponse>(createdResult.Value);
         Assert.Equal("br-03", returned.Id);
+        await MvcResultTestHelper.ExecuteCreatedResultAsync(
+            controller, createdResult, "Create", "/api/v1/branches", "https://localhost/api/v1/branches/br-03");
     }
 
     [Fact]

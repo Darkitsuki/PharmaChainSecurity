@@ -14,15 +14,16 @@ public class InventoryControllerTests
     private readonly Mock<IInventoryQueryService> queryServiceMock = new();
     private readonly Mock<IInventoryRepository> repositoryMock = new();
 
-    private InventoryController CreateController(string branchId = "branch-01", string userId = "user-01", string role = "WAREHOUSE")
+    private InventoryController CreateController(string branchId = "branch-01", string? userId = "user-01", string role = "WAREHOUSE")
     {
         var controller = new InventoryController(queryServiceMock.Object, repositoryMock.Object);
         var claims = new List<Claim>
         {
             new("BranchId", branchId),
-            new(ClaimTypes.NameIdentifier, userId),
             new(ClaimTypes.Role, role)
         };
+        if (!string.IsNullOrWhiteSpace(userId))
+            claims.Add(new Claim(ClaimTypes.NameIdentifier, userId));
         var identity = new ClaimsIdentity(claims, "TestAuth");
         var principal = new ClaimsPrincipal(identity);
 
@@ -101,6 +102,19 @@ public class InventoryControllerTests
 
         var problemResult = Assert.IsType<ObjectResult>(result);
         Assert.Equal(StatusCodes.Status400BadRequest, problemResult.StatusCode);
+        repositoryMock.Verify(repository => repository.AdjustStockAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AdjustStockAsync_WhenUserIdClaimIsMissing_ReturnsForbidWithoutWritingInventory()
+    {
+        var controller = CreateController(userId: null);
+        var request = new StockAdjustmentRequestBody("drug-1", "batch-1", 50, "Kiểm kê kho");
+
+        var result = await controller.AdjustStockAsync(request);
+
+        Assert.IsType<ForbidResult>(result);
         repositoryMock.Verify(repository => repository.AdjustStockAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }

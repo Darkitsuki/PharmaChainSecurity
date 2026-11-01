@@ -37,6 +37,19 @@ public class UsersControllerTests
     }
 
     [Fact]
+    public async Task GetBranchUsers_WhenBranchContextIsMissing_ReturnsForbidWithoutCallingService()
+    {
+        var controller = CreateController();
+        userContextMock.Setup(u => u.BranchId).Returns((string?)null);
+
+        var result = await controller.GetBranchUsers(CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(result);
+        userServiceMock.Verify(service => service.GetBranchUsersAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task GetBranchUsers_WhenCalled_ReturnsOkWithUsersList()
     {
         // Arrange

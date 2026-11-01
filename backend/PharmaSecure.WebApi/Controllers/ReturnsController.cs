@@ -84,13 +84,14 @@ public sealed class ReturnsController : ControllerBase
             return Forbid();
 
         var cashierId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value
-            ?? "us-00000000-0000-0000-0000-000000000003";
+            ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(cashierId))
+            return Forbid();
 
         try
         {
             var created = await returnService.CreateReturnAsync(request, branchId, cashierId, cancellationToken);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = created.Id }, created);
+            return CreatedAtAction("GetById", new { id = created.Id }, created);
         }
         catch (InvalidOperationException ex)
         {

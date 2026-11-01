@@ -424,48 +424,41 @@ export interface ReturnableInvoice {
   items: ReturnableInvoiceItem[];
 }
 
-export type InventoryAuditStatus = 'DANG_KIEM' | 'CAN_BANG' | 'DA_HUY';
+export type InventoryAuditStatus = 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 
 export interface InventoryAudit {
   id: string;
-  code: string;
-  auditNo?: string;
+  auditNo: string;
   branchId: string;
-  createdById: string;
-  createdBy?: string;
-  createdByName: string;
-  creatorName?: string;
-  reconciledById: string | null;
-  reconciledByName: string | null;
-  approverName?: string | null;
+  createdBy: string;
+  creatorName: string;
+  approvedBy: string | null;
+  approverName: string | null;
+  auditDate: string;
+  approvedDate: string | null;
   status: InventoryAuditStatus;
-  note: string | null;
-  notes?: string | null;
-  createdAt: string;
-  createdDate?: string;
-  reconciledAt: string | null;
-  approvedDate?: string | null;
-  totalItems: number;
-  totalItemsCount?: number;
-  discrepantItems: number;
-  discrepancyCount?: number;
+  totalItemsCount: number;
+  matchedCount: number;
+  discrepancyCount: number;
+  totalDiscrepancyValue: number;
+  notes: string | null;
+  createdDate: string;
 }
 
 export interface InventoryAuditItem {
-  id: string;
-  inventoryId: string;
   drugId: string;
   drugCode: string;
   drugName: string;
-  unit: string;
+  activeIngredient: string | null;
+  unit: string | null;
   batchId: string;
   batchNumber: string;
   expiryDate: string;
   systemQuantity: number;
   actualQuantity: number;
-  differenceQuantity: number;
+  discrepancyQuantity: number;
   unitPrice: number;
-  differenceValue: number;
+  discrepancyValue: number;
   reason: string | null;
 }
 
@@ -474,11 +467,12 @@ export interface InventoryAuditDetail extends InventoryAudit {
 }
 
 export interface CreateInventoryAuditPayload {
-  note?: string;
+  notes?: string;
 }
 
 export interface UpdateAuditItemEntry {
-  itemId: string;
+  drugId: string;
+  batchId: string;
   actualQuantity: number;
   reason?: string;
 }
@@ -488,7 +482,7 @@ export interface UpdateAuditItemsPayload {
 }
 
 export interface ReconcileAuditPayload {
-  reason?: string;
+  notes?: string;
 }
 
 export type StockTransferStatus = 'PENDING' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';

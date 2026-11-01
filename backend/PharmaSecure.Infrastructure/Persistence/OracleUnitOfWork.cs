@@ -12,6 +12,7 @@ public sealed class OracleUnitOfWork : IUnitOfWork
     private readonly ILogger<OracleUnitOfWork> logger;
     private OracleConnection? connection;
     private OracleTransaction? transaction;
+    private string? branchId;
 
     public OracleUnitOfWork(
         IOracleConnectionFactory connectionFactory,
@@ -27,10 +28,19 @@ public sealed class OracleUnitOfWork : IUnitOfWork
 
     public async Task BeginTransactionAsync(string branchId, CancellationToken cancellationToken = default)
     {
-        if (connection is not null)
+        if (transaction is not null)
             throw new InvalidOperationException("The unit of work has already been started.");
 
-        connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+        if (connection is null)
+        {
+            connection = await connectionFactory.CreateOpenConnectionAsync(branchId, cancellationToken);
+            this.branchId = branchId;
+        }
+        else if (!string.Equals(this.branchId, branchId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The unit of work cannot switch branches within the same request.");
+        }
+
         transaction = (OracleTransaction)await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
     }
 
@@ -79,6 +89,7 @@ public sealed class OracleUnitOfWork : IUnitOfWork
             {
                 await connection.DisposeAsync();
                 connection = null;
+                branchId = null;
             }
         }
     }

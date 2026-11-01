@@ -49,7 +49,7 @@ public sealed class SuppliersController : ControllerBase
         try
         {
             var created = await supplierService.CreateAsync(request, cancellationToken);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = created.Id }, created);
+            return CreatedAtAction("GetById", new { id = created.Id }, created);
         }
         catch (InvalidOperationException ex)
         {
