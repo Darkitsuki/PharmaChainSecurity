@@ -68,13 +68,14 @@ public sealed class StockTransfersController : ControllerBase
             return Forbid();
 
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value
-            ?? "us-system";
+            ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         try
         {
             var created = await transferService.CreateTransferAsync(request, branchId, userId, cancellationToken);
-            return CreatedAtAction(nameof(GetByIdAsync), new { id = created.Id }, created);
+            return CreatedAtAction("GetById", new { id = created.Id }, created);
         }
         catch (InvalidOperationException ex)
         {
@@ -95,8 +96,9 @@ public sealed class StockTransfersController : ControllerBase
             return Forbid();
 
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value
-            ?? "us-system";
+            ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         try
         {
@@ -122,8 +124,9 @@ public sealed class StockTransfersController : ControllerBase
             return Forbid();
 
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value
-            ?? "us-system";
+            ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         try
         {
@@ -149,8 +152,9 @@ public sealed class StockTransfersController : ControllerBase
             return Forbid();
 
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-            ?? User.FindFirst("sub")?.Value
-            ?? "us-system";
+            ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         try
         {

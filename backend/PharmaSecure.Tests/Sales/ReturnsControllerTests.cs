@@ -14,7 +14,7 @@ public class ReturnsControllerTests
     private const string TestBranchId = "br-00000000-0000-0000-0000-000000000001";
     private const string TestCashierId = "us-00000000-0000-0000-0000-000000000003";
 
-    private ReturnsController CreateController(bool withUserClaims = true)
+    private ReturnsController CreateController(bool withUserClaims = true, bool withUserId = true)
     {
         var controller = new ReturnsController(returnServiceMock.Object);
         var httpContext = new DefaultHttpContext();
@@ -24,9 +24,10 @@ public class ReturnsControllerTests
             var claims = new List<Claim>
             {
                 new("BranchId", TestBranchId),
-                new(ClaimTypes.NameIdentifier, TestCashierId),
                 new(ClaimTypes.Role, "SALES")
             };
+            if (withUserId)
+                claims.Add(new Claim(ClaimTypes.NameIdentifier, TestCashierId));
             var identity = new ClaimsIdentity(claims, "TestAuth");
             httpContext.User = new ClaimsPrincipal(identity);
         }
@@ -182,6 +183,8 @@ public class ReturnsControllerTests
         var response = Assert.IsType<ReturnResponse>(createdResult.Value);
         Assert.Equal("TH001", response.ReturnNo);
         Assert.Equal(100000m, response.TotalRefundAmount);
+        await MvcResultTestHelper.ExecuteCreatedResultAsync(
+            controller, createdResult, "Create", "/api/v1/returns", "https://localhost/api/v1/returns/ret-1");
     }
 
     [Fact]
@@ -207,5 +210,24 @@ public class ReturnsControllerTests
         // Assert
         var badRequest = Assert.IsType<ObjectResult>(result.Result);
         Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
+    }
+
+    [Fact]
+    public async Task Create_WhenUserIdClaimIsMissing_ReturnsForbidWithoutCallingService()
+    {
+        var request = new CreateReturnRequest(
+            "inv-1",
+            "Lỗi sản phẩm",
+            new List<CreateReturnItemRequest> { new("drug-1", "batch-1", 1, 100000m) });
+        var controller = CreateController(withUserId: false);
+
+        var result = await controller.CreateAsync(request);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        returnServiceMock.Verify(service => service.CreateReturnAsync(
+            It.IsAny<CreateReturnRequest>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 }

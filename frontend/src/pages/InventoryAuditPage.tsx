@@ -34,6 +34,8 @@ const moneyFormatter = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 0,
 });
 
+const auditItemKey = (drugId: string, batchId: string) => `${drugId}:${batchId}`;
+
 export function InventoryAuditPage() {
   const { currentUser } = useAuth();
   const isOwner = currentUser?.role === 'OWNER';
@@ -43,7 +45,7 @@ export function InventoryAuditPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'DANG_KIEM' | 'CAN_BANG' | 'DA_HUY'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
@@ -100,8 +102,9 @@ export function InventoryAuditPage() {
       const qMap: Record<string, number> = {};
       const rMap: Record<string, string> = {};
       detail.items.forEach(item => {
-        qMap[item.id] = item.actualQuantity;
-        rMap[item.id] = item.reason || '';
+        const key = auditItemKey(item.drugId, item.batchId);
+        qMap[key] = item.actualQuantity;
+        rMap[key] = item.reason || '';
       });
       setCountedQuantities(qMap);
       setItemReasons(rMap);
@@ -120,14 +123,14 @@ export function InventoryAuditPage() {
     setCreateError('');
     try {
       const payload: CreateInventoryAuditPayload = {
-        note: createNote.trim() || undefined,
+        notes: createNote.trim() || undefined,
       };
       const newAudit = await apiClient<InventoryAuditDetail>('/inventory-audits', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
 
-      setSuccessMsg(`Đã khởi tạo đợt kiểm kê ${newAudit.code} thành công.`);
+      setSuccessMsg(`Đã khởi tạo đợt kiểm kê ${newAudit.auditNo} thành công.`);
       setShowCreateModal(false);
       setCreateNote('');
       await loadAudits();
@@ -153,9 +156,10 @@ export function InventoryAuditPage() {
     try {
       const payload: UpdateAuditItemsPayload = {
         items: selectedAudit.items.map(item => ({
-          itemId: item.id,
-          actualQuantity: countedQuantities[item.id] ?? item.systemQuantity,
-          reason: itemReasons[item.id]?.trim() || undefined,
+          drugId: item.drugId,
+          batchId: item.batchId,
+          actualQuantity: countedQuantities[auditItemKey(item.drugId, item.batchId)] ?? item.systemQuantity,
+          reason: itemReasons[auditItemKey(item.drugId, item.batchId)]?.trim() || undefined,
         })),
       };
 
@@ -184,7 +188,7 @@ export function InventoryAuditPage() {
     setDetailActionError('');
     try {
       const payload: ReconcileAuditPayload = {
-        reason: reconcileReason.trim() || undefined,
+        notes: reconcileReason.trim() || undefined,
       };
       const reconciled = await apiClient<InventoryAuditDetail>(`/inventory-audits/${selectedAudit.id}/reconcile`, {
         method: 'POST',
@@ -194,7 +198,7 @@ export function InventoryAuditPage() {
       setSelectedAudit(reconciled);
       setShowReconcileModal(false);
       setReconcileReason('');
-      setSuccessMsg(`Đã duyệt cân đối tồn kho đợt ${reconciled.code} thành công.`);
+      setSuccessMsg(`Đã duyệt cân đối tồn kho đợt ${reconciled.auditNo} thành công.`);
       await loadAudits();
     } catch (err) {
       if (err instanceof ApiError) {
@@ -209,7 +213,7 @@ export function InventoryAuditPage() {
 
   async function handleCancelAudit() {
     if (!selectedAudit) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn hủy đợt kiểm kê ${selectedAudit.code}?`)) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn hủy đợt kiểm kê ${selectedAudit.auditNo}?`)) return;
 
     setDetailActionError('');
     try {
@@ -217,7 +221,7 @@ export function InventoryAuditPage() {
         method: 'POST',
       });
       setSelectedAudit(cancelled);
-      setSuccessMsg(`Đã hủy đợt kiểm kê ${cancelled.code}.`);
+      setSuccessMsg(`Đã hủy đợt kiểm kê ${cancelled.auditNo}.`);
       await loadAudits();
     } catch (err) {
       if (err instanceof ApiError) {
@@ -235,11 +239,8 @@ export function InventoryAuditPage() {
 
     return audits.filter(a => {
       const matchSearch =
-        (a?.code ?? '').toLowerCase().includes(term) ||
         (a?.auditNo ?? '').toLowerCase().includes(term) ||
-        (a?.createdByName ?? '').toLowerCase().includes(term) ||
         (a?.creatorName ?? '').toLowerCase().includes(term) ||
-        (a?.note ?? '').toLowerCase().includes(term) ||
         (a?.notes ?? '').toLowerCase().includes(term);
 
       const status = a?.status ?? '';
@@ -277,7 +278,7 @@ export function InventoryAuditPage() {
     let deficitCount = 0;
 
     selectedAudit.items.forEach(item => {
-      const actual = countedQuantities[item.id] ?? item.actualQuantity;
+      const actual = countedQuantities[auditItemKey(item.drugId, item.batchId)] ?? item.actualQuantity;
       const diff = actual - item.systemQuantity;
       if (diff !== 0) {
         discrepantCount++;
@@ -301,7 +302,7 @@ export function InventoryAuditPage() {
       header: 'Mã đợt kiểm',
       cell: audit => (
         <span className="font-mono font-bold text-ink">
-          {audit?.code || audit?.auditNo || '—'}
+          {audit.auditNo}
         </span>
       ),
     },
@@ -309,18 +310,18 @@ export function InventoryAuditPage() {
       header: 'Ngày tạo',
       cell: audit => (
         <span className="text-xs text-slate-600">
-          {new Date(audit?.createdAt || audit?.createdDate || (audit as any)?.auditDate || Date.now()).toLocaleString('vi-VN')}
+          {new Date(audit.auditDate).toLocaleString('vi-VN')}
         </span>
       ),
     },
     {
       header: 'Người lập',
-      cell: audit => <span className="font-medium text-slate-700">{audit?.createdByName || audit?.creatorName || '—'}</span>,
+      cell: audit => <span className="font-medium text-slate-700">{audit.creatorName}</span>,
     },
     {
       header: 'Trạng thái',
       cell: audit => {
-        if (audit.status === 'CAN_BANG') {
+        if (audit.status === 'COMPLETED') {
           return (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
               <CheckCircle2 size={13} />
@@ -328,7 +329,7 @@ export function InventoryAuditPage() {
             </span>
           );
         }
-        if (audit.status === 'DANG_KIEM') {
+        if (audit.status === 'IN_PROGRESS') {
           return (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
               <RefreshCw size={13} className="animate-spin text-amber-600" />
@@ -347,17 +348,17 @@ export function InventoryAuditPage() {
     {
       header: 'Tổng số mục',
       align: 'center',
-      cell: audit => <span className="text-center font-semibold text-slate-700">{audit?.totalItems ?? audit?.totalItemsCount ?? 0}</span>,
+      cell: audit => <span className="text-center font-semibold text-slate-700">{audit.totalItemsCount}</span>,
     },
     {
       header: 'Chênh lệch',
       cell: audit => (
         <span
           className={`font-semibold ${
-            (audit?.discrepantItems ?? audit?.discrepancyCount ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600'
+            audit.discrepancyCount > 0 ? 'text-rose-600' : 'text-emerald-600'
           }`}
         >
-          {(audit?.discrepantItems ?? audit?.discrepancyCount ?? 0) > 0 ? `${audit?.discrepantItems ?? audit?.discrepancyCount ?? 0} mục lệch` : 'Khớp 100%'}
+          {audit.discrepancyCount > 0 ? `${audit.discrepancyCount} mục lệch` : 'Khớp 100%'}
         </span>
       ),
     },
@@ -365,10 +366,10 @@ export function InventoryAuditPage() {
       header: 'Người duyệt cân đối',
       cell: audit => (
         <span className="text-xs text-slate-500">
-          {(audit?.reconciledByName || audit?.approverName) ? (
+          {audit.approverName ? (
             <>
-              <div className="font-medium text-slate-700">{audit?.reconciledByName || audit?.approverName}</div>
-              {(audit?.reconciledAt || audit?.approvedDate) && <div>{new Date(audit?.reconciledAt || audit?.approvedDate || Date.now()).toLocaleDateString('vi-VN')}</div>}
+              <div className="font-medium text-slate-700">{audit.approverName}</div>
+              {audit.approvedDate && <div>{new Date(audit.approvedDate).toLocaleDateString('vi-VN')}</div>}
             </>
           ) : (
             '—'
@@ -385,7 +386,7 @@ export function InventoryAuditPage() {
           className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50"
         >
           <Eye size={14} />
-          {audit.status === 'DANG_KIEM' ? 'Kiểm đếm' : 'Chi tiết'}
+          {audit.status === 'IN_PROGRESS' ? 'Kiểm đếm' : 'Chi tiết'}
         </button>
       ),
     },
@@ -428,21 +429,21 @@ export function InventoryAuditPage() {
         />
         <StatCard
           title="Đang kiểm kê"
-          value={Array.isArray(audits) ? audits.filter(a => a?.status === 'DANG_KIEM').length : 0}
+          value={Array.isArray(audits) ? audits.filter(a => a.status === 'IN_PROGRESS').length : 0}
           subValue="Chờ kiểm đếm / cân đối"
           icon={ClipboardCheck}
           colorTheme="amber"
         />
         <StatCard
           title="Đã cân bằng"
-          value={Array.isArray(audits) ? audits.filter(a => a?.status === 'CAN_BANG').length : 0}
+          value={Array.isArray(audits) ? audits.filter(a => a.status === 'COMPLETED').length : 0}
           subValue="Đã chốt tồn kho hợp lệ"
           icon={CheckCircle2}
           colorTheme="emerald"
         />
         <StatCard
           title="Đợt có chênh lệch"
-          value={Array.isArray(audits) ? audits.filter(a => (a?.discrepantItems ?? a?.discrepancyCount ?? 0) > 0).length : 0}
+          value={Array.isArray(audits) ? audits.filter(a => a.discrepancyCount > 0).length : 0}
           subValue="Có sản phẩm thừa / thiếu"
           icon={SlidersHorizontal}
           colorTheme="purple"
@@ -466,9 +467,9 @@ export function InventoryAuditPage() {
                 className="rounded-lg border border-line bg-white px-3 py-2 text-xs font-semibold text-ink shadow-sm focus:border-forest focus:outline-none"
               >
                 <option value="ALL">Tất cả trạng thái</option>
-                <option value="DANG_KIEM">Đang kiểm kê</option>
-                <option value="CAN_BANG">Đã cân bằng</option>
-                <option value="DA_HUY">Đã hủy</option>
+                <option value="IN_PROGRESS">Đang kiểm kê</option>
+                <option value="COMPLETED">Đã cân bằng</option>
+                <option value="CANCELLED">Đã hủy</option>
               </select>
             </div>
           }
@@ -547,7 +548,7 @@ export function InventoryAuditPage() {
       <Modal
         isOpen={!!selectedAudit}
         onClose={() => setSelectedAudit(null)}
-        title={`Phiếu kiểm kê: ${selectedAudit?.code || ''}`}
+        title={`Phiếu kiểm kê: ${selectedAudit?.auditNo || ''}`}
         maxWidth="5xl"
       >
         {selectedAudit && (
@@ -560,25 +561,25 @@ export function InventoryAuditPage() {
               <div>
                 <span className="text-slate-500">Trạng thái:</span>
                 <div className="mt-0.5 font-bold">
-                  {selectedAudit.status === 'CAN_BANG' && <span className="text-emerald-700">Đã cân bằng</span>}
-                  {selectedAudit.status === 'DANG_KIEM' && <span className="text-amber-700">Đang kiểm kê</span>}
-                  {selectedAudit.status === 'DA_HUY' && <span className="text-slate-600">Đã hủy</span>}
+                  {selectedAudit.status === 'COMPLETED' && <span className="text-emerald-700">Đã cân bằng</span>}
+                  {selectedAudit.status === 'IN_PROGRESS' && <span className="text-amber-700">Đang kiểm kê</span>}
+                  {selectedAudit.status === 'CANCELLED' && <span className="text-slate-600">Đã hủy</span>}
                 </div>
               </div>
               <div>
                 <span className="text-slate-500">Người lập:</span>
-                <div className="mt-0.5 font-bold text-slate-800">{selectedAudit.createdByName}</div>
+                <div className="mt-0.5 font-bold text-slate-800">{selectedAudit.creatorName}</div>
               </div>
               <div>
                 <span className="text-slate-500">Thời gian tạo:</span>
                 <div className="mt-0.5 font-bold text-slate-800">
-                  {new Date(selectedAudit.createdAt).toLocaleString('vi-VN')}
+                  {new Date(selectedAudit.auditDate).toLocaleString('vi-VN')}
                 </div>
               </div>
               <div>
                 <span className="text-slate-500">Ghi chú:</span>
-                <div className="mt-0.5 font-medium text-slate-700 truncate" title={selectedAudit.note || ''}>
-                  {selectedAudit.note || '—'}
+                <div className="mt-0.5 font-medium text-slate-700 truncate" title={selectedAudit.notes || ''}>
+                  {selectedAudit.notes || '—'}
                 </div>
               </div>
             </div>
@@ -650,13 +651,14 @@ export function InventoryAuditPage() {
                     </tr>
                   ) : (
                     filteredDetailItems.map(item => {
-                      const isEditable = selectedAudit.status === 'DANG_KIEM';
-                      const currentCount = countedQuantities[item.id] ?? item.systemQuantity;
+                      const key = auditItemKey(item.drugId, item.batchId);
+                      const isEditable = selectedAudit.status === 'IN_PROGRESS';
+                      const currentCount = countedQuantities[key] ?? item.systemQuantity;
                       const diff = currentCount - item.systemQuantity;
                       const diffVal = diff * item.unitPrice;
 
                       return (
-                        <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={key} className="hover:bg-slate-50/80 transition-colors">
                           <td className="px-3 py-2">
                             <div className="font-semibold text-ink">{item.drugName}</div>
                             <div className="font-mono text-[10px] text-slate-400">
@@ -682,7 +684,7 @@ export function InventoryAuditPage() {
                                   const val = parseInt(e.target.value, 10);
                                   setCountedQuantities(prev => ({
                                     ...prev,
-                                    [item.id]: isNaN(val) ? 0 : Math.max(0, val),
+                                    [key]: isNaN(val) ? 0 : Math.max(0, val),
                                   }));
                                 }}
                                 className="w-20 rounded border border-line px-2 py-1 text-center font-bold text-ink focus:border-forest focus:outline-none"
@@ -714,12 +716,12 @@ export function InventoryAuditPage() {
                               <input
                                 type="text"
                                 placeholder="Lý do lệch..."
-                                value={itemReasons[item.id] || ''}
+                                value={itemReasons[key] || ''}
                                 onChange={e => {
                                   const val = e.target.value;
                                   setItemReasons(prev => ({
                                     ...prev,
-                                    [item.id]: val,
+                                    [key]: val,
                                   }));
                                 }}
                                 className="w-full rounded border border-line px-2 py-1 text-[11px] focus:border-forest focus:outline-none"
@@ -737,12 +739,12 @@ export function InventoryAuditPage() {
             </div>
 
             {/* Reconciliation Audit Info if reconciled */}
-            {selectedAudit.status === 'CAN_BANG' && (
+            {selectedAudit.status === 'COMPLETED' && (
               <div className="rounded-lg bg-emerald-50/70 p-3.5 text-xs text-emerald-800">
                 <p className="font-semibold">Đợt kiểm kê đã được duyệt cân đối:</p>
                 <p className="mt-1">
-                  Người duyệt: <strong>{selectedAudit.reconciledByName}</strong> vào ngày{' '}
-                  <strong>{selectedAudit.reconciledAt && new Date(selectedAudit.reconciledAt).toLocaleString('vi-VN')}</strong>.
+                  Người duyệt: <strong>{selectedAudit.approverName}</strong> vào ngày{' '}
+                  <strong>{selectedAudit.approvedDate && new Date(selectedAudit.approvedDate).toLocaleString('vi-VN')}</strong>.
                   Tồn kho chi nhánh và thẻ kho đã được điều chỉnh tự động.
                 </p>
               </div>
@@ -751,7 +753,7 @@ export function InventoryAuditPage() {
             {/* Modal Actions */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-3 border-t border-line">
               <div>
-                {selectedAudit.status === 'DANG_KIEM' && (
+                {selectedAudit.status === 'IN_PROGRESS' && (
                   <button
                     type="button"
                     onClick={handleCancelAudit}
@@ -771,7 +773,7 @@ export function InventoryAuditPage() {
                   Đóng
                 </button>
 
-                {selectedAudit.status === 'DANG_KIEM' && (
+                {selectedAudit.status === 'IN_PROGRESS' && (
                   <>
                     <button
                       type="button"
@@ -822,7 +824,7 @@ export function InventoryAuditPage() {
           <div className="rounded-lg border border-line p-3 text-xs space-y-1.5">
             <div className="flex justify-between">
               <span className="text-slate-500">Mã đợt kiểm:</span>
-              <span className="font-bold text-ink">{selectedAudit?.code}</span>
+              <span className="font-bold text-ink">{selectedAudit?.auditNo}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Số lượng mặt hàng chênh lệch:</span>

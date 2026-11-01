@@ -86,6 +86,8 @@ public sealed class InventoryController : ControllerBase
             return Forbid();
 
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return Forbid();
 
         await inventoryRepository.AdjustStockAsync(
             branchId,

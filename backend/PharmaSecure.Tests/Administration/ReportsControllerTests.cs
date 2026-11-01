@@ -35,6 +35,19 @@ public class ReportsControllerTests
     }
 
     [Fact]
+    public async Task GetSalesSummary_WhenBranchContextIsMissing_ReturnsForbidWithoutCallingService()
+    {
+        var controller = CreateController();
+        userContextMock.Setup(u => u.BranchId).Returns((string?)null);
+
+        var result = await controller.GetSalesSummary(7, CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(result);
+        reportServiceMock.Verify(service => service.GetSalesSummaryAsync(
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task GetSalesSummary_WhenValidDays_ReturnsOkWithReport()
     {
         // Arrange
