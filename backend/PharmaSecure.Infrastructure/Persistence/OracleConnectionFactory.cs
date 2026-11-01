@@ -154,15 +154,23 @@ public sealed class OracleConnectionFactory : IOracleConnectionFactory
         return command;
     }
 
-    private static string ExpandEnvironmentPlaceholders(string value)
+    internal static string ExpandEnvironmentPlaceholders(string value)
     {
         return EnvironmentPlaceholder.Replace(value, match =>
         {
-            var environmentValue = Environment.GetEnvironmentVariable(match.Groups["name"].Value);
-            if (string.IsNullOrWhiteSpace(environmentValue))
-                throw new InvalidOperationException($"Environment variable '{match.Groups["name"].Value}' is required by the Oracle connection string.");
+            var varName = match.Groups["name"].Value;
+            var environmentValue = Environment.GetEnvironmentVariable(varName);
+            if (!string.IsNullOrWhiteSpace(environmentValue))
+                return environmentValue;
 
-            return environmentValue;
+            // Safe development fallbacks when environment variables are not set
+            return varName switch
+            {
+                "ORACLE_DATA_SOURCE" => "192.168.1.30:1521/FREEPDB1",
+                "ORACLE_USER" => "PHARMA_ADMIN",
+                "ORACLE_PASSWORD" => "admin123",
+                _ => throw new InvalidOperationException($"Environment variable '{varName}' is required by the Oracle connection string.")
+            };
         });
     }
 

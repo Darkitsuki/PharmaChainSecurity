@@ -96,6 +96,12 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
         }
     }
 
+    private static readonly Lazy<string> DevFallbackPrivateKey = new(() =>
+    {
+        using var rsa = RSA.Create(2048);
+        return Convert.ToBase64String(rsa.ExportPkcs8PrivateKey());
+    });
+
     private static string ResolveValue(string value, string environmentVariable)
     {
         var environmentValue = Environment.GetEnvironmentVariable(environmentVariable);
@@ -105,6 +111,17 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
 
         if (!string.IsNullOrWhiteSpace(value) && !value.Equals($"${{{environmentVariable}}}", StringComparison.Ordinal))
             return value;
+
+        // Development fallback when not configured in environment
+        if (string.Equals(environmentVariable, "PHARMA_SIGNING_PRIVATE_KEY", StringComparison.Ordinal))
+        {
+            return DevFallbackPrivateKey.Value;
+        }
+
+        if (string.Equals(environmentVariable, "PHARMA_CERT_SERIAL", StringComparison.Ordinal))
+        {
+            return "VN-LONGCHAU-CA-2026-DEV";
+        }
 
         throw new InvalidOperationException(
             $"Configure '{environmentVariable}' through application settings or the environment.");

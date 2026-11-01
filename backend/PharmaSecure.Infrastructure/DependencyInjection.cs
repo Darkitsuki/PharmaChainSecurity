@@ -89,6 +89,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(serviceProvider => serviceProvider.GetRequiredService<OracleUnitOfWork>());
         services.AddScoped<IInventoryRepository, InventoryRepository>();
         services.AddScoped<IInvoicePersistence, InvoicePersistence>();
+        services.AddHostedService<DatabaseMigrationHostedService>();
 
         return services;
     }

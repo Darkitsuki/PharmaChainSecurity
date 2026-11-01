@@ -61,13 +61,13 @@ CREATE OR REPLACE PACKAGE BODY PKG_PHARMA_SECURITY AS
         v_role_code := SYS_CONTEXT('PHARMA_CTX', 'ROLE_CODE');
         v_branch_id := SYS_CONTEXT('PHARMA_CTX', 'BRANCH_ID');
 
-        -- Chủ nhà thuốc được toàn quyền xem và thao tác trên tất cả chi nhánh
-        IF v_role_code IN ('CHU_NHA_THUOC', 'Chủ nhà thuốc', 'ADMIN') THEN
+        -- Chủ nhà thuốc (OWNER / CHU_NHA_THUOC / ADMIN) được toàn quyền xem và thao tác trên tất cả chi nhánh
+        IF UPPER(TRIM(v_role_code)) IN ('OWNER', 'CHU_NHA_THUOC', 'CHỦ NHÀ THUỐC', 'ADMIN') THEN
             RETURN '1 = 1';
         END IF;
 
         -- Nếu kết nối không có ngữ cảnh chi nhánh hợp lệ -> Chặn truy xuất
-        IF v_branch_id IS NULL THEN
+        IF v_branch_id IS NULL OR TRIM(v_branch_id) IS NULL THEN
             RETURN '1 = 0';
         END IF;
 
@@ -159,9 +159,9 @@ SELECT
     u.PhoneNumber,
     u.BranchId,
     r.RoleName,
-    -- Nếu là Chủ nhà thuốc thì hiển thị tổng doanh thu thực tế, ngược lại ẩn thành NULL
+    -- Nếu là Chủ nhà thuốc (OWNER / CHU_NHA_THUOC / ADMIN) thì hiển thị tổng doanh thu thực tế, ngược lại ẩn thành NULL
     CASE 
-        WHEN SYS_CONTEXT('PHARMA_CTX', 'ROLE_CODE') IN ('CHU_NHA_THUOC', 'Chủ nhà thuốc', 'ADMIN') 
+        WHEN UPPER(TRIM(SYS_CONTEXT('PHARMA_CTX', 'ROLE_CODE'))) IN ('OWNER', 'CHU_NHA_THUOC', 'CHỦ NHÀ THUỐC', 'ADMIN') 
         THEN NVL(SUM(i.TotalAmount), 0)
         ELSE NULL 
     END AS PersonalRevenue
