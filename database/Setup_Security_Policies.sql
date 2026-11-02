@@ -79,7 +79,7 @@ END PKG_PHARMA_SECURITY;
 /
 
 -- ----------------------------------------------------------------------------
--- BƯỚC 3: GẮN CHÍNH SÁCH VPD (RLS) VÀO 5 BẢNG NGHIỆP VỤ TRỌNG TÂM
+-- BƯỚC 3: GẮN CHÍNH SÁCH VPD (RLS) VÀO CÁC BẢNG NGHIỆP VỤ TRỌNG TÂM (RULE 06)
 -- ----------------------------------------------------------------------------
 BEGIN
     -- Xóa policy cũ nếu đã tồn tại (để script có thể chạy lại nhiều lần không lỗi)
@@ -140,6 +140,16 @@ BEGIN
         object_schema   => USER,
         object_name     => 'CUSTOMERS',
         policy_name     => 'POL_VPD_CUSTOMERS',
+        function_schema => USER,
+        policy_function => 'PKG_PHARMA_SECURITY.FN_VPD_BRANCH_ISOLATION',
+        statement_types => 'SELECT, INSERT, UPDATE, DELETE',
+        update_check    => TRUE
+    );
+    -- 6. Bảng Đơn đặt mua thuốc (PURCHASE_ORDERS)
+    DBMS_RLS.ADD_POLICY(
+        object_schema   => USER,
+        object_name     => 'PURCHASE_ORDERS',
+        policy_name     => 'POL_VPD_PURCHASE_ORDERS',
         function_schema => USER,
         policy_function => 'PKG_PHARMA_SECURITY.FN_VPD_BRANCH_ISOLATION',
         statement_types => 'SELECT, INSERT, UPDATE, DELETE',
