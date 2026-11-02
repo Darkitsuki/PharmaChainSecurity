@@ -3,11 +3,19 @@ import '../core/theme/app_theme.dart';
 import '../widgets/ui_components.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen(
-      {super.key, required this.onSubmit, this.busy = false, this.error});
+  const LoginScreen({
+    super.key,
+    required this.onSubmit,
+    this.busy = false,
+    this.error,
+    this.onBackToPatient,
+  });
+
   final Future<void> Function(String username, String password)? onSubmit;
   final bool busy;
   final String? error;
+  final VoidCallback? onBackToPatient;
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -17,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final username = TextEditingController();
   final password = TextEditingController();
   final formKey = GlobalKey<FormState>();
+
   Future<void> submit() async {
     if (widget.busy ||
         widget.onSubmit == null ||
@@ -153,6 +162,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                                       CircularProgressIndicator(
                                                           strokeWidth: 2))
                                               : const Text('Đăng nhập')),
+                                      if (widget.onBackToPatient != null) ...[
+                                        const SizedBox(height: 12),
+                                        OutlinedButton.icon(
+                                          icon: const Icon(Icons.arrow_back, size: 16),
+                                          label: const Text('Quay lại Ứng dụng Bệnh nhân'),
+                                          onPressed: widget.onBackToPatient,
+                                        ),
+                                      ],
                                       const SizedBox(height: 14),
                                       const Text(
                                           'Sử dụng tài khoản được cấp. Phiên chỉ lưu trong bộ nhớ; đóng ứng dụng sẽ cần đăng nhập lại.',
