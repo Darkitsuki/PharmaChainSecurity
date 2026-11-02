@@ -5,6 +5,7 @@ export interface SearchToolbarProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
+  searchLabel?: string;
   onRefresh?: () => void;
   loading?: boolean;
   filterSlot?: React.ReactNode;
@@ -15,6 +16,7 @@ export const SearchToolbar: React.FC<SearchToolbarProps> = ({
   searchValue,
   onSearchChange,
   searchPlaceholder = 'Tìm kiếm...',
+  searchLabel,
   onRefresh,
   loading = false,
   filterSlot,
@@ -31,6 +33,7 @@ export const SearchToolbar: React.FC<SearchToolbarProps> = ({
           />
           <input
             type="text"
+            aria-label={searchLabel}
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}

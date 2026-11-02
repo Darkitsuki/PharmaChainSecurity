@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import type { PurchaseOrder } from '../services/purchaseOrders';
 import {
   Building2,
   Eye,
@@ -31,6 +33,9 @@ const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND
 const dateTime = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
 
 export function GoodsReceiptPage() {
+  const [params] = useSearchParams();
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [purchaseOrderId, setPurchaseOrderId] = useState('');
   const [receipts, setReceipts] = useState<GoodsReceipt[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [drugs, setDrugs] = useState<Drug[]>([]);
@@ -69,6 +74,33 @@ export function GoodsReceiptPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const id = params.get('purchaseOrderId');
+    apiClient<PageResult<PurchaseOrder>>('/purchase-orders?status=ORDERED&page=1&pageSize=100')
+      .then(async result => {
+        let options = result.items;
+        if (id && !options.some(order => order.id === id)) {
+          const order = await apiClient<PurchaseOrder>(`/purchase-orders/${encodeURIComponent(id)}`);
+          if (order.status === 'ORDERED') options = [order, ...options];
+        }
+        setPurchaseOrders(options);
+        const selected = options.find(order => order.id === id);
+        if (selected) { chooseOrder(selected); setShowCreateModal(true); }
+      }).catch(e => setError(e instanceof Error ? e.message : 'Không tải được đơn mua.'));
+    const receiptId = params.get('receiptId');
+    if (receiptId) apiClient<GoodsReceipt>(`/goods-receipts/${encodeURIComponent(receiptId)}`).then(setSelectedReceipt)
+      .catch(e => setError(e instanceof Error ? e.message : 'Không tải được phiếu nhập.'));
+  }, []);
+
+  function chooseOrder(order: PurchaseOrder) {
+    setPurchaseOrderId(order.id);
+    setSelectedSupplierId(order.supplierId);
+    setReceiptItems(order.items.filter(item => item.quantity > item.receivedQuantity).map(item => ({
+      drugId: item.drugId, batchNo: '', expiryDate: '', mfgDate: '',
+      quantity: item.quantity - item.receivedQuantity, importPrice: item.estimatedUnitPrice,
+    })));
+  }
 
   async function loadData() {
     setLoading(true);
@@ -135,7 +167,7 @@ export function GoodsReceiptPage() {
     e.preventDefault();
     setCreateError('');
 
-    if (!selectedSupplierId) {
+    if (!purchaseOrderId || !selectedSupplierId) {
       setCreateError('Vui lòng chọn nhà cung cấp.');
       return;
     }
@@ -169,6 +201,7 @@ export function GoodsReceiptPage() {
       await apiClient('/goods-receipts', {
         method: 'POST',
         body: JSON.stringify({
+          purchaseOrderId,
           supplierId: selectedSupplierId,
           note: receiptNote.trim() || null,
           items: receiptItems.map((item) => ({
@@ -184,6 +217,10 @@ export function GoodsReceiptPage() {
 
       setShowCreateModal(false);
       setSelectedSupplierId('');
+      setPurchaseOrderId('');
+      void apiClient<PageResult<PurchaseOrder>>('/purchase-orders?status=ORDERED&page=1&pageSize=100')
+        .then(refreshed => setPurchaseOrders(refreshed.items))
+        .catch(() => setError('Phiếu nhập đã lưu; chưa tải lại được danh sách đơn mua.'));
       setReceiptNote('');
       setReceiptItems([{ drugId: '', batchNo: '', expiryDate: '', mfgDate: '', quantity: 10, importPrice: 0 }]);
       await loadData();
@@ -493,18 +530,19 @@ export function GoodsReceiptPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-semibold text-slate-700">
-                Nhà Cung Cấp Đối Tác <span className="text-rose-500">*</span>
+                Đơn mua đã đặt hàng <span className="text-rose-500">*</span>
               </label>
               <select
                 required
-                value={selectedSupplierId}
-                onChange={(e) => setSelectedSupplierId(e.target.value)}
+                aria-label="Đơn mua đã đặt hàng"
+                value={purchaseOrderId}
+                onChange={(e) => { const order = purchaseOrders.find(o => o.id === e.target.value); if (order) chooseOrder(order); else { setPurchaseOrderId(''); setSelectedSupplierId(''); } }}
                 className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
               >
-                <option value="">-- Chọn nhà cung cấp --</option>
-                {suppliers.map((s) => (
+                <option value="">-- Chọn đơn mua đã đặt hàng --</option>
+                {purchaseOrders.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.supplierName} ({s.supplierCode})
+                    {s.orderNo} — {s.supplierName}
                   </option>
                 ))}
               </select>

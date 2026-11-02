@@ -30,7 +30,8 @@ public sealed record GoodsReceiptItemResponse(
 public sealed record CreateGoodsReceiptRequest(
     string SupplierId,
     string? Note,
-    IReadOnlyList<CreateGoodsReceiptItemRequest> Items);
+    IReadOnlyList<CreateGoodsReceiptItemRequest> Items,
+    string? PurchaseOrderId = null);
 
 public sealed record CreateGoodsReceiptItemRequest(
     string DrugId,
