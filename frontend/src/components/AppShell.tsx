@@ -10,6 +10,7 @@ const navigation = [
   { label: 'Khách hàng & Tích điểm', to: '/customers', icon: HeartHandshake, roles: ['OWNER', 'SALES'] },
   { label: 'Tồn kho chi nhánh', to: '/inventory', icon: Boxes },
   { label: 'Nhập kho thuốc', to: '/goods-receipts', icon: PackagePlus, roles: ['OWNER', 'WAREHOUSE'] },
+  { label: 'Đơn mua thuốc', to: '/purchase-orders', icon: ClipboardCheck, roles: ['OWNER', 'WAREHOUSE'] },
   { label: 'Kiểm kê kho', to: '/inventory-audits', icon: ClipboardCheck, roles: ['OWNER', 'WAREHOUSE'] },
   { label: 'Điều chuyển kho', to: '/stock-transfers', icon: ArrowLeftRight, roles: ['OWNER', 'WAREHOUSE'] },
   { label: 'Nhà cung cấp', to: '/suppliers', icon: Truck, roles: ['OWNER', 'WAREHOUSE'] },

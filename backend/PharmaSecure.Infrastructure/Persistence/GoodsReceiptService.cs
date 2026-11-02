@@ -181,6 +181,8 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             throw new ArgumentException("Supplier ID is required.");
         if (request.Items is null || request.Items.Count == 0)
             throw new ArgumentException("At least one receipt item is required.");
+        if (string.IsNullOrWhiteSpace(request.PurchaseOrderId) || request.PurchaseOrderId.Length > 50)
+            throw new ArgumentException("Cần chọn đơn mua đã đặt hàng.");
 
         foreach (var item in request.Items)
         {
@@ -199,6 +201,37 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
         await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
         try
         {
+            // Serialize all deliveries of the same order before calculating cumulative receipt quantities.
+            await using var orderLock = (OracleCommand)unitOfWork.Connection.CreateCommand();
+            orderLock.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+            orderLock.BindByName = true;
+            orderLock.CommandText = "SELECT SupplierId,Status FROM PURCHASE_ORDERS WHERE id=:id AND BranchId=:branch FOR UPDATE";
+            orderLock.Parameters.Add("id", OracleDbType.Varchar2).Value = request.PurchaseOrderId;
+            orderLock.Parameters.Add("branch", OracleDbType.Varchar2).Value = branchId;
+            await using (var reader = await orderLock.ExecuteReaderAsync(cancellationToken))
+            {
+                if (!await reader.ReadAsync(cancellationToken)) throw new InvalidOperationException("Đơn mua không thuộc chi nhánh.");
+                if (reader.GetString(0) != request.SupplierId || reader.GetString(1) != "ORDERED")
+                    throw new InvalidOperationException("Đơn mua chưa đặt hàng, đã nhận đủ hoặc sai nhà cung cấp.");
+            }
+            foreach (var line in request.Items.GroupBy(i => i.DrugId))
+            {
+                await using var check = (OracleCommand)unitOfWork.Connection.CreateCommand();
+                check.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+                check.BindByName = true;
+                check.CommandText = """
+                    SELECT i.Quantity-NVL((SELECT SUM(ri.Quantity) FROM GOODS_RECEIPT_ITEMS ri
+                        JOIN GOODS_RECEIPTS r ON r.id=ri.ReceiptId WHERE r.PurchaseOrderId=i.OrderId
+                        AND r.BranchId=:branch AND r.Status='COMPLETED' AND ri.DrugId=i.DrugId),0)
+                    FROM PURCHASE_ORDER_ITEMS i WHERE i.OrderId=:orderId AND i.DrugId=:drug
+                    """;
+                check.Parameters.Add("branch", OracleDbType.Varchar2).Value = branchId;
+                check.Parameters.Add("orderId", OracleDbType.Varchar2).Value = request.PurchaseOrderId;
+                check.Parameters.Add("drug", OracleDbType.Varchar2).Value = line.Key;
+                var remaining = await check.ExecuteScalarAsync(cancellationToken);
+                if (remaining is null || line.Sum(i => (long)i.Quantity) > Convert.ToInt64(remaining))
+                    throw new InvalidOperationException("Thuốc không thuộc đơn mua hoặc số lượng nhận vượt số đã đặt.");
+            }
             // 1. Verify supplier
             await using var supCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
             supCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
@@ -221,8 +254,8 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             receiptInsertCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
             receiptInsertCmd.BindByName = true;
             receiptInsertCmd.CommandText = """
-                INSERT INTO GOODS_RECEIPTS (id, ReceiptNo, BranchId, SupplierId, WarehouseStaffId, TotalAmount, Note, Status, CreatedDate)
-                VALUES (:id, :no, :branchId, :supplierId, :staffId, :total, :note, 'COMPLETED', :createdDate)
+                INSERT INTO GOODS_RECEIPTS (id, ReceiptNo, BranchId, SupplierId, WarehouseStaffId, TotalAmount, Note, Status, CreatedDate, PurchaseOrderId)
+                VALUES (:id, :no, :branchId, :supplierId, :staffId, :total, :note, 'COMPLETED', :createdDate, :purchaseOrderId)
                 """;
             receiptInsertCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = receiptId;
             receiptInsertCmd.Parameters.Add("no", OracleDbType.Varchar2, 50).Value = receiptNo;
@@ -232,6 +265,7 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             receiptInsertCmd.Parameters.Add("total", OracleDbType.Decimal).Value = totalAmount;
             receiptInsertCmd.Parameters.Add("note", OracleDbType.Varchar2, 500).Value = (object?)request.Note?.Trim() ?? DBNull.Value;
             receiptInsertCmd.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = now;
+            receiptInsertCmd.Parameters.Add("purchaseOrderId", OracleDbType.Varchar2, 50).Value = request.PurchaseOrderId;
             await receiptInsertCmd.ExecuteNonQueryAsync(cancellationToken);
 
             // 2. Process each item
@@ -390,6 +424,19 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             }
 
             // Commit atomic transaction
+            await using var completeOrder = (OracleCommand)unitOfWork.Connection.CreateCommand();
+            completeOrder.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+            completeOrder.BindByName = true;
+            completeOrder.CommandText = """
+                UPDATE PURCHASE_ORDERS p SET Status='RECEIVED'
+                WHERE p.id=:id AND p.BranchId=:branch AND NOT EXISTS (
+                    SELECT 1 FROM PURCHASE_ORDER_ITEMS i WHERE i.OrderId=p.id AND i.Quantity > NVL((
+                        SELECT SUM(ri.Quantity) FROM GOODS_RECEIPT_ITEMS ri JOIN GOODS_RECEIPTS r ON r.id=ri.ReceiptId
+                        WHERE r.PurchaseOrderId=p.id AND r.BranchId=p.BranchId AND r.Status='COMPLETED' AND ri.DrugId=i.DrugId),0))
+                """;
+            completeOrder.Parameters.Add("id", OracleDbType.Varchar2).Value = request.PurchaseOrderId;
+            completeOrder.Parameters.Add("branch", OracleDbType.Varchar2).Value = branchId;
+            await completeOrder.ExecuteNonQueryAsync(cancellationToken);
             await unitOfWork.CommitAsync(cancellationToken);
 
             return new GoodsReceiptResponse(
