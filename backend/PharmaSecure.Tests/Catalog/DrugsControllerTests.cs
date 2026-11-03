@@ -233,4 +233,48 @@ public class DrugsControllerTests
         var details = Assert.IsType<ProblemDetails>(problemResult.Value);
         Assert.Equal(StatusCodes.Status404NotFound, details.Status);
     }
+
+    [Fact]
+    public async Task GetPageAsync_WhenAnonymous_ResolvesDefaultBranchAndReturnsOk()
+    {
+        // Arrange
+        var paged = new PharmaSecure.Application.Common.PagedResult<DrugResponse>(
+            new List<DrugResponse>
+            {
+                new("dr-001", "THUOC001", "Paracetamol", null, "Hộp", 35000m, true)
+            }, 1, 20, 1);
+
+        drugQueryServiceMock.Setup(s => s.GetPageAsync("BR001", 1, 20, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(paged);
+
+        var controller = CreateController(branchId: null, role: "");
+
+        // Act
+        var result = await controller.GetPageAsync();
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var returned = Assert.IsType<PharmaSecure.Application.Common.PagedResult<DrugResponse>>(okResult.Value);
+        Assert.Single(returned.Items);
+        drugQueryServiceMock.Verify(s => s.GetPageAsync("BR001", 1, 20, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_WhenAnonymous_ResolvesDefaultBranchAndReturnsOk()
+    {
+        // Arrange
+        var drug = new DrugResponse("dr-001", "THUOC001", "Paracetamol", null, "Hộp", 35000m, true);
+        drugQueryServiceMock.Setup(s => s.GetByIdAsync("BR001", "dr-001", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(drug);
+
+        var controller = CreateController(branchId: null, role: "");
+
+        // Act
+        var result = await controller.GetByIdAsync("dr-001");
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var returned = Assert.IsType<DrugResponse>(okResult.Value);
+        Assert.Equal("THUOC001", returned.DrugCode);
+    }
 }

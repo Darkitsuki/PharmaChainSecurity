@@ -41,6 +41,7 @@ class AuthSession extends ChangeNotifier {
   bool busy = false;
   String? error;
   String? _token;
+  String? get token => _token;
   DateTime? _expiresAt;
   Timer? _expiryTimer;
   int _generation = 0;
