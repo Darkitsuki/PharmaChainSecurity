@@ -4,6 +4,7 @@ using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Features.Auth;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 using PharmaSecure.Domain.Enums;
 using PharmaSecure.Infrastructure.Persistence;
 
@@ -195,7 +196,7 @@ public sealed class AuthService : IAuthService
             command.Parameters.Add("ipAddress", OracleDbType.Varchar2, 50).Value = (object?)ipAddress ?? DBNull.Value;
             command.Parameters.Add("userAgent", OracleDbType.Varchar2, 500).Value = (object?)SecurityAuditWriter.Bounded(SecurityAuditWriter.Sanitize(userAgent), 500) ?? DBNull.Value;
             command.Parameters.Add("failureReason", OracleDbType.Varchar2, 255).Value = (object?)failureReason ?? DBNull.Value;
-            command.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = DateTime.UtcNow;
+            command.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = VietnamTimeHelper.UnspecifiedNow;
 
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
