@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.IdentityModel.Tokens;
@@ -36,7 +38,20 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<AuditAccessStore>();
-        services.AddSingleton<IAuditOtpDelivery, UnavailableAuditOtpDelivery>();
+        services.Configure<AuditOtpSmtpOptions>(configuration.GetSection("Email:Smtp"));
+        services.AddSingleton<GmailAuditOtpDelivery>();
+        services.AddSingleton<IAuditOtpDelivery>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<AuditOtpSmtpOptions>>().Value;
+            if (!options.Enabled) return new UnavailableAuditOtpDelivery();
+            if (!GmailAuditOtpDelivery.IsConfigurationValid(options))
+            {
+                provider.GetRequiredService<ILoggerFactory>().CreateLogger("AuditOtpConfiguration").LogWarning(
+                    "Audit OTP email is disabled because Gmail SMTP settings are incomplete or invalid.");
+                return new UnavailableAuditOtpDelivery();
+            }
+            return provider.GetRequiredService<GmailAuditOtpDelivery>();
+        });
         services.AddScoped<SecurityAuditWriter>();
         services.AddScoped<SessionCredentialValidator>();
         services.AddScoped<IAccountSettingsService, AccountSettingsService>();

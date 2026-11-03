@@ -3,3 +3,4 @@
 **/bin/
 **/obj/
 frontend/node_modules/
+backend/PharmaSecure.WebApi/appsettings.Email.local.json

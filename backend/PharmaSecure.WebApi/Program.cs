@@ -1,9 +1,11 @@
 using PharmaSecure.Infrastructure;
+using PharmaSecure.WebApi;
 using PharmaSecure.WebApi.Middlewares;
 
 LoadDotEnv();
 
 var builder = WebApplication.CreateBuilder(args);
+EmailLocalConfiguration.AddDevelopmentFile(builder.Configuration, builder.Environment);
 
 // Add services to the container.
 builder.Services.AddControllers();
