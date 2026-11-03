@@ -7,6 +7,7 @@ using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Security;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 using PharmaSecure.Domain.Entities;
 
 namespace PharmaSecure.Infrastructure.Cryptography;
@@ -25,7 +26,7 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
         ArgumentNullException.ThrowIfNull(invoice);
         var hash = ComputeHash(invoice);
         var signature = SignHash(hash);
-        var signedAt = DateTime.UtcNow;
+        var signedAt = VietnamTimeHelper.Now;
         var certificateSerial = ResolveValue(options.CertificateSerial, "PHARMA_CERT_SERIAL");
         return new InvoiceSignatureResult(Convert.ToHexString(hash).ToLowerInvariant(), signature, certificateSerial, signedAt);
     }
