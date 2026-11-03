@@ -6,11 +6,11 @@
   updated. Mutable fields are `fullName` and `phoneNumber`. Email, username,
   branch, role and active status are read-only. Unmapped mutation fields are rejected.
 - `/security/audit-logs`: OWNER only, within the account's branch, after password
-  reauthentication and OTP. Production registers `UnavailableAuditOtpDelivery`:
-  correct password alone returns 503 and never grants audit access.
-- There is no configuration switch, fixed production OTP, test-code endpoint or
-  frontend-only unlock. `IAuditOtpDelivery` can be replaced only through DI code;
-  the fixture replacement is defined exclusively in the test project.
+  reauthentication and OTP. Gmail delivery is disabled by default; enabling it
+  requires explicit sender configuration.
+- There is no fixed production OTP, test-code endpoint or frontend-only unlock.
+  `IAuditOtpDelivery` can be replaced through DI; the fixture replacement is
+  defined exclusively in the test project.
 
 ## API
 
@@ -28,9 +28,12 @@
 Audit reads require `X-Audit-Access`. The opaque grant is kept in page memory,
 never localStorage or a URL. It is bound to user ID, branch and unique JWT `jti`,
 expires within five minutes and cannot outlive the JWT. Challenges expire after
-five minutes, allow at most five failed codes and cannot be replayed. Reauthentication
-is limited per account. Sensitive-session lock/logout revokes the binding; log in
-again before obtaining another grant for that binding.
+five minutes, allow at most five failed codes and cannot be replayed. Reauthentication,
+OTP sends and code verification are limited to five attempts per account in each
+five-minute window.
+The challenge is bound to the current email address as well as user, branch and
+JWT `jti`. Sensitive-session lock/logout revokes the binding; log in again before
+obtaining another grant for that binding.
 
 Filters: `startDate` inclusive / `endDate` exclusive UTC instants, `username`,
 `eventType`, `outcome`, `search`, `page`, `pageSize`. Defaults cover seven UTC days;
@@ -79,6 +82,29 @@ merely because logout was clicked. Password-change revocation is separate and is
 verified against Oracle. Sensitive grants/challenges are in bounded process memory;
 restart discards them, so audit access fails closed.
 
+## Gmail OTP configuration
+
+The schema remains unchanged: no email-verification column or migration is used.
+The backend sends only to the OWNER email returned from `USERS.Email`; the client
+cannot supply or change the destination. The address is validated before sending
+and checked again before granting access. Missing or malformed addresses fail
+closed. The challenge response contains only a masked destination address.
+
+Gmail uses `smtp.gmail.com:587` with STARTTLS and the platform's normal TLS
+certificate validation. There is no plaintext or alternate-transport fallback.
+For local Development, copy
+`backend/PharmaSecure.WebApi/appsettings.Email.local.json.example` to
+`backend/PharmaSecure.WebApi/appsettings.Email.local.json` and follow
+[`EMAIL_OTP_LOCAL_SETUP.md`](./EMAIL_OTP_LOCAL_SETUP.md). The local file is
+gitignored and loaded only in Development. User Secrets or environment variables
+can override it. Production must use a secret manager or environment variables.
+The six-digit code is generated server-side, expires after five minutes, is
+single-use, and is delivered only after password reauthentication. A failed SMTP
+send removes its pending challenge and never grants access.
+
+SMTP delivery, challenges and grants are process-local. A multi-instance
+deployment still requires a shared atomic TTL store before enabling this feature.
+
 ## Opt-in verification
 
 Default unit tests never open Oracle. `Category=LocalOracle` requires
@@ -92,15 +118,15 @@ Playwright/Edge and a private evidence directory in `PHARMA_TEST_EVIDENCE`.
 `PHARMA_PLAYWRIGHT_PATH` may reference an existing external installation. The test
 assembly starts its own loopback Kestrel host with the fixture OTP delivery and
 a separate Vite process on 3002, stopped after the test. Fixture OTP crosses only
-parent/child stdin, never an HTTP endpoint, UI hint, configuration or log. The normal
-Web/Backend keep the unavailable provider. No test keys or credentials belong in Git.
+parent/child stdin, never an HTTP endpoint, UI hint, configuration or log. Normal
+configuration uses the unavailable provider unless Gmail SMTP is explicitly
+enabled and fully configured. No test keys or credentials belong in Git.
 
-## Deferred — phase 2
+## Remaining security work
 
-Real Gmail/SMTP/email OTP delivery and ownership verification are **DEFERRED**.
-Do not register a real delivery provider until email ownership, delivery failure,
-abuse controls and verification-state persistence have been designed and reviewed.
-Email change must remain disabled until then. A multi-instance deployment also
-requires a shared atomic TTL store for challenges, attempts and grants. Audit VPD,
-durable ordinary-session logout revocation and deployment monitoring require their
-own security review; no claim is made that phase 1 completes those controls.
+No permanent email ownership state is stored in Oracle. Email changes remain
+unsupported by account settings. The administrator remains responsible for keeping
+each account email accurate; a successful OTP proves access only for that attempt.
+Audit VPD, durable ordinary-session logout revocation
+and deployment monitoring require their own security review; no claim is made
+that these controls are complete.

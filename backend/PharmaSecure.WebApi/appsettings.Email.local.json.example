@@ -1,0 +1,10 @@
+{
+  "Email": {
+    "Smtp": {
+      "Enabled": true,
+      "Sender": "YOUR_GMAIL_ADDRESS",
+      "Username": "YOUR_GMAIL_ADDRESS",
+      "AppPassword": ""
+    }
+  }
+}

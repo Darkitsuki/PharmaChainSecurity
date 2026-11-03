@@ -40,7 +40,7 @@ public interface IAuditLogService
 public sealed record AuditPasswordRequest(string Password);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record AuditOtpRequest(string ChallengeId, string Code);
-public sealed record AuditChallenge(string ChallengeId, DateTimeOffset ExpiresAt);
+public sealed record AuditChallenge(string ChallengeId, DateTimeOffset ExpiresAt, string MaskedEmail);
 public sealed record AuditGrant(string AccessToken, DateTimeOffset ExpiresAt);
 public interface IAuditAccessService
 {
@@ -49,7 +49,7 @@ public interface IAuditAccessService
     Task<AuditGrant> VerifyAsync(AuditOtpRequest request, CancellationToken ct = default);
     void RevokeSession();
 }
-// Production registration is deliberately unavailable until verified email delivery is integrated.
+// Production delivery remains fail-closed unless SMTP is configured.
 public interface IAuditOtpDelivery
 {
     bool IsAvailable { get; }

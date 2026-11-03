@@ -1,5 +1,10 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Moq;
 using PharmaSecure.Application.Features.Security;
 using PharmaSecure.Application.Interfaces;
@@ -20,40 +25,65 @@ public sealed class AccountAuditSecurityTests
         public override DateTimeOffset GetUtcNow() => Now;
     }
     [Fact]
+    public void AuditChallengeRequest_WhenClientSuppliesRecipientEmail_IsRejected()
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<AuditPasswordRequest>(
+            """{"password":"correct-password","email":"attacker@example.test"}"""));
+    }
+    [Fact]
     public void OtpGrant_WhenCorrect_BindsUserBranchSessionAndCannotReplay()
     {
         using var store = new AuditAccessStore(new Clock());
-        var challenge = store.Create("owner:a:session1", "314159");
-        Assert.Throws<SensitiveAccessException>(() => store.Verify("owner:b:session1", new(challenge.ChallengeId, "314159"), Now.AddHours(1)));
-        var grant = store.Verify("owner:a:session1", new(challenge.ChallengeId, "314159"), Now.AddHours(1));
+        var challenge = store.Create("owner:a:session1", "owner@example.test", "314159");
+        Assert.Throws<SensitiveAccessException>(() => store.Verify("owner:b:session1", new(challenge.ChallengeId, "314159"), Now.AddHours(1), "owner@example.test"));
+        var grant = store.Verify("owner:a:session1", new(challenge.ChallengeId, "314159"), Now.AddHours(1), "owner@example.test");
         Assert.True(store.HasGrant("owner:a:session1", grant.AccessToken));
         Assert.False(store.HasGrant("owner:a:session2", grant.AccessToken));
         Assert.False(store.HasGrant("other:a:session1", grant.AccessToken));
         Assert.False(store.HasGrant("owner:b:session1", grant.AccessToken));
-        Assert.Throws<SensitiveAccessException>(() => store.Verify("owner:a:session1", new(challenge.ChallengeId, "314159"), Now.AddHours(1)));
+        Assert.Throws<SensitiveAccessException>(() => store.Verify("owner:a:session1", new(challenge.ChallengeId, "314159"), Now.AddHours(1), "owner@example.test"));
+    }
+    [Fact]
+    public void OtpGrant_WhenOwnerEmailChanges_CannotUsePreviousChallenge()
+    {
+        using var store = new AuditAccessStore(new Clock());
+        var challenge = store.Create("owner:a:session1", "owner@example.test", "314159");
+        Assert.Equal(403, Assert.Throws<SensitiveAccessException>(() =>
+            store.Verify("owner:a:session1", new(challenge.ChallengeId, "314159"), Now.AddHours(1), "different@example.test")).Status);
     }
     [Fact]
     public void OtpChallenge_WhenWrongFiveTimes_LocksOutCorrectCode()
     {
-        using var store = new AuditAccessStore(new Clock()); var c = store.Create("binding", "314159");
-        for (var i = 0; i < 5; i++) Assert.Equal(400, Assert.Throws<SensitiveAccessException>(() => store.Verify("binding", new(c.ChallengeId, "000000"), Now.AddHours(1))).Status);
-        Assert.Equal(403, Assert.Throws<SensitiveAccessException>(() => store.Verify("binding", new(c.ChallengeId, "314159"), Now.AddHours(1))).Status);
+        using var store = new AuditAccessStore(new Clock()); var c = store.Create("binding", "owner@example.test", "314159");
+        for (var i = 0; i < 5; i++) Assert.Equal(400, Assert.Throws<SensitiveAccessException>(() => store.Verify("binding", new(c.ChallengeId, "000000"), Now.AddHours(1), "owner@example.test")).Status);
+        Assert.Equal(403, Assert.Throws<SensitiveAccessException>(() => store.Verify("binding", new(c.ChallengeId, "314159"), Now.AddHours(1), "owner@example.test")).Status);
     }
     [Fact]
     public void OtpGrant_WhenExpiredOrSessionRevoked_FailsClosed()
     {
         var clock = new Clock(); using var store = new AuditAccessStore(clock);
-        var c = store.Create("binding", "314159"); var grant = store.Verify("binding", new(c.ChallengeId, "314159"), Now.AddHours(1));
+        var c = store.Create("binding", "owner@example.test", "314159"); var grant = store.Verify("binding", new(c.ChallengeId, "314159"), Now.AddHours(1), "owner@example.test");
         store.RevokeBinding("binding", Now.AddHours(1)); Assert.False(store.HasGrant("binding", grant.AccessToken));
-        var other = store.Create("other", "314159"); var otherGrant = store.Verify("other", new(other.ChallengeId, "314159"), Now.AddHours(1));
+        var other = store.Create("other", "owner@example.test", "314159"); var otherGrant = store.Verify("other", new(other.ChallengeId, "314159"), Now.AddHours(1), "owner@example.test");
         clock.Now = Now.AddMinutes(6); Assert.False(store.HasGrant("other", otherGrant.AccessToken));
     }
     [Fact]
     public void OtpChallenge_WhenExpired_RejectsCode()
     {
-        var clock = new Clock(); using var store = new AuditAccessStore(clock); var c = store.Create("binding", "314159");
+        var clock = new Clock(); using var store = new AuditAccessStore(clock); var c = store.Create("binding", "owner@example.test", "314159");
         clock.Now = Now.AddMinutes(6);
-        Assert.Equal(403, Assert.Throws<SensitiveAccessException>(() => store.Verify("binding", new(c.ChallengeId, "314159"), clock.Now.AddHours(1))).Status);
+        Assert.Equal(403, Assert.Throws<SensitiveAccessException>(() => store.Verify("binding", new(c.ChallengeId, "314159"), clock.Now.AddHours(1), "owner@example.test")).Status);
+    }
+    [Fact]
+    public void OtpChallenge_WhenRemovedAfterDeliveryFailure_CannotBeVerified()
+    {
+        using var store = new AuditAccessStore(new Clock());
+        var challenge = store.Create("binding", "owner@example.test", "314159");
+
+        store.RemoveChallenge(challenge.ChallengeId);
+
+        Assert.Equal(403, Assert.Throws<SensitiveAccessException>(() =>
+            store.Verify("binding", new(challenge.ChallengeId, "314159"), Now.AddHours(1), "owner@example.test")).Status);
     }
     [Fact]
     public void Reauthentication_WhenRepeated_IsRateLimited()
@@ -69,6 +99,99 @@ public sealed class AccountAuditSecurityTests
         using var provider = services.BuildServiceProvider();
         var delivery = provider.GetRequiredService<IAuditOtpDelivery>();
         Assert.IsType<UnavailableAuditOtpDelivery>(delivery); Assert.False(delivery.IsAvailable);
+    }
+    [Fact]
+    public void ProductionRegistration_WhenGmailConfigurationIsIncomplete_RemainsUnavailable()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Email:Smtp:Enabled"] = "true",
+            ["Email:Smtp:Sender"] = "sender@example.test"
+        }).Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddInfrastructureServices(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var delivery = provider.GetRequiredService<IAuditOtpDelivery>();
+
+        Assert.IsType<UnavailableAuditOtpDelivery>(delivery);
+        Assert.False(delivery.IsAvailable);
+    }
+    [Fact]
+    public void ProductionRegistration_WhenGmailIsConfigured_UsesSmtpDelivery()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Email:Smtp:Enabled"] = "true",
+            ["Email:Smtp:Sender"] = "sender@example.test",
+            ["Email:Smtp:Username"] = "sender@example.test",
+            ["Email:Smtp:AppPassword"] = "test-only-placeholder"
+        }).Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddInfrastructureServices(configuration);
+        using var provider = services.BuildServiceProvider();
+        var delivery = provider.GetRequiredService<IAuditOtpDelivery>();
+        Assert.IsType<GmailAuditOtpDelivery>(delivery);
+        Assert.True(delivery.IsAvailable);
+    }
+    [Fact]
+    public async Task GmailDelivery_WhenRecipientIsMalformed_RejectsBeforeSending()
+    {
+        var delivery = new GmailAuditOtpDelivery(Options.Create(new AuditOtpSmtpOptions
+        {
+            Enabled = true,
+            Sender = "sender@example.test",
+            Username = "sender@example.test",
+            AppPassword = "test-only-placeholder"
+        }), NullLogger<GmailAuditOtpDelivery>.Instance);
+
+        var error = await Assert.ThrowsAsync<SensitiveAccessException>(() =>
+            delivery.SendAsync("not-an-email", "123456", CancellationToken.None));
+
+        Assert.Equal(503, error.Status);
+    }
+    [Theory]
+    [InlineData("owner.a@gmail.com")]
+    [InlineData("owner.b@outlook.com")]
+    [InlineData("owner.c@yahoo.com")]
+    public async Task AuditChallenge_UsesOnlyEmailReturnedForAuthenticatedOwner(string accountEmail)
+    {
+        var user = new Mock<ICurrentUserContext>();
+        user.SetupGet(x => x.IsAuthenticated).Returns(true);
+        user.SetupGet(x => x.UserId).Returns("owner");
+        user.SetupGet(x => x.BranchId).Returns("branch");
+        user.SetupGet(x => x.Role).Returns(UserRole.OWNER);
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity([
+                new Claim("jti", "session"),
+                new Claim("exp", Now.AddHours(1).ToUnixTimeSeconds().ToString())
+            ], "test"))
+        };
+        var http = new Mock<IHttpContextAccessor>();
+        http.SetupGet(x => x.HttpContext).Returns(httpContext);
+        var account = new Mock<IAccountSettingsService>();
+        account.Setup(x => x.VerifyPasswordAsync("correct-password", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(accountEmail);
+        string? recipient = null;
+        var delivery = new Mock<IAuditOtpDelivery>();
+        delivery.SetupGet(x => x.IsAvailable).Returns(true);
+        delivery.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Callback<string, string, CancellationToken>((email, _, _) => recipient = email)
+            .Returns(Task.CompletedTask);
+        using var store = new AuditAccessStore(new Clock());
+        var audit = new SecurityAuditWriter(user.Object, http.Object, Mock.Of<IOracleConnectionFactory>(),
+            NullLogger<SecurityAuditWriter>.Instance);
+        var service = new AuditAccessService(user.Object, http.Object, account.Object, delivery.Object, store, audit);
+
+        var challenge = await service.StartAsync("correct-password");
+
+        Assert.Equal(accountEmail, recipient);
+        Assert.Equal(64, challenge.ChallengeId.Length);
+        Assert.DoesNotContain(accountEmail, challenge.MaskedEmail);
+        Assert.EndsWith(accountEmail[accountEmail.IndexOf('@')..], challenge.MaskedEmail);
     }
     [Theory]
     [InlineData(UserRole.OWNER, false)]
