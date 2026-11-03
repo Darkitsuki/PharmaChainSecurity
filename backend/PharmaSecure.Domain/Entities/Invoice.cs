@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using PharmaSecure.Domain.Common;
 using PharmaSecure.Domain.Enums;
 
 namespace PharmaSecure.Domain.Entities;
@@ -25,14 +26,18 @@ public sealed class Invoice : EntityBase<string>
         BranchId = string.IsNullOrWhiteSpace(branchId) ? throw new ArgumentException("Branch ID is required.", nameof(branchId)) : branchId;
         CashierId = string.IsNullOrWhiteSpace(cashierId) ? throw new ArgumentException("Cashier ID is required.", nameof(cashierId)) : cashierId;
         CustomerId = string.IsNullOrWhiteSpace(customerId) ? null : customerId.Trim();
-        var timestamp = createdDate ?? DateTime.UtcNow;
-        timestamp = timestamp.Kind switch
+
+        // Lấy thời gian Việt Nam chuẩn (UTC+7)
+        var timestamp = createdDate ?? VietnamTimeHelper.Now;
+
+        // Nếu truyền vào là UTC thì chuyển sang giờ Việt Nam, không ép ngược về UTC nữa
+        if (timestamp.Kind == DateTimeKind.Utc)
         {
-            DateTimeKind.Local => timestamp.ToUniversalTime(),
-            DateTimeKind.Unspecified => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc),
-            _ => timestamp
-        };
-        CreatedDate = new DateTime(timestamp.Ticks - timestamp.Ticks % 10, DateTimeKind.Utc);
+            timestamp = TimeZoneInfo.ConvertTimeFromUtc(timestamp, VietnamTimeHelper.VietnamTz);
+        }
+
+        // Cắt bớt ticks và đặt Kind = Unspecified để ODP.NET ghi chính xác giờ hiển thị xuống Oracle TIMESTAMP
+        CreatedDate = new DateTime(timestamp.Ticks - timestamp.Ticks % 10, DateTimeKind.Unspecified);
         Status = InvoiceStatus.Draft;
     }
 

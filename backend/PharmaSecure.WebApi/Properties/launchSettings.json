@@ -5,10 +5,11 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DB_USER": "PHARMA_ADMIN",
-        "DB_PASSWORD": "YourPassword123",
-        "DB_DATA_SOURCE": "localhost:1521/FREEPDB1",
-        "PHARMA_CERT_SERIAL": "DEV-ONLY-LOCAL"
+        "ORACLE_DATA_SOURCE": "192.168.2.166:1521/FREEPDB1",
+        "ORACLE_USER": "PHARMA_ADMIN",
+        "ORACLE_PASSWORD": "admin123",
+        "JWT_SECRET": "DEV_ONLY_PHARMASECURE_JWT_SIGNING_KEY_2026_DO_NOT_DEPLOY",
+        "PHARMA_CERT_SERIAL": "VN-LONGCHAU-CA-2026-0001"
       },
       "applicationUrl": "https://localhost:55198;http://localhost:55199"
     }

@@ -247,7 +247,7 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
 
             var invId = headerReader.GetString(0);
             var invNo = headerReader.GetString(1);
-            var createdDate = DateTime.SpecifyKind(headerReader.GetDateTime(2), DateTimeKind.Utc);
+            var createdDate = DateTime.SpecifyKind(headerReader.GetDateTime(2), DateTimeKind.Unspecified);
             var storedTotalAmount = headerReader.GetDecimal(3);
             var bId = headerReader.GetString(4);
             var cashierId = headerReader.GetString(5);

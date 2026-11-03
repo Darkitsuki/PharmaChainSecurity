@@ -9,11 +9,21 @@ import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/medicine_screen.dart';
 import 'screens/records_screen.dart';
+import 'screens/patient_shell.dart';
+import 'services/drug_service.dart';
+import 'services/staff_notification_service.dart';
 import 'widgets/ui_components.dart';
 
 class PharmaSecureApp extends StatefulWidget {
-  const PharmaSecureApp({super.key, this.session});
+  const PharmaSecureApp({
+    super.key,
+    this.session,
+    this.startAsPatient,
+  });
+
   final AuthSession? session;
+  final bool? startAsPatient;
+
   @override
   State<PharmaSecureApp> createState() => _PharmaSecureAppState();
 }
@@ -22,6 +32,8 @@ class _PharmaSecureAppState extends State<PharmaSecureApp>
     with WidgetsBindingObserver {
   AuthSession? session;
   String? configurationError;
+  late bool _showStaffPortal = (widget.session != null && widget.startAsPatient != true);
+
   @override
   void initState() {
     super.initState();
@@ -71,44 +83,83 @@ class _PharmaSecureAppState extends State<PharmaSecureApp>
   Widget build(BuildContext context) {
     final auth = session;
     final user = auth?.user;
+
+    Widget homeWidget;
+
+    // 1. If configuration error exists, show error on LoginScreen
+    if (configurationError != null) {
+      homeWidget = LoginScreen(
+        busy: false,
+        error: configurationError,
+        onSubmit: null,
+      );
+    } else if (auth == null) {
+      // Waiting for session & API client initialization
+      homeWidget = const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    } else if (!_showStaffPortal && user == null) {
+      // 100% Patient-first by default when starting application
+      homeWidget = PatientShell(
+        key: ValueKey('patient_shell_${auth.hashCode}'),
+        session: auth,
+        onOpenStaffPortal: () => setState(() => _showStaffPortal = true),
+      );
+    } else if (user == null) {
+      // Staff Login Portal
+      homeWidget = LoginScreen(
+        busy: auth.busy,
+        error: configurationError ?? auth.error,
+        onSubmit: auth.signIn,
+        onBackToPatient: () => setState(() => _showStaffPortal = false),
+      );
+    } else {
+      // Staff ERP Shell
+      homeWidget = Stack(children: [
+        PharmaShell(
+            key: ValueKey('${user.userId}:${user.role}:${user.branchId}'),
+            user: user,
+            session: auth,
+            initialSection: switch (user.role) {
+              'OWNER' => AppSection.reports,
+              'WAREHOUSE' => AppSection.inventory,
+              _ => AppSection.checkout,
+            },
+            onOpenPatientApp: () => setState(() => _showStaffPortal = false),
+            onExit: () => unawaited(auth.signOut())),
+        if (auth.busy)
+          const Positioned.fill(
+              child: ColoredBox(
+                  color: Color(0xCCFFFFFF),
+                  child: Center(child: CircularProgressIndicator()))),
+      ]);
+    }
+
     return MaterialApp(
       title: 'PharmaSecure Mobile',
       debugShowCheckedModeBanner: false,
       theme: pharmaTheme(),
-      home: user == null
-          ? LoginScreen(
-              busy: auth?.busy ?? configurationError == null,
-              error: configurationError ?? auth?.error,
-              onSubmit: auth?.signIn)
-          : Stack(children: [
-              PharmaShell(
-                  key: ValueKey('${user.userId}:${user.role}:${user.branchId}'),
-                  user: user,
-                  initialSection: switch (user.role) {
-                    'OWNER' => AppSection.reports,
-                    'WAREHOUSE' => AppSection.inventory,
-                    _ => AppSection.checkout,
-                  },
-                  onExit: () => unawaited(auth!.signOut())),
-              if (auth!.busy)
-                const Positioned.fill(
-                    child: ColoredBox(
-                        color: Color(0xCCFFFFFF),
-                        child: Center(child: CircularProgressIndicator()))),
-            ]),
+      home: homeWidget,
     );
   }
 }
 
 class PharmaShell extends StatefulWidget {
-  const PharmaShell(
-      {super.key,
-      required this.onExit,
-      this.initialSection = AppSection.overview,
-      this.user});
+  const PharmaShell({
+    super.key,
+    required this.onExit,
+    this.initialSection = AppSection.overview,
+    this.user,
+    this.session,
+    this.onOpenPatientApp,
+  });
+
   final AuthUser? user;
+  final AuthSession? session;
   final VoidCallback onExit;
+  final VoidCallback? onOpenPatientApp;
   final AppSection initialSection;
+
   @override
   State<PharmaShell> createState() => _PharmaShellState();
 }
@@ -116,6 +167,7 @@ class PharmaShell extends StatefulWidget {
 class _PharmaShellState extends State<PharmaShell> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   late AppSection selected = widget.initialSection;
+
   List<AppSection> get primarySections => [
         AppSection.overview,
         AppSection.catalog,
@@ -152,9 +204,9 @@ class _PharmaShellState extends State<PharmaShell> {
   Widget get screen => switch (selected) {
         AppSection.overview => DashboardScreen(onNavigate: select),
         AppSection.reports => DashboardScreen(report: true, onNavigate: select),
-        AppSection.catalog => const MedicineScreen(),
+        AppSection.catalog => MedicineScreen(drugService: DrugService(api: widget.session?.api, tokenProvider: () => widget.session?.token)),
         AppSection.inventory => const MedicineScreen(inventory: true),
-        AppSection.checkout => const CheckoutScreen(),
+        AppSection.checkout => CheckoutScreen(session: widget.session),
         _ => RecordsScreen(section: selected),
       };
 
@@ -228,6 +280,21 @@ class _PharmaShellState extends State<PharmaShell> {
     return Scaffold(
       key: scaffoldKey,
       appBar: AppBar(title: const Text('PharmaSecure'), actions: [
+        IconButton(
+            tooltip: 'Mở Ứng dụng Bệnh nhân đặt thuốc',
+            onPressed: widget.onOpenPatientApp ??
+                () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PatientShell(
+                        session: widget.session,
+                        onExit: () => Navigator.pop(context),
+                      ),
+                    ),
+                  );
+                },
+            icon: const Icon(Icons.shopping_bag_outlined)),
         const Center(child: StatusBadge('Nghiệp vụ mẫu')),
         const SizedBox(width: 8),
         IconButton(
@@ -245,6 +312,36 @@ class _PharmaShellState extends State<PharmaShell> {
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+              // Real-time Staff Notification Banner for Online Orders
+              ListenableBuilder(
+                listenable: StaffNotificationService.instance,
+                builder: (context, _) {
+                  final notifs = StaffNotificationService.instance.notifications;
+                  if (notifs.isEmpty) return const SizedBox.shrink();
+
+                  final latest = notifs.first;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    color: const Color(0xFFFFF3CD),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.notifications_active, color: Color(0xFF856404), size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '🔔 [ĐƠN MỚI] ${latest.invoiceNumber} · Khách: ${latest.customerName} (${latest.phoneNumber}) - ${latest.branchName}',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF856404)),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => StaffNotificationService.instance.clearNotifications(),
+                          child: const Text('Đã nhận', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               const PreviewNotice(),
               Expanded(
                   child: Center(

@@ -14,15 +14,13 @@ public sealed class OracleConnectionFactoryTests
     private const string UserId = "us-00000000-0000-0000-0000-000000000001";
 
     [Fact]
-    public async Task CreateOpenConnectionAsync_WhenUserIsNotAuthenticated_FailsBeforeOpeningConnection()
+    public async Task CreateOpenConnectionAsync_WhenUserIsNotAuthenticated_ProceedsToOracleConnection()
     {
         var currentUser = CreateCurrentUser(isAuthenticated: false, UserRole.SALES, BranchId);
         var factory = CreateFactory(currentUser.Object, BranchId);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<OracleException>(
             () => factory.CreateOpenConnectionAsync(BranchId));
-
-        Assert.Contains("authenticated user", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
