@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using PharmaSecure.Domain.Common;
 using PharmaSecure.Domain.Entities;
 using PharmaSecure.Infrastructure.Cryptography;
 using Xunit;
@@ -139,7 +140,7 @@ public class InvoiceSignatureTests
         secondInvoice.AddItem(new InvoiceItem(secondInvoice.Id, "dr-002", "bt-002", 1, 20m));
 
         Assert.Equal(firstInvoice.GetCanonicalPayload(), secondInvoice.GetCanonicalPayload());
-        Assert.Contains("2026-09-30T12:34:56.000000Z", firstInvoice.GetCanonicalPayload());
+        Assert.Contains("2026-09-30T19:34:56.000000Z", firstInvoice.GetCanonicalPayload());
     }
 
     [Theory]
@@ -176,5 +177,56 @@ public class InvoiceSignatureTests
             signatureResult.SignedAt);
 
         Assert.False(service.VerifyIntegrity(tamperedInvoice, digitalSignature));
+    }
+
+    [Fact]
+    public void VietnamTimeHelper_Now_IsWithinExpectedOffsetFromUtc()
+    {
+        var nowVn = VietnamTimeHelper.Now;
+        var nowUtc = DateTime.UtcNow;
+        var expectedVn = nowUtc.AddHours(7);
+
+        Assert.Equal(DateTimeKind.Unspecified, nowVn.Kind);
+        Assert.True(Math.Abs((nowVn - expectedVn).TotalSeconds) < 2);
+    }
+
+    [Fact]
+    public void Invoice_WhenCreatedDateNotSpecified_SetsVietnamTimeWithUnspecifiedKind()
+    {
+        var invoice = new Invoice("HD20261103-001", "br-001", "us-001");
+        var nowVn = VietnamTimeHelper.Now;
+
+        Assert.Equal(DateTimeKind.Unspecified, invoice.CreatedDate.Kind);
+        Assert.True(Math.Abs((invoice.CreatedDate - nowVn).TotalSeconds) < 2);
+    }
+
+    [Fact]
+    public void Invoice_WhenUtcCreatedDateProvided_ConvertsToVietnamTime()
+    {
+        var utcTime = new DateTime(2026, 11, 3, 5, 0, 0, DateTimeKind.Utc);
+        var invoice = new Invoice("HD20261103-002", "br-001", "us-001", createdDate: utcTime);
+
+        Assert.Equal(DateTimeKind.Unspecified, invoice.CreatedDate.Kind);
+        Assert.Equal(new DateTime(2026, 11, 3, 12, 0, 0, DateTimeKind.Unspecified), invoice.CreatedDate);
+    }
+
+    [Fact]
+    public void DigitalSignature_WhenSignedAtNotSpecified_SetsVietnamTimeWithUnspecifiedKind()
+    {
+        var sig = new DigitalSignature("iv-001", "hash", "data", "serial");
+        var nowVn = VietnamTimeHelper.Now;
+
+        Assert.Equal(DateTimeKind.Unspecified, sig.SignedAt.Kind);
+        Assert.True(Math.Abs((sig.SignedAt - nowVn).TotalSeconds) < 2);
+    }
+
+    [Fact]
+    public void DigitalSignature_WhenUtcSignedAtProvided_ConvertsToVietnamTime()
+    {
+        var utcTime = new DateTime(2026, 11, 3, 5, 0, 0, DateTimeKind.Utc);
+        var sig = new DigitalSignature("iv-001", "hash", "data", "serial", signedAt: utcTime);
+
+        Assert.Equal(DateTimeKind.Unspecified, sig.SignedAt.Kind);
+        Assert.Equal(new DateTime(2026, 11, 3, 12, 0, 0, DateTimeKind.Unspecified), sig.SignedAt);
     }
 }

@@ -1,3 +1,5 @@
+using PharmaSecure.Domain.Common;
+
 namespace PharmaSecure.Domain.Entities;
 
 public sealed class DigitalSignature : EntityBase<string>
@@ -19,7 +21,12 @@ public sealed class DigitalSignature : EntityBase<string>
         HashValueSha256 = string.IsNullOrWhiteSpace(hashValueSha256) ? throw new ArgumentException("Hash value is required.", nameof(hashValueSha256)) : hashValueSha256;
         SignatureData = string.IsNullOrWhiteSpace(signatureData) ? throw new ArgumentException("Signature data is required.", nameof(signatureData)) : signatureData;
         CertificateSerial = string.IsNullOrWhiteSpace(certificateSerial) ? throw new ArgumentException("Certificate serial is required.", nameof(certificateSerial)) : certificateSerial;
-        SignedAt = signedAt ?? DateTime.UtcNow;
+        var timestamp = signedAt ?? VietnamTimeHelper.Now;
+        if (timestamp.Kind == DateTimeKind.Utc)
+        {
+            timestamp = TimeZoneInfo.ConvertTimeFromUtc(timestamp, VietnamTimeHelper.VietnamTz);
+        }
+        SignedAt = new DateTime(timestamp.Ticks - timestamp.Ticks % 10, DateTimeKind.Unspecified);
     }
 
     public string InvoiceId { get; private set; } = null!;

@@ -1,5 +1,6 @@
 using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 using PharmaSecure.Domain.Entities;
 using DomainInventory = PharmaSecure.Domain.Entities.Inventory;
 
@@ -50,8 +51,9 @@ public sealed class CheckoutService : ICheckoutService
                     return await RollbackAsync<CheckoutResponse>("Customer was not found or is inactive.", cancellationToken);
             }
 
+            var nowVn = VietnamTimeHelper.Now;
             var invoice = new Invoice(
-                invoiceNumber: $"HD{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24],
+                invoiceNumber: $"HD{nowVn:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24],
                 branchId: request.BranchId,
                 cashierId: request.CashierId,
                 customerId: request.CustomerId);
