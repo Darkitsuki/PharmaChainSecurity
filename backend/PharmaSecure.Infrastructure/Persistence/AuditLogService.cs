@@ -4,6 +4,7 @@ using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Features.Security;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 using PharmaSecure.Domain.Enums;
 
 namespace PharmaSecure.Infrastructure.Persistence;
@@ -57,7 +58,8 @@ public sealed class AuditLogService(IUnitOfWork unit, ICurrentUserContext user, 
     private static string Escape(string text) => text.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
     private static (string Filter, (string Name, object Value)[] Values) Filter(AuditQuery q)
     {
-        var (start, end) = Validate(q, DateTimeOffset.UtcNow);
+        var nowVn = VietnamTimeHelper.Now;
+        var (start, end) = Validate(q, new DateTimeOffset(nowVn, VietnamTimeHelper.VietnamTz.GetUtcOffset(nowVn)));
         var sql = Scope + " AND CreatedDate>=:startAt AND CreatedDate<:endAt";
         var values = new List<(string, object)> { ("startAt", start), ("endAt", end) };
         if (!string.IsNullOrWhiteSpace(q.Username)) { sql += " AND LOWER(Username) LIKE :username ESCAPE '\\'"; values.Add(("username", "%" + Escape(q.Username.Trim().ToLowerInvariant()) + "%")); }

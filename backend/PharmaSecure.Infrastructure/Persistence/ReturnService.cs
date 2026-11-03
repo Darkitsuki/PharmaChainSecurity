@@ -2,6 +2,7 @@ using System.Data;
 using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Features.Returns;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 
 namespace PharmaSecure.Infrastructure.Persistence;
 
@@ -384,8 +385,9 @@ public sealed class ReturnService : IReturnService
 
             // 3. Tạo phiếu trả hàng (RETURNS)
             var returnId = $"ret-{Guid.NewGuid():N}";
-            var returnNo = $"TH{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24];
-            var createdDate = DateTime.UtcNow;
+            var now = VietnamTimeHelper.Now;
+            var returnNo = $"TH{now:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24];
+            var createdDate = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
 
             await using (var insertReturnCmd = (OracleCommand)unitOfWork.Connection.CreateCommand())
             {

@@ -5,6 +5,7 @@ public static class VietnamTimeHelper
     public static readonly TimeZoneInfo VietnamTz = ResolveVietnamTimeZone();
 
     public static DateTime Now => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, VietnamTz);
+    public static DateTime UnspecifiedNow => DateTime.SpecifyKind(Now, DateTimeKind.Unspecified);
 
     private static TimeZoneInfo ResolveVietnamTimeZone()
     {

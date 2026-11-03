@@ -2,6 +2,7 @@ using System.Data;
 using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Features.Procurement;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 
 namespace PharmaSecure.Infrastructure.Persistence;
 
@@ -244,8 +245,9 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             var supplierName = (string)supplierNameObj;
 
             var receiptId = $"rc-{Guid.NewGuid():N}";
-            var receiptNo = $"PN{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..18].ToUpperInvariant();
-            var now = DateTime.UtcNow;
+            var now = VietnamTimeHelper.Now;
+            var receiptNo = $"PN{now:yyyyMMdd}-{Guid.NewGuid():N}"[..18].ToUpperInvariant();
+
             var totalAmount = request.Items.Sum(item => item.Quantity * item.ImportPrice);
             var responseItems = new List<GoodsReceiptItemResponse>();
 
@@ -264,7 +266,7 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             receiptInsertCmd.Parameters.Add("staffId", OracleDbType.Varchar2, 50).Value = warehouseStaffId;
             receiptInsertCmd.Parameters.Add("total", OracleDbType.Decimal).Value = totalAmount;
             receiptInsertCmd.Parameters.Add("note", OracleDbType.Varchar2, 500).Value = (object?)request.Note?.Trim() ?? DBNull.Value;
-            receiptInsertCmd.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = now;
+            receiptInsertCmd.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
             receiptInsertCmd.Parameters.Add("purchaseOrderId", OracleDbType.Varchar2, 50).Value = request.PurchaseOrderId;
             await receiptInsertCmd.ExecuteNonQueryAsync(cancellationToken);
 
@@ -383,7 +385,7 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
                 txCmd.Parameters.Add("change", OracleDbType.Int32).Value = item.Quantity;
                 txCmd.Parameters.Add("remaining", OracleDbType.Int32).Value = newQuantity;
                 txCmd.Parameters.Add("createdBy", OracleDbType.Varchar2, 50).Value = warehouseStaffId;
-                txCmd.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = now;
+                txCmd.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
                 txCmd.Parameters.Add("note", OracleDbType.Varchar2, 500).Value = $"Nhập kho phiếu {receiptNo} (Lô: {item.BatchNo.Trim()})";
                 await txCmd.ExecuteNonQueryAsync(cancellationToken);
 

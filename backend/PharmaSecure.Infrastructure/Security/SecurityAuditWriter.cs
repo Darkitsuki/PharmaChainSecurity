@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Features.Security;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 using PharmaSecure.Infrastructure.Persistence;
 
 namespace PharmaSecure.Infrastructure.Security;
@@ -43,7 +44,7 @@ public class SecurityAuditWriter(ICurrentUserContext user, IHttpContextAccessor 
                 ("branch",user.BranchId),("eventType",eventType),("ip",http.HttpContext?.Connection.RemoteIpAddress?.ToString()),
                 ("agent",Bounded(Sanitize(http.HttpContext?.Request.Headers.UserAgent.ToString()),500)),("reason",Bounded(Sanitize(reason),255)) })
                 command.Parameters.Add(name, OracleDbType.Varchar2).Value = (object?)value ?? DBNull.Value;
-            command.Parameters.Add("occurredAt", OracleDbType.TimeStamp).Value = DateTime.UtcNow;
+            command.Parameters.Add("occurredAt", OracleDbType.TimeStamp).Value = VietnamTimeHelper.UnspecifiedNow;
             await command.ExecuteNonQueryAsync(ct);
         }
         catch (Exception ex)

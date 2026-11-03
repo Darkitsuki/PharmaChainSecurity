@@ -3,6 +3,7 @@ using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Features.Procurement;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 using PharmaSecure.Domain.Enums;
 
 namespace PharmaSecure.Infrastructure.Persistence;
@@ -105,13 +106,14 @@ public sealed class PurchaseOrderService(IUnitOfWork unitOfWork, ICurrentUserCon
                 using var drug = Command("SELECT COUNT(*) FROM DRUGS WHERE id=:id AND IsActive=1", ("id", item.DrugId));
                 if (Convert.ToInt32(await drug.ExecuteScalarAsync(cancellationToken)) != 1) throw new ArgumentException("Thuốc không hoạt động.");
             }
+            var now = VietnamTimeHelper.Now;
             var id = $"po-{Guid.NewGuid():N}";
             using var insert = Command("""
                 INSERT INTO PURCHASE_ORDERS(id,OrderNo,BranchId,SupplierId,CreatedBy,TotalEstimatedAmount,Status,ExpectedDeliveryDate,Notes,CreatedDate)
                 VALUES(:id,:no,:branch,:supplier,:creator,:total,'PENDING',:expected,:notes,:pDate)
-                """, ("id", id), ("no", $"PO-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"), ("branch", Branch),
+                """, ("id", id), ("no", $"PO-{now:yyyyMMdd}-{Guid.NewGuid():N}"), ("branch", Branch),
                 ("supplier", request.SupplierId), ("creator", UserId), ("total", total), ("expected", request.ExpectedDeliveryDate?.Date),
-                ("notes", request.Notes?.Trim()), ("pDate", DateTime.UtcNow));
+                ("notes", request.Notes?.Trim()), ("pDate", DateTime.SpecifyKind(now, DateTimeKind.Unspecified)));
             await insert.ExecuteNonQueryAsync(cancellationToken);
             foreach (var item in request.Items)
             {
@@ -138,7 +140,7 @@ public sealed class PurchaseOrderService(IUnitOfWork unitOfWork, ICurrentUserCon
             var notes = approve ? before.Notes : string.Join("\n", new[] { before.Notes, "Từ chối: " + reason?.Trim() }.Where(s => !string.IsNullOrWhiteSpace(s)));
             Text(notes, 500);
             using var update = Command("UPDATE PURCHASE_ORDERS SET Status=:status,ApprovedBy=:actor,ApprovedDate=:pDate,Notes=:notes WHERE id=:id AND BranchId=:branch",
-                ("status", approve ? "APPROVED" : "REJECTED"), ("actor", UserId), ("pDate", DateTime.UtcNow), ("notes", notes), ("id", id), ("branch", Branch));
+                ("status", approve ? "APPROVED" : "REJECTED"), ("actor", UserId), ("pDate", DateTime.SpecifyKind(VietnamTimeHelper.Now, DateTimeKind.Unspecified)), ("notes", notes), ("id", id), ("branch", Branch));
             await update.ExecuteNonQueryAsync(cancellationToken);
             await Audit(id, approve ? "APPROVED" : "REJECTED", cancellationToken);
             return await Detail(id, cancellationToken);
@@ -169,7 +171,7 @@ public sealed class PurchaseOrderService(IUnitOfWork unitOfWork, ICurrentUserCon
             INSERT INTO AUDIT_LOGS(id,UserId,Username,BranchId,EventType,FailureReason,CreatedDate)
             VALUES(:id,:userId,:username,:branch,:event,:detail,:pDate)
             """, ("id", Guid.NewGuid().ToString("N")), ("userId", UserId), ("username", user.Username), ("branch", Branch),
-            ("event", "PURCHASE_ORDER_" + action), ("detail", id), ("pDate", DateTime.UtcNow));
+            ("event", "PURCHASE_ORDER_" + action), ("detail", id), ("pDate", DateTime.SpecifyKind(VietnamTimeHelper.Now, DateTimeKind.Unspecified)));
         await command.ExecuteNonQueryAsync(ct);
     }
     private async Task<PurchaseOrderResponse> Detail(string id, CancellationToken ct)

@@ -2,6 +2,7 @@ using System.Data;
 using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Features.Reports;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Domain.Common;
 
 namespace PharmaSecure.Infrastructure.Persistence;
 
@@ -25,10 +26,10 @@ public sealed class ReportService : IReportService
         if (days <= 0 || days > 365)
             days = 7;
 
-        var now = DateTime.UtcNow;
-        var todayStart = now.Date;
-        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
-        var intervalStart = now.Date.AddDays(-days);
+        var now = VietnamTimeHelper.Now;
+        var todayStart = DateTime.SpecifyKind(now.Date, DateTimeKind.Unspecified);
+        var monthStart = DateTime.SpecifyKind(new DateTime(now.Year, now.Month, 1), DateTimeKind.Unspecified);
+        var intervalStart = DateTime.SpecifyKind(now.Date.AddDays(-days), DateTimeKind.Unspecified);
 
         await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
         try
