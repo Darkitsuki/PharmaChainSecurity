@@ -49,6 +49,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadDrugs();
   }
 
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.drugService != widget.drugService) {
+      _loadDrugs();
+    }
+  }
+
   Future<void> _loadDrugs() async {
     setState(() => isLoading = true);
     try {

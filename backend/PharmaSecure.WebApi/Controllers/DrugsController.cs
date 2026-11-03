@@ -17,35 +17,43 @@ public sealed class DrugsController : ControllerBase
     }
 
     [HttpGet]
+    [AllowAnonymous]
     public async Task<ActionResult> GetPageAsync(
         [FromQuery] string? search = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] string? branchId = null,
         CancellationToken cancellationToken = default)
     {
         if (page < 1 || pageSize is < 1 or > 100)
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Invalid pagination.");
 
-        var branchId = User.FindFirst("BranchId")?.Value;
-        if (string.IsNullOrWhiteSpace(branchId))
-            return Forbid();
+        var resolvedBranchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(resolvedBranchId))
+        {
+            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? "BR001" : branchId.Trim();
+        }
 
-        return Ok(await drugQueryService.GetPageAsync(branchId, page, pageSize, search, cancellationToken));
+        return Ok(await drugQueryService.GetPageAsync(resolvedBranchId, page, pageSize, search, cancellationToken));
     }
 
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<ActionResult<DrugResponse>> GetByIdAsync(
         string id,
+        [FromQuery] string? branchId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id))
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Drug ID is required.");
 
-        var branchId = User.FindFirst("BranchId")?.Value;
-        if (string.IsNullOrWhiteSpace(branchId))
-            return Forbid();
+        var resolvedBranchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(resolvedBranchId))
+        {
+            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? "BR001" : branchId.Trim();
+        }
 
-        var drug = await drugQueryService.GetByIdAsync(branchId, id, cancellationToken);
+        var drug = await drugQueryService.GetByIdAsync(resolvedBranchId, id, cancellationToken);
         if (drug is null)
             return Problem(statusCode: StatusCodes.Status404NotFound, title: "Drug was not found.");
 
@@ -53,18 +61,22 @@ public sealed class DrugsController : ControllerBase
     }
 
     [HttpGet("{id}/batches")]
+    [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyCollection<DrugBatchResponse>>> GetBatchesAsync(
         string id,
+        [FromQuery] string? branchId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(id))
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Drug ID is required.");
 
-        var branchId = User.FindFirst("BranchId")?.Value;
-        if (string.IsNullOrWhiteSpace(branchId))
-            return Forbid();
+        var resolvedBranchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(resolvedBranchId))
+        {
+            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? "BR001" : branchId.Trim();
+        }
 
-        var batches = await drugQueryService.GetBatchesAsync(branchId, id, cancellationToken);
+        var batches = await drugQueryService.GetBatchesAsync(resolvedBranchId, id, cancellationToken);
         return Ok(batches);
     }
 

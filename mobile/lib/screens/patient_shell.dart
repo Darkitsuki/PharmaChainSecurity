@@ -30,13 +30,17 @@ class PatientShell extends StatefulWidget {
 class _PatientShellState extends State<PatientShell> {
   late int _currentIndex = widget.initialTab;
   late final CartService _cartService;
-  late final DrugService _drugService;
-  late final OrderService _orderService;
+  late DrugService _drugService;
+  late OrderService _orderService;
 
   @override
   void initState() {
     super.initState();
     _cartService = CartService();
+    _initServices();
+  }
+
+  void _initServices() {
     _drugService = DrugService(
       api: widget.session?.api,
       tokenProvider: () => widget.session?.token,
@@ -46,6 +50,15 @@ class _PatientShellState extends State<PatientShell> {
       tokenProvider: () => widget.session?.token,
       defaultBranchId: widget.session?.user?.branchId,
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant PatientShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session != widget.session) {
+      _initServices();
+      setState(() {});
+    }
   }
 
   @override
@@ -68,7 +81,7 @@ class _PatientShellState extends State<PatientShell> {
         onNavigateToOrders: () => _switchTab(3),
         onOpenStaffPortal: widget.onOpenStaffPortal,
       ),
-      const MedicineScreen(),
+      MedicineScreen(drugService: _drugService),
       CartScreen(
         cartService: _cartService,
         orderService: _orderService,

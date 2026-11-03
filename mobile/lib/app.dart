@@ -10,6 +10,7 @@ import 'screens/login_screen.dart';
 import 'screens/medicine_screen.dart';
 import 'screens/records_screen.dart';
 import 'screens/patient_shell.dart';
+import 'services/drug_service.dart';
 import 'services/staff_notification_service.dart';
 import 'widgets/ui_components.dart';
 
@@ -92,18 +93,24 @@ class _PharmaSecureAppState extends State<PharmaSecureApp>
         error: configurationError,
         onSubmit: null,
       );
+    } else if (auth == null) {
+      // Waiting for session & API client initialization
+      homeWidget = const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     } else if (!_showStaffPortal && user == null) {
       // 100% Patient-first by default when starting application
       homeWidget = PatientShell(
+        key: ValueKey('patient_shell_${auth.hashCode}'),
         session: auth,
         onOpenStaffPortal: () => setState(() => _showStaffPortal = true),
       );
     } else if (user == null) {
       // Staff Login Portal
       homeWidget = LoginScreen(
-        busy: auth?.busy ?? configurationError == null,
-        error: configurationError ?? auth?.error,
-        onSubmit: auth?.signIn,
+        busy: auth.busy,
+        error: configurationError ?? auth.error,
+        onSubmit: auth.signIn,
         onBackToPatient: () => setState(() => _showStaffPortal = false),
       );
     } else {
@@ -119,8 +126,8 @@ class _PharmaSecureAppState extends State<PharmaSecureApp>
               _ => AppSection.checkout,
             },
             onOpenPatientApp: () => setState(() => _showStaffPortal = false),
-            onExit: () => unawaited(auth!.signOut())),
-        if (auth!.busy)
+            onExit: () => unawaited(auth.signOut())),
+        if (auth.busy)
           const Positioned.fill(
               child: ColoredBox(
                   color: Color(0xCCFFFFFF),
@@ -197,7 +204,7 @@ class _PharmaShellState extends State<PharmaShell> {
   Widget get screen => switch (selected) {
         AppSection.overview => DashboardScreen(onNavigate: select),
         AppSection.reports => DashboardScreen(report: true, onNavigate: select),
-        AppSection.catalog => const MedicineScreen(),
+        AppSection.catalog => MedicineScreen(drugService: DrugService(api: widget.session?.api, tokenProvider: () => widget.session?.token)),
         AppSection.inventory => const MedicineScreen(inventory: true),
         AppSection.checkout => CheckoutScreen(session: widget.session),
         _ => RecordsScreen(section: selected),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../core/network/api_client.dart';
 import '../data/demo_data.dart';
 import '../data/models/drug_model.dart';
@@ -12,8 +13,7 @@ class DrugService {
 
   Future<List<DrugModel>> getDrugs({String? search, int page = 1, int pageSize = 50}) async {
     final client = api;
-    final token = _token;
-    if (client != null && token != null) {
+    if (client != null) {
       try {
         final queryParams = <String>[
           'page=$page',
@@ -21,7 +21,7 @@ class DrugService {
           if (search != null && search.trim().isNotEmpty) 'search=${Uri.encodeQueryComponent(search.trim())}',
         ].join('&');
 
-        final response = await client.get('/drugs?$queryParams', token: token);
+        final response = await client.get('/drugs?$queryParams', token: _token);
         final items = response['items'] as List<dynamic>?;
         if (items != null) {
           return items
@@ -29,9 +29,12 @@ class DrugService {
               .where((d) => d.isActive)
               .toList();
         }
-      } catch (_) {
+      } catch (e) {
+        debugPrint('DrugService.getDrugs error: $e');
         // Fallback to local catalog if network or backend unavailable
       }
+    } else {
+      debugPrint('DrugService.getDrugs: ApiClient is null!');
     }
 
     // Fallback catalog from demoMedicines
@@ -57,10 +60,9 @@ class DrugService {
 
   Future<List<DrugBatchModel>> getBatches(String drugId) async {
     final client = api;
-    final token = _token;
-    if (client != null && token != null) {
+    if (client != null) {
       try {
-        final response = await client.get('/drugs/$drugId/batches', token: token);
+        final response = await client.get('/drugs/$drugId/batches', token: _token);
         final rawBatches = response['batches'] ?? response['items'];
         if (rawBatches is List) {
           return rawBatches
@@ -90,4 +92,3 @@ class DrugService {
     ];
   }
 }
-
