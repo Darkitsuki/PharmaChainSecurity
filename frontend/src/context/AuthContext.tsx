@@ -8,6 +8,8 @@ interface AuthContextValue {
   isLoading: boolean;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void> | void;
+  refreshCurrentUser: () => Promise<void>;
+  clearSession: (notice?: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -87,8 +89,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function refreshCurrentUser() {
+    const user = await apiClient<CurrentUser>('/auth/me');
+    setCurrentUser(user);
+    localStorage.setItem('auth_user', JSON.stringify(user));
+  }
+  function clearSession(notice?: string) {
+    localStorage.removeItem('auth_token'); localStorage.removeItem('auth_user');
+    setCurrentUser(null); navigate('/login', { replace: true, state: { notice } });
+  }
+
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, signIn, signOut, refreshCurrentUser, clearSession }}>
       {children}
     </AuthContext.Provider>
   );

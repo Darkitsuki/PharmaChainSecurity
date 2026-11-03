@@ -29,6 +29,7 @@ app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
+app.UseMiddleware<SecurityAuditMiddleware>();
 app.UseMiddleware<BranchContextMiddleware>();
 app.UseAuthorization();
 
@@ -66,3 +67,5 @@ static void LoadDotEnv()
         current = parent.FullName;
     }
 }
+
+public partial class Program { }

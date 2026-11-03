@@ -47,6 +47,7 @@ public class BranchContextMiddleware
                         branchId, clientQueryBranch.ToString());
 
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    context.Items["CrossBranchDenied"] = true;
                     await context.Response.WriteAsJsonAsync(new
                     {
                         status = 403,

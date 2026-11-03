@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PharmaSecure.Application.Features.Auth;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Application.Features.Security;
 
 namespace PharmaSecure.WebApi.Controllers;
 
@@ -11,11 +12,13 @@ public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService authService;
     private readonly ICurrentUserContext currentUserContext;
+    private readonly IAuditAccessService? auditAccess;
 
-    public AuthController(IAuthService authService, ICurrentUserContext currentUserContext)
+    public AuthController(IAuthService authService, ICurrentUserContext currentUserContext, IAuditAccessService? auditAccess = null)
     {
         this.authService = authService;
         this.currentUserContext = currentUserContext;
+        this.auditAccess = auditAccess;
     }
 
     [HttpPost("login")]
@@ -65,6 +68,7 @@ public sealed class AuthController : ControllerBase
         if (result.IsFailure)
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: result.Error);
 
+        if (User.IsInRole("OWNER")) auditAccess?.RevokeSession();
         return NoContent();
     }
 }

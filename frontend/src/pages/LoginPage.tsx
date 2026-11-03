@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react';
+import { useLocation } from 'react-router-dom';
+import { AlertBanner } from '../components/common';
 import { ApiError } from '../services/apiClient';
 import { useAuth } from '../context/AuthContext';
 import { AuthHeader } from '../components/auth/AuthHeader';
@@ -8,6 +10,8 @@ import { RoleQuickSelector } from '../components/auth/RoleQuickSelector';
 import { TerminalStatusBar } from '../components/auth/TerminalStatusBar';
 
 export function LoginPage() {
+  const location = useLocation();
+  const notice = typeof location.state?.notice === 'string' ? location.state.notice : '';
   const { signIn } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -53,6 +57,7 @@ export function LoginPage() {
 
       {/* 2. Main Terminal Login Section */}
       <main className="flex flex-1 flex-col items-center justify-center px-4 py-8 sm:py-12">
+        <AlertBanner type="success" message={notice} className="mb-4 w-full max-w-[440px]" />
         <LoginForm
           username={username}
           password={password}
