@@ -4,5 +4,5 @@ namespace PharmaSecure.Application.Interfaces;
 
 public interface IJwtTokenService
 {
-    string GenerateToken(string userId, string username, UserRole role, string branchId);
+    string GenerateToken(string userId, string username, UserRole role, string branchId, string? passwordHash = null);
 }

@@ -1,6 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { ArrowLeftRight, Boxes, Building, ClipboardCheck, FileText, HeartHandshake, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, RotateCcw, ShoppingCart, Truck, Users } from 'lucide-react';
-import { useState } from 'react';
+import { Link, NavLink, Outlet } from 'react-router-dom';
+import { ArrowLeftRight, Boxes, Building, ChevronDown, ClipboardCheck, FileText, HeartHandshake, KeyRound, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, RotateCcw, Settings, ShieldCheck, ShoppingCart, Truck, Users } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const navigation = [
@@ -17,6 +17,7 @@ const navigation = [
   { label: 'Danh mục thuốc', to: '/drugs', icon: Pill, roles: ['OWNER'] },
   { label: 'Mạng lưới chi nhánh', to: '/branches', icon: Building, roles: ['OWNER'] },
   { label: 'Quản lý nhân viên', to: '/users', icon: Users, roles: ['OWNER'] },
+  { label: 'Bảo mật & Nhật ký', to: '/security/audit-logs', icon: ShieldCheck, roles: ['OWNER'] },
   { label: 'Tổng quan chi nhánh', to: '/reports', icon: LayoutDashboard, roles: ['OWNER'] },
 ];
 
@@ -36,6 +37,14 @@ function getInitials(name?: string, fallback = 'PS') {
 export function AppShell() {
   const { currentUser, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountMenu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function close(event: PointerEvent) { if (!accountMenu.current?.contains(event.target as Node)) setAccountOpen(false); }
+    function escape(event: KeyboardEvent) { if (event.key === 'Escape') setAccountOpen(false); }
+    document.addEventListener('pointerdown', close); document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); };
+  }, []);
 
   const accessibleNav = navigation.filter(
     item => !item.roles || (currentUser && item.roles.includes(currentUser.role))
@@ -104,20 +113,16 @@ export function AppShell() {
           <p className="hidden text-xs font-medium text-slate-500 lg:block">
             Chi nhánh: <span className="ml-1 font-semibold text-ink">{currentUser?.branchName || currentUser?.branchId}</span>
           </p>
-          <div className="flex items-center gap-2 lg:hidden">
-            <span className="max-w-[120px] truncate text-xs font-semibold text-ink">{currentUser?.fullName || currentUser?.username}</span>
-            <button onClick={signOut} className="grid h-9 w-9 place-items-center rounded-md text-slate-500 hover:bg-slate-100" aria-label="Đăng xuất" title="Đăng xuất">
-              <LogOut size={17} />
+          <div ref={accountMenu} className="relative">
+            <button type="button" onClick={() => setAccountOpen(open => !open)} aria-label="Menu tài khoản" aria-expanded={accountOpen} className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-slate-50 sm:gap-3">
+              <span className="hidden text-right sm:block"><span className="block max-w-[240px] truncate text-[13px] font-bold text-ink">{currentUser?.fullName || currentUser?.username}</span><span className="block text-[11px] text-slate-500">{currentUser ? `${roleLabels[currentUser.role] ?? currentUser.role} (@${currentUser.username})` : ''}</span></span>
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mint font-display text-xs font-bold text-forest">{getInitials(currentUser?.fullName || currentUser?.username)}</span><ChevronDown size={14} className="text-slate-400" />
             </button>
-          </div>
-          <div className="hidden items-center gap-3 lg:flex">
-            <div className="text-right">
-              <p className="text-[13px] font-bold text-ink">{currentUser?.fullName || currentUser?.username}</p>
-              <p className="text-[11px] text-slate-500">{currentUser ? `${roleLabels[currentUser.role] ?? currentUser.role} (@${currentUser.username})` : ''}</p>
-            </div>
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-mint font-display text-xs font-bold text-forest">
-              {getInitials(currentUser?.fullName || currentUser?.username)}
-            </span>
+            {accountOpen && <nav aria-label="Tài khoản" className="absolute right-0 top-full z-30 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-panel">
+              <Link to="/settings" onClick={() => setAccountOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-mint hover:text-forest"><Settings size={16} />Hồ sơ & Cài đặt</Link>
+              <Link to="/settings#password" onClick={() => setAccountOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-mint hover:text-forest"><KeyRound size={16} />Đổi mật khẩu</Link>
+              <button type="button" onClick={() => { setAccountOpen(false); void signOut(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"><LogOut size={16} />Đăng xuất</button>
+            </nav>}
           </div>
         </header>
 

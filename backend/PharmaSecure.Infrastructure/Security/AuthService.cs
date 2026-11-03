@@ -88,7 +88,7 @@ public sealed class AuthService : IAuthService
         }
 
         var role = MapToUserRole(roleName, roleId);
-        var token = jwtTokenService.GenerateToken(userId, username, role, branchId);
+        var token = jwtTokenService.GenerateToken(userId, username, role, branchId, passwordHash);
         var profile = new UserProfileResponse(userId, username, fullName, role.ToString(), branchId, branchName);
 
         logger.LogInformation("User '{Username}' (Role: {Role}, Branch: {BranchName}) logged in successfully. IP: {IpAddress}.", username, role, branchName, ipAddress ?? "Unknown");
@@ -185,26 +185,28 @@ public sealed class AuthService : IAuthService
             command.BindByName = true;
             command.CommandText = """
                 INSERT INTO AUDIT_LOGS (id, UserId, Username, BranchId, EventType, IpAddress, UserAgent, FailureReason, CreatedDate)
-                VALUES (:id, :userId, :username, :branchId, :eventType, :ipAddress, :userAgent, :failureReason, CURRENT_TIMESTAMP)
+                VALUES (:id, :userId, :username, :branchId, :eventType, :ipAddress, :userAgent, :failureReason, :createdDate)
                 """;
             command.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = Guid.NewGuid().ToString("N");
             command.Parameters.Add("userId", OracleDbType.Varchar2, 50).Value = (object?)userId ?? DBNull.Value;
-            command.Parameters.Add("username", OracleDbType.Varchar2, 100).Value = username;
+            command.Parameters.Add("username", OracleDbType.Varchar2, 100).Value = SecurityAuditWriter.Bounded(username, 100);
             command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = (object?)branchId ?? DBNull.Value;
             command.Parameters.Add("eventType", OracleDbType.Varchar2, 50).Value = eventType;
             command.Parameters.Add("ipAddress", OracleDbType.Varchar2, 50).Value = (object?)ipAddress ?? DBNull.Value;
-            command.Parameters.Add("userAgent", OracleDbType.Varchar2, 500).Value = (object?)(userAgent?.Length > 500 ? userAgent[..500] : userAgent) ?? DBNull.Value;
+            command.Parameters.Add("userAgent", OracleDbType.Varchar2, 500).Value = (object?)SecurityAuditWriter.Bounded(SecurityAuditWriter.Sanitize(userAgent), 500) ?? DBNull.Value;
             command.Parameters.Add("failureReason", OracleDbType.Varchar2, 255).Value = (object?)failureReason ?? DBNull.Value;
+            command.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = DateTime.UtcNow;
 
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to write audit log for user '{Username}' event '{EventType}'.", username, eventType);
+            throw new PharmaSecure.Application.Features.Security.AuditPersistenceException();
         }
     }
 
-    private static UserRole MapToUserRole(string roleName, string? roleId = null)
+    internal static UserRole MapToUserRole(string roleName, string? roleId = null)
     {
         if (string.Equals(roleId, "rl-00000000-0000-0000-0000-000000000001", StringComparison.OrdinalIgnoreCase))
             return UserRole.OWNER;

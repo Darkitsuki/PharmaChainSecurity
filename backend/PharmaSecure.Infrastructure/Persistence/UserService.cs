@@ -2,6 +2,7 @@ using System.Data;
 using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Features.Users;
 using PharmaSecure.Application.Interfaces;
+using PharmaSecure.Infrastructure.Security;
 
 namespace PharmaSecure.Infrastructure.Persistence;
 
@@ -9,11 +10,13 @@ public sealed class UserService : IUserService
 {
     private readonly IUnitOfWork unitOfWork;
     private readonly IPasswordHasher passwordHasher;
+    private readonly SecurityAuditWriter audit;
 
-    public UserService(IUnitOfWork unitOfWork, IPasswordHasher passwordHasher)
+    public UserService(IUnitOfWork unitOfWork, IPasswordHasher passwordHasher, SecurityAuditWriter audit)
     {
         this.unitOfWork = unitOfWork;
         this.passwordHasher = passwordHasher;
+        this.audit = audit;
     }
 
     public async Task<IReadOnlyList<UserSummaryResponse>> GetBranchUsersAsync(
@@ -157,6 +160,7 @@ public sealed class UserService : IUserService
                 await insertCmd.ExecuteNonQueryAsync(cancellationToken);
             }
 
+            await audit.WriteAsync(unitOfWork.Connection, unitOfWork.Transaction, "USER_CREATED", "Target user: " + id, cancellationToken);
             await unitOfWork.CommitAsync(cancellationToken);
 
             return new UserSummaryResponse(
@@ -212,6 +216,8 @@ public sealed class UserService : IUserService
                 await updateCmd.ExecuteNonQueryAsync(cancellationToken);
             }
 
+            if (existing.IsActive != isActive)
+                await audit.WriteAsync(unitOfWork.Connection, unitOfWork.Transaction, isActive ? "USER_ACTIVATED" : "USER_DEACTIVATED", "Target user: " + id, cancellationToken);
             await unitOfWork.CommitAsync(cancellationToken);
 
             return existing with { IsActive = isActive };

@@ -17,6 +17,8 @@ import { ReturnsPage } from '../pages/ReturnsPage';
 import { InventoryAuditPage } from '../pages/InventoryAuditPage';
 import { StockTransferPage } from '../pages/StockTransferPage';
 import { PurchaseOrdersPage } from '../pages/PurchaseOrdersPage';
+import { SettingsPage } from '../pages/SettingsPage';
+import { AuditLogsPage } from '../pages/AuditLogsPage';
 
 function getRoleDefaultPath(role?: string) {
   if (role === 'WAREHOUSE') return '/inventory';
@@ -51,6 +53,7 @@ export function AppRoutes() {
           <Route path="checkout" element={<CheckoutPage />} />
           <Route path="invoices" element={<InvoicesPage />} />
           <Route path="inventory" element={<InventoryPage />} />
+          <Route path="settings" element={<SettingsPage />} />
 
           {/* Role-guarded routes */}
           <Route element={<RequireAuth allowedRoles={['OWNER', 'SALES']} />}>
@@ -66,6 +69,7 @@ export function AppRoutes() {
             <Route path="suppliers" element={<SuppliersPage />} />
           </Route>
           <Route element={<RequireAuth allowedRoles={['OWNER']} />}>
+            <Route path="security/audit-logs" element={<AuditLogsPage />} />
             <Route path="drugs" element={<DrugCatalogPage />} />
             <Route path="branches" element={<BranchesPage />} />
             <Route path="users" element={<UsersPage />} />

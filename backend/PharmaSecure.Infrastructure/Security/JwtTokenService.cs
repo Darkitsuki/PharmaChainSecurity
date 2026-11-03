@@ -17,7 +17,7 @@ public sealed class JwtTokenService : IJwtTokenService
         this.options = options.Value;
     }
 
-    public string GenerateToken(string userId, string username, UserRole role, string branchId)
+    public string GenerateToken(string userId, string username, UserRole role, string branchId, string? passwordHash = null)
     {
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("User ID is required.", nameof(userId));
@@ -35,6 +35,8 @@ public sealed class JwtTokenService : IJwtTokenService
         var roleCode = role.ToString();
         var claims = new[]
         {
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new Claim("pwdv", passwordHash is null ? "" : SessionCredentialValidator.Stamp(passwordHash, secretKey)),
             new Claim("UserId", userId),
             new Claim("RoleCode", roleCode),
             new Claim("BranchId", branchId),

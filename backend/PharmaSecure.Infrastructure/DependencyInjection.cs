@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
@@ -33,6 +34,14 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddSingleton<IPasswordHasher, BouncyCastlePasswordHasher>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<AuditAccessStore>();
+        services.AddSingleton<IAuditOtpDelivery, UnavailableAuditOtpDelivery>();
+        services.AddScoped<SecurityAuditWriter>();
+        services.AddScoped<SessionCredentialValidator>();
+        services.AddScoped<IAccountSettingsService, AccountSettingsService>();
+        services.AddScoped<IAuditAccessService, AuditAccessService>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
         services.AddSingleton<IIdempotencyService, MemoryIdempotencyService>();
         services.Configure<DigitalSignatureOptions>(configuration.GetSection("DigitalSignature"));
         services.AddSingleton<IDigitalSignatureService, DigitalSignatureService>();
@@ -77,10 +86,22 @@ public static class DependencyInjection
                     RoleClaimType = ClaimTypes.Role,
                     NameClaimType = ClaimTypes.Name
                 };
+                options.IncludeErrorDetails = false;
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = async context =>
+                    {
+                        if (!await context.HttpContext.RequestServices.GetRequiredService<SessionCredentialValidator>()
+                            .ValidateAsync(context.Principal!, context.HttpContext.RequestAborted))
+                            context.Fail("Phiên đăng nhập đã thay đổi. Vui lòng đăng nhập lại.");
+                    }
+                };
             });
         services.AddAuthorization(options =>
         {
             options.AddPolicy("OwnerOnly", policy => policy.RequireRole("OWNER"));
+            options.AddPolicy("AuditStepUp", policy => policy.RequireRole("OWNER").RequireAssertion(context =>
+                context.Resource is HttpContext http && http.RequestServices.GetRequiredService<IAuditAccessService>().HasAccess()));
             options.AddPolicy("SalesOnly", policy => policy.RequireRole("SALES"));
             options.AddPolicy("WarehouseOnly", policy => policy.RequireRole("WAREHOUSE"));
             options.AddPolicy("InventoryRead", policy => policy.RequireRole("OWNER", "SALES", "WAREHOUSE"));
