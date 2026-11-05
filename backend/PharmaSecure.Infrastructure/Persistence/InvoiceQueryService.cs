@@ -41,7 +41,9 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             var items = new List<InvoiceResponse>();
             await using var command = CreateCommand("""
                 SELECT i.id, i.InvoiceNo, i.CreatedDate, i.TotalAmount, i.BranchId, i.CashierId,
-                       NVL(i.Status, 'COMPLETED'), i.CancelledBy, u.FullName AS CancelledByName,
+                       NVL(i.Status, 'COMPLETED'),
+                       NVL(i.PaymentMethod, 'CASH'), NVL(i.PaymentStatus, 'PAID'), NVL(i.PaidAmount, 0), i.PaidAt,
+                       i.CancelledBy, u.FullName AS CancelledByName,
                        i.CancelledDate, i.CancelReason,
                        i.LastVerifiedAt, i.VerifiedBy, uv.FullName AS VerifiedByName
                 FROM INVOICES i
@@ -65,13 +67,17 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                     reader.GetString(4),
                     reader.GetString(5),
                     reader.IsDBNull(6) ? "COMPLETED" : reader.GetString(6),
-                    reader.IsDBNull(7) ? null : reader.GetString(7),
-                    reader.IsDBNull(8) ? null : reader.GetString(8),
-                    reader.IsDBNull(9) ? null : (DateTime?)reader.GetDateTime(9),
-                    reader.IsDBNull(10) ? null : reader.GetString(10),
-                    reader.IsDBNull(11) ? null : (DateTime?)reader.GetDateTime(11),
+                    reader.IsDBNull(7) ? "CASH" : reader.GetString(7),
+                    reader.IsDBNull(8) ? "PAID" : reader.GetString(8),
+                    reader.IsDBNull(9) ? 0 : reader.GetDecimal(9),
+                    reader.IsDBNull(10) ? null : (DateTime?)reader.GetDateTime(10),
+                    reader.IsDBNull(11) ? null : reader.GetString(11),
                     reader.IsDBNull(12) ? null : reader.GetString(12),
-                    reader.IsDBNull(13) ? null : reader.GetString(13)
+                    reader.IsDBNull(13) ? null : (DateTime?)reader.GetDateTime(13),
+                    reader.IsDBNull(14) ? null : reader.GetString(14),
+                    reader.IsDBNull(15) ? null : (DateTime?)reader.GetDateTime(15),
+                    reader.IsDBNull(16) ? null : reader.GetString(16),
+                    reader.IsDBNull(17) ? null : reader.GetString(17)
                 ));
             }
 
@@ -117,7 +123,9 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
         await using var headerCommand = CreateCommand("""
             SELECT i.id, i.InvoiceNo, i.CreatedDate, i.TotalAmount, i.BranchId, i.CashierId,
                    i.CustomerId, c.FullName, c.PhoneNumber,
-                   NVL(i.Status, 'COMPLETED'), i.CancelledBy, uc.FullName AS CancelledByName,
+                   NVL(i.Status, 'COMPLETED'),
+                   NVL(i.PaymentMethod, 'CASH'), NVL(i.PaymentStatus, 'PAID'), NVL(i.PaidAmount, 0), i.PaidAt,
+                   i.CancelledBy, uc.FullName AS CancelledByName,
                    i.CancelledDate, i.CancelReason,
                    i.LastVerifiedAt, i.VerifiedBy, uv.FullName AS VerifiedByName
             FROM INVOICES i
@@ -145,13 +153,17 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
         var custName = headerReader.IsDBNull(7) ? null : headerReader.GetString(7);
         var custPhone = headerReader.IsDBNull(8) ? null : headerReader.GetString(8);
         var status = headerReader.IsDBNull(9) ? "COMPLETED" : headerReader.GetString(9);
-        var cancelledById = headerReader.IsDBNull(10) ? null : headerReader.GetString(10);
-        var cancelledByName = headerReader.IsDBNull(11) ? null : headerReader.GetString(11);
-        var cancelledDate = headerReader.IsDBNull(12) ? null : (DateTime?)headerReader.GetDateTime(12);
-        var cancelReason = headerReader.IsDBNull(13) ? null : headerReader.GetString(13);
-        var lastVerifiedAt = headerReader.IsDBNull(14) ? null : (DateTime?)headerReader.GetDateTime(14);
-        var verifiedById = headerReader.IsDBNull(15) ? null : headerReader.GetString(15);
-        var verifiedByName = headerReader.IsDBNull(16) ? null : headerReader.GetString(16);
+        var paymentMethod = headerReader.IsDBNull(10) ? "CASH" : headerReader.GetString(10);
+        var paymentStatus = headerReader.IsDBNull(11) ? "PAID" : headerReader.GetString(11);
+        var paidAmount = headerReader.IsDBNull(12) ? 0 : headerReader.GetDecimal(12);
+        var paidAt = headerReader.IsDBNull(13) ? null : (DateTime?)headerReader.GetDateTime(13);
+        var cancelledById = headerReader.IsDBNull(14) ? null : headerReader.GetString(14);
+        var cancelledByName = headerReader.IsDBNull(15) ? null : headerReader.GetString(15);
+        var cancelledDate = headerReader.IsDBNull(16) ? null : (DateTime?)headerReader.GetDateTime(16);
+        var cancelReason = headerReader.IsDBNull(17) ? null : headerReader.GetString(17);
+        var lastVerifiedAt = headerReader.IsDBNull(18) ? null : (DateTime?)headerReader.GetDateTime(18);
+        var verifiedById = headerReader.IsDBNull(19) ? null : headerReader.GetString(19);
+        var verifiedByName = headerReader.IsDBNull(20) ? null : headerReader.GetString(20);
         await headerReader.CloseAsync();
 
         var items = await QueryItemsInternalAsync(invoiceId, cancellationToken);
@@ -170,6 +182,10 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             custName,
             custPhone,
             status,
+            paymentMethod,
+            paymentStatus,
+            paidAmount,
+            paidAt,
             cancelledById,
             cancelledByName,
             cancelledDate,
@@ -586,4 +602,177 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
         command.CommandText = commandText;
         return command;
     }
+
+    public async Task<InvoiceDetailResponse> ConfirmPaymentAsync(
+        string branchId,
+        string invoiceId,
+        string cashierId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(branchId))
+            throw new ArgumentException("Branch ID is required.", nameof(branchId));
+        if (string.IsNullOrWhiteSpace(invoiceId))
+            throw new ArgumentException("Invoice ID is required.", nameof(invoiceId));
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var lockCommand = CreateCommand("""
+                SELECT InvoiceNo, Status, NVL(PaymentStatus, 'PAID'), TotalAmount
+                FROM INVOICES
+                WHERE id = :id AND BranchId = :branchId
+                FOR UPDATE
+                """);
+            lockCommand.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = invoiceId;
+            lockCommand.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+            string invoiceNo;
+            string status;
+            string paymentStatus;
+            decimal totalAmount;
+            await using (var reader = await lockCommand.ExecuteReaderAsync(cancellationToken))
+            {
+                if (!await reader.ReadAsync(cancellationToken))
+                    throw new InvalidOperationException("Không tìm thấy hóa đơn tại chi nhánh.");
+
+                invoiceNo = reader.GetString(0);
+                status = reader.IsDBNull(1) ? "COMPLETED" : reader.GetString(1);
+                paymentStatus = reader.GetString(2);
+                totalAmount = reader.GetDecimal(3);
+            }
+
+            if (string.Equals(status, "CANCELLED", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Hóa đơn {invoiceNo} đã bị hủy, không thể thu tiền.");
+
+            if (string.Equals(paymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Hóa đơn {invoiceNo} đã được thanh toán từ trước.");
+
+            await using var updateCmd = CreateCommand("""
+                UPDATE INVOICES
+                SET PaymentStatus = 'PAID',
+                    PaidAmount = TotalAmount,
+                    PaidAt = CURRENT_TIMESTAMP
+                WHERE id = :id AND BranchId = :branchId
+                """);
+            updateCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = invoiceId;
+            updateCmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+            await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            var result = await GetByIdInternalAsync(branchId, invoiceId, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return result!;
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+
+    public async Task<IReadOnlyCollection<PatientOrderSummaryDto>> GetPatientOrdersAsync(
+        string phoneNumber,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+            return Array.Empty<PatientOrderSummaryDto>();
+
+        var cleanPhone = phoneNumber.Trim();
+        const string defaultBranchId = "br-00000000-0000-0000-0000-000000000001";
+
+        await unitOfWork.BeginTransactionAsync(defaultBranchId, cancellationToken);
+        try
+        {
+            var orders = new List<PatientOrderSummaryDto>();
+            await using var command = CreateCommand("""
+                SELECT i.id, i.InvoiceNo, i.CreatedDate, i.TotalAmount, i.BranchId, b.Name AS BranchName,
+                       NVL(i.Status, 'COMPLETED'),
+                       NVL(i.PaymentMethod, 'CASH'), NVL(i.PaymentStatus, 'PAID'), NVL(i.PaidAmount, 0), i.PaidAt,
+                       i.CancelReason, i.CancelledDate,
+                       ds.HashValue_SHA256,
+                       c.FullName AS CustomerName,
+                       c.PhoneNumber,
+                       c.Address AS DeliveryAddress
+                FROM INVOICES i
+                JOIN BRANCHES b ON i.BranchId = b.id
+                JOIN CUSTOMERS c ON i.CustomerId = c.id
+                LEFT JOIN DIGITAL_SIGNATURES ds ON ds.InvoiceId = i.id
+                WHERE c.PhoneNumber = :phone
+                ORDER BY i.CreatedDate DESC
+                """);
+            command.Parameters.Add("phone", OracleDbType.Varchar2, 20).Value = cleanPhone;
+
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            {
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    orders.Add(new PatientOrderSummaryDto(
+                        reader.GetString(0),
+                        reader.GetString(1),
+                        reader.GetDateTime(2),
+                        reader.GetDecimal(3),
+                        reader.GetString(4),
+                        reader.GetString(5),
+                        reader.GetString(6),
+                        reader.GetString(7),
+                        reader.GetString(8),
+                        reader.GetDecimal(9),
+                        reader.IsDBNull(10) ? null : (DateTime?)reader.GetDateTime(10),
+                        reader.IsDBNull(11) ? null : reader.GetString(11),
+                        reader.IsDBNull(12) ? null : (DateTime?)reader.GetDateTime(12),
+                        reader.IsDBNull(13) ? null : reader.GetString(13),
+                        reader.IsDBNull(14) ? null : reader.GetString(14),
+                        reader.IsDBNull(15) ? null : reader.GetString(15),
+                        reader.IsDBNull(16) ? null : reader.GetString(16),
+                        Array.Empty<PatientOrderItemDto>()
+                    ));
+                }
+            }
+
+            if (orders.Count > 0)
+            {
+                var ordersWithItems = new List<PatientOrderSummaryDto>();
+                foreach (var order in orders)
+                {
+                    await using var itemsCmd = CreateCommand("""
+                        SELECT ii.DrugId, d.DrugCode, d.Name, ii.BatchId, ii.Quantity, ii.UnitPrice, ii.SubTotal
+                        FROM INVOICE_ITEMS ii
+                        JOIN DRUGS d ON ii.DrugId = d.id
+                        WHERE ii.InvoiceId = :invoiceId
+                        ORDER BY d.Name
+                        """);
+                    itemsCmd.Parameters.Add("invoiceId", OracleDbType.Varchar2, 50).Value = order.InvoiceId;
+
+                    var items = new List<PatientOrderItemDto>();
+                    await using (var itemReader = await itemsCmd.ExecuteReaderAsync(cancellationToken))
+                    {
+                        while (await itemReader.ReadAsync(cancellationToken))
+                        {
+                            items.Add(new PatientOrderItemDto(
+                                itemReader.GetString(0),
+                                itemReader.GetString(1),
+                                itemReader.GetString(2),
+                                itemReader.GetString(3),
+                                itemReader.GetInt32(4),
+                                itemReader.GetDecimal(5),
+                                itemReader.GetDecimal(6)
+                            ));
+                        }
+                    }
+
+                    ordersWithItems.Add(order with { Items = items });
+                }
+                orders = ordersWithItems;
+            }
+
+            await unitOfWork.CommitAsync(cancellationToken);
+            return orders;
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
 }

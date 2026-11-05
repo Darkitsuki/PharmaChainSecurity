@@ -335,6 +335,111 @@ public sealed class CustomerService : ICustomerService
         }
     }
 
+    public async Task<CustomerResponse> IdentifyAsync(
+        IdentifyCustomerRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+            throw new ArgumentException("Số điện thoại khách hàng là bắt buộc.", nameof(request));
+
+        var cleanPhone = request.PhoneNumber.Trim();
+        var branchId = !string.IsNullOrWhiteSpace(request.BranchId)
+            ? request.BranchId
+            : (branchContextAccessor.BranchId ?? "br-00000000-0000-0000-0000-000000000001");
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var queryCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
+            queryCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+            queryCmd.BindByName = true;
+            queryCmd.CommandText = """
+                SELECT id, CustomerCode, FullName, PhoneNumber, Email, Address, BranchId, TotalSpent, Points, IsActive, CreatedDate
+                FROM CUSTOMERS
+                WHERE PhoneNumber = :phone
+                """;
+            queryCmd.Parameters.Add("phone", OracleDbType.Varchar2, 20).Value = cleanPhone;
+
+            await using var reader = await queryCmd.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                var existing = MapCustomer(reader);
+                await reader.CloseAsync();
+
+                var newName = !string.IsNullOrWhiteSpace(request.FullName) ? request.FullName.Trim() : existing.FullName;
+                var newAddress = !string.IsNullOrWhiteSpace(request.Address) ? request.Address.Trim() : existing.Address;
+
+                if (!string.Equals(newName, existing.FullName, StringComparison.Ordinal) ||
+                    !string.Equals(newAddress, existing.Address, StringComparison.Ordinal))
+                {
+                    await using var updateCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
+                    updateCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+                    updateCmd.BindByName = true;
+                    updateCmd.CommandText = """
+                        UPDATE CUSTOMERS
+                        SET FullName = :fullName, Address = :address
+                        WHERE id = :id
+                        """;
+                    updateCmd.Parameters.Add("fullName", OracleDbType.Varchar2, 255).Value = newName;
+                    updateCmd.Parameters.Add("address", OracleDbType.Varchar2, 500).Value = (object?)newAddress ?? DBNull.Value;
+                    updateCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = existing.Id;
+                    await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+
+                    existing = existing with { FullName = newName, Address = newAddress };
+                }
+
+                await unitOfWork.CommitAsync(cancellationToken);
+                return existing;
+            }
+
+            await reader.CloseAsync();
+
+            var id = Guid.NewGuid().ToString("D");
+            var code = $"KH{DateTime.UtcNow:yyMMddHHmmss}";
+            var fullName = !string.IsNullOrWhiteSpace(request.FullName) ? request.FullName.Trim() : $"Khách hàng {cleanPhone}";
+            var address = !string.IsNullOrWhiteSpace(request.Address) ? request.Address.Trim() : null;
+            var createdDate = DateTime.UtcNow;
+
+            await using var insertCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
+            insertCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+            insertCmd.BindByName = true;
+            insertCmd.CommandText = """
+                INSERT INTO CUSTOMERS (id, CustomerCode, FullName, PhoneNumber, Email, Address, BranchId, TotalSpent, Points, CreatedDate, IsActive)
+                VALUES (:id, :code, :fullName, :phone, NULL, :address, :branchId, 0, 0, :createdDate, 1)
+                """;
+            insertCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id;
+            insertCmd.Parameters.Add("code", OracleDbType.Varchar2, 50).Value = code;
+            insertCmd.Parameters.Add("fullName", OracleDbType.Varchar2, 255).Value = fullName;
+            insertCmd.Parameters.Add("phone", OracleDbType.Varchar2, 20).Value = cleanPhone;
+            insertCmd.Parameters.Add("address", OracleDbType.Varchar2, 500).Value = (object?)address ?? DBNull.Value;
+            insertCmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+            insertCmd.Parameters.Add("createdDate", OracleDbType.TimeStamp).Value = createdDate;
+
+            await insertCmd.ExecuteNonQueryAsync(cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+
+            return new CustomerResponse(
+                id,
+                code,
+                fullName,
+                cleanPhone,
+                null,
+                address,
+                branchId,
+                0m,
+                0,
+                true,
+                createdDate);
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+
     private static CustomerResponse MapCustomer(OracleDataReader reader)
     {
         return new CustomerResponse(

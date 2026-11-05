@@ -45,7 +45,11 @@ public class InvoicesControllerCancellationTests
         var expectedDetail = new InvoiceDetailResponse(
             TestInvoiceId, "HD20261020-001", DateTime.UtcNow, 250000m, TestBranchId, TestOwnerId,
             Array.Empty<InvoiceItemResponse>(), null, null, null, null,
-            "CANCELLED", TestOwnerId, "Chủ nhà thuốc", DateTime.UtcNow, "Xuất nhầm số lượng cho khách"
+            Status: "CANCELLED",
+            CancelledById: TestOwnerId,
+            CancelledByName: "Chủ nhà thuốc",
+            CancelledDate: DateTime.UtcNow,
+            CancelReason: "Xuất nhầm số lượng cho khách"
         );
 
         invoiceQueryServiceMock.Setup(s => s.CancelInvoiceAsync(

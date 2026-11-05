@@ -1,7 +1,8 @@
+import 'package:flutter/foundation.dart';
 import '../core/network/api_client.dart';
 import '../data/models/order_model.dart';
 
-class OrderService {
+class OrderService extends ChangeNotifier {
   OrderService({this.api, this.tokenProvider, this.defaultBranchId});
 
   final ApiClient? api;
@@ -9,48 +10,63 @@ class OrderService {
   final String? defaultBranchId;
 
   final List<CustomerOrderResult> _orderHistory = [];
+  bool _isLoading = false;
+  String? _lastError;
 
   List<CustomerOrderResult> get orderHistory => List.unmodifiable(_orderHistory);
+  bool get isLoading => _isLoading;
+  String? get lastError => _lastError;
+
+  Future<List<CustomerOrderResult>> fetchCustomerOrders(String phoneNumber) async {
+    final client = api;
+    final cleanPhone = phoneNumber.trim();
+    if (cleanPhone.isEmpty) {
+      _orderHistory.clear();
+      notifyListeners();
+      return [];
+    }
+
+    if (client != null) {
+      _isLoading = true;
+      _lastError = null;
+      notifyListeners();
+
+      try {
+        final res = await client.get('/patient/orders?phoneNumber=$cleanPhone');
+        final rawItems = res['items'] ?? res['data'];
+        final List<dynamic> data = rawItems is List ? rawItems : [];
+        final fetchedOrders = data
+            .whereType<Map<String, dynamic>>()
+            .map(CustomerOrderResult.fromApiJson)
+            .toList();
+
+        _orderHistory
+          ..clear()
+          ..addAll(fetchedOrders);
+        _isLoading = false;
+        notifyListeners();
+        return _orderHistory;
+      } catch (e) {
+        debugPrint('OrderService.fetchCustomerOrders error: $e');
+        _lastError = e.toString();
+        _isLoading = false;
+        notifyListeners();
+        return _orderHistory;
+      }
+    }
+
+    return _orderHistory;
+  }
 
   Future<CustomerOrderResult> placeOrder(CustomerOrderRequest request) async {
     final client = api;
     final token = tokenProvider?.call();
 
-    if (client != null && token != null) {
+    if (client != null) {
       try {
-        // 1. Try to find or register customer by phone number
-        String? customerId;
-        try {
-          final customerSearch = await client.get('/customers?phone=${Uri.encodeComponent(request.phoneNumber)}', token: token);
-          final customerItems = customerSearch['items'] ?? customerSearch['data'];
-          if (customerItems is List && customerItems.isNotEmpty) {
-            final firstItem = customerItems.first;
-            if (firstItem is Map) {
-              customerId = firstItem['id'] as String?;
-            }
-          }
-        } catch (_) {
-          // Ignore lookup errors
-        }
-
-        if (customerId == null) {
-          try {
-            final newCustomer = await client.post('/customers', body: {
-              'fullName': request.customerName,
-              'phoneNumber': request.phoneNumber,
-              'address': request.deliveryAddress ?? request.branchName,
-              'email': '${request.phoneNumber}@pharmasecure.vn',
-            }, token: token);
-            customerId = newCustomer['id'] as String?;
-          } catch (_) {
-            // If conflict or validation error, proceed without customerId or use phone
-          }
-        }
-
-        // 2. Prepare checkout lines
+        // 1. Prepare checkout lines (resolve batches if empty)
         final lines = <Map<String, dynamic>>[];
         for (final item in request.items) {
-          // If batch not selected, fetch first available batch
           String batchId = item.batch?.batchId ?? '';
           if (batchId.isEmpty) {
             try {
@@ -65,10 +81,6 @@ class OrderService {
             } catch (_) {}
           }
 
-          if (batchId.isEmpty) {
-            batchId = 'BATCH-${item.drug.drugCode}-01';
-          }
-
           lines.add({
             'drugId': item.drug.drugId,
             'batchId': batchId,
@@ -76,11 +88,18 @@ class OrderService {
           });
         }
 
-        // 3. Post checkout
-        final checkoutRes = await client.post('/checkout', body: {
+        // 2. Post checkout: use /patient/checkout for online patient orders
+        const endpoint = '/patient/checkout';
+        final payload = {
+          'phoneNumber': request.phoneNumber,
+          'customerName': request.customerName,
+          'branchId': request.branchId,
+          'deliveryAddress': request.deliveryAddress,
+          'paymentMethod': request.paymentMethod == PaymentMethod.qrTransfer ? 'QR_CODE' : 'CASH',
           'lines': lines,
-          'customerId': customerId,
-        }, token: token);
+        };
+
+        final checkoutRes = await client.post(endpoint, body: payload, token: token);
 
         final result = CustomerOrderResult.fromJson(
           checkoutRes,
@@ -93,8 +112,10 @@ class OrderService {
         );
 
         _orderHistory.insert(0, result);
+        notifyListeners();
         return result;
       } catch (e) {
+        debugPrint('OrderService.placeOrder error: $e');
         if (e is ApiException) rethrow;
       }
     }
@@ -119,7 +140,7 @@ class OrderService {
     );
 
     _orderHistory.insert(0, result);
+    notifyListeners();
     return result;
   }
 }
-

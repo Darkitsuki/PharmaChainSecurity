@@ -34,6 +34,60 @@ public sealed class CustomersController : ControllerBase
         return Ok(customers);
     }
 
+    [HttpPost("identify")]
+    [AllowAnonymous]
+    public async Task<IActionResult> IdentifyCustomer(
+        [FromBody] IdentifyCustomerRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.PhoneNumber))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Validation Error",
+                Detail = "Số điện thoại là bắt buộc."
+            });
+        }
+
+        var cleanPhone = request.PhoneNumber.Trim();
+        if (cleanPhone.Length < 9 || cleanPhone.Length > 15)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Validation Error",
+                Detail = "Số điện thoại không hợp lệ (từ 9 đến 15 chữ số)."
+            });
+        }
+
+        try
+        {
+            var customer = await customerService.IdentifyAsync(request, cancellationToken);
+            return Ok(customer);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Validation Error",
+                Detail = ex.Message
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Lỗi định danh khách hàng qua số điện thoại {Phone}", request.PhoneNumber);
+            return StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails
+            {
+                Status = StatusCodes.Status500InternalServerError,
+                Title = "Lỗi máy chủ",
+                Detail = "Không thể xử lý định danh khách hàng."
+            });
+        }
+    }
+
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(
         string id,

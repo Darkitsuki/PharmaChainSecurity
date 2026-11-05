@@ -9,7 +9,9 @@ public sealed record CheckoutRequest(
     string BranchId,
     string CashierId,
     IReadOnlyCollection<CheckoutLineRequest> Lines,
-    string? CustomerId = null);
+    string? CustomerId = null,
+    string PaymentMethod = "CASH",
+    bool IsPendingPayment = false);
 
 public sealed record CheckoutResponse(
     string InvoiceId,
@@ -17,4 +19,5 @@ public sealed record CheckoutResponse(
     decimal TotalAmount,
     string HashValueSha256,
     string? CustomerId = null,
-    string? CustomerName = null);
+    string? CustomerName = null,
+    string PaymentStatus = "PAID");

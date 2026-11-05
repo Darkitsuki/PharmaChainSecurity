@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Canonical RBAC Roles matching backend domain (Rule 04).
  */
 export type UserRole = 'OWNER' | 'SALES' | 'WAREHOUSE';
@@ -84,6 +84,10 @@ export interface Invoice {
   branchId: string;
   cashierId: string;
   status?: 'COMPLETED' | 'CANCELLED';
+  paymentMethod?: 'CASH' | 'BANK_TRANSFER' | 'QR_CODE' | 'CREDIT_CARD';
+  paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+  paidAmount?: number;
+  paidAt?: string | null;
   cancelledById?: string | null;
   cancelledByName?: string | null;
   cancelledDate?: string | null;
@@ -159,6 +163,10 @@ export interface InvoiceDetail {
   customerName?: string | null;
   customerPhone?: string | null;
   status?: 'COMPLETED' | 'CANCELLED';
+  paymentMethod?: 'CASH' | 'BANK_TRANSFER' | 'QR_CODE' | 'CREDIT_CARD';
+  paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
+  paidAmount?: number;
+  paidAt?: string | null;
   cancelledById?: string | null;
   cancelledByName?: string | null;
   cancelledDate?: string | null;
@@ -548,3 +556,23 @@ export interface CreateStockTransferPayload {
 
 
 
+
+export interface NotificationItem {
+  id: string;
+  category: 'ORDER' | 'PROCUREMENT' | 'INVENTORY';
+  type: string;
+  title: string;
+  subtitle: string;
+  targetUrl: string;
+  timestamp: string;
+  severity: 'INFO' | 'WARNING' | 'URGENT';
+  amount?: number;
+}
+
+export interface NotificationSummary {
+  totalUnread: number;
+  ordersCount: number;
+  procurementCount: number;
+  inventoryAlertsCount: number;
+  items: NotificationItem[];
+}

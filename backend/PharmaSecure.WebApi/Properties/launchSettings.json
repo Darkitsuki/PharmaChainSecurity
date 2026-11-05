@@ -5,7 +5,7 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "ORACLE_DATA_SOURCE": "192.168.2.166:1521/FREEPDB1",
+        "ORACLE_DATA_SOURCE": "192.168.2.200:1521/FREEPDB1",
         "ORACLE_USER": "PHARMA_ADMIN",
         "ORACLE_PASSWORD": "admin123",
         "JWT_SECRET": "DEV_ONLY_PHARMASECURE_JWT_SIGNING_KEY_2026_DO_NOT_DEPLOY",

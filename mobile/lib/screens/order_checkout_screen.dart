@@ -80,6 +80,9 @@ class _OrderCheckoutScreenState extends State<OrderCheckoutScreen> {
         context,
         initialPhone: _phoneController.text.trim(),
         initialName: _nameController.text.trim(),
+        initialAddress: _addressController.text.trim(),
+        api: widget.orderService.api,
+        branchId: _selectedBranchId,
       );
       if (user == null) return; // User dismissed auth
       if (!mounted) return;
@@ -155,21 +158,57 @@ class _OrderCheckoutScreenState extends State<OrderCheckoutScreen> {
                 style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.forest, fontSize: 15),
               ),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.mint,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.verified_outlined, size: 14, color: AppColors.forest),
-                    SizedBox(width: 6),
-                    Text('ĐÃ KÝ SỐ HSM (SHA-256)',
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.forest)),
-                  ],
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: result.paymentStatus == 'PENDING'
+                          ? const Color(0xFFFEF3C7)
+                          : AppColors.mint,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          result.paymentStatus == 'PENDING' ? Icons.schedule : Icons.check_circle_outline,
+                          size: 14,
+                          color: result.paymentStatus == 'PENDING' ? const Color(0xFFB45309) : AppColors.forest,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          result.paymentStatus == 'PENDING'
+                              ? 'CHỜ THANH TOÁN TẠI QUẦY'
+                              : 'ĐÃ THANH TOÁN',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: result.paymentStatus == 'PENDING' ? const Color(0xFFB45309) : AppColors.forest,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.mint,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.verified_outlined, size: 14, color: AppColors.forest),
+                        SizedBox(width: 4),
+                        Text('KÝ SỐ HSM',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.forest)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 14),
               Text(
@@ -274,6 +313,9 @@ class _OrderCheckoutScreenState extends State<OrderCheckoutScreen> {
                             context,
                             initialPhone: _phoneController.text.trim(),
                             initialName: _nameController.text.trim(),
+                            initialAddress: _addressController.text.trim(),
+                            api: widget.orderService.api,
+                            branchId: _selectedBranchId,
                           );
                           if (user != null) {
                             setState(() {

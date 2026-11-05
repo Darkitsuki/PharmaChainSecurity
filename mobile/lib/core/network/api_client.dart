@@ -61,6 +61,7 @@ class ApiClient {
       }
       if (response.statusCode == 204) return {};
       final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is List) return {'items': decoded, 'data': decoded};
       if (decoded is! Map<String, dynamic>) throw const FormatException();
       return decoded;
     } on ApiException {

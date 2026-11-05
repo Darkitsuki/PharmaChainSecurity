@@ -240,4 +240,54 @@ public class CustomersControllerTests
         var problem = Assert.IsType<ProblemDetails>(conflictResult.Value);
         Assert.Equal(StatusCodes.Status409Conflict, problem.Status);
     }
+
+    [Fact]
+    public async Task IdentifyCustomer_WhenValidRequest_ReturnsOkWithCustomer()
+    {
+        // Arrange
+        var request = new IdentifyCustomerRequest("0908123456", "Nguyen Van An", "123 Hai Ba Trung");
+        var expected = new CustomerResponse(
+            "cus-new",
+            "KH0908123456",
+            "Nguyen Van An",
+            "0908123456",
+            null,
+            "123 Hai Ba Trung",
+            "br-00000000-0000-0000-0000-000000000001",
+            0m,
+            0,
+            true,
+            DateTime.UtcNow);
+
+        customerServiceMock.Setup(s => s.IdentifyAsync(request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        var controller = CreateController();
+
+        // Act
+        var result = await controller.IdentifyCustomer(request, CancellationToken.None);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var returned = Assert.IsType<CustomerResponse>(okResult.Value);
+        Assert.Equal("0908123456", returned.PhoneNumber);
+        Assert.Equal("Nguyen Van An", returned.FullName);
+    }
+
+    [Fact]
+    public async Task IdentifyCustomer_WhenPhoneEmpty_ReturnsBadRequest()
+    {
+        // Arrange
+        var request = new IdentifyCustomerRequest("");
+        var controller = CreateController();
+
+        // Act
+        var result = await controller.IdentifyCustomer(request, CancellationToken.None);
+
+        // Assert
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result);
+        var problem = Assert.IsType<ProblemDetails>(badRequestResult.Value);
+        Assert.Equal(StatusCodes.Status400BadRequest, problem.Status);
+    }
+
 }

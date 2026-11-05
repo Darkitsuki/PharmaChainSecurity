@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using PharmaSecure.Application.Features.Security;
+using PharmaSecure.Application.Features.Customers;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Features.Invoices;
@@ -159,6 +161,163 @@ public sealed class InvoicesController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 
+    [HttpPost("patient/checkout")]
+    [HttpPost("~/api/v1/patient/checkout")]
+    [AllowAnonymous]
+    public async Task<ActionResult> PatientCheckoutAsync(
+        [FromBody] PatientCheckoutRequest request,
+        [FromServices] ICustomerService customerService,
+        [FromServices] IDrugQueryService drugQueryService,
+        CancellationToken cancellationToken = default)
+    {
+        if (request is null)
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Dữ liệu đặt hàng không được rỗng.");
+        if (string.IsNullOrWhiteSpace(request.PhoneNumber))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Số điện thoại người nhận là bắt buộc.");
+        if (request.Lines is null || request.Lines.Count == 0)
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Đơn hàng phải có ít nhất một mặt hàng thuốc.");
+
+        var branchId = !string.IsNullOrWhiteSpace(request.BranchId)
+            ? request.BranchId
+            : "br-00000000-0000-0000-0000-000000000001";
+
+        var cashierId = branchId == "br-00000000-0000-0000-0000-000000000002"
+            ? "us-00000000-0000-0000-0000-000000000005"
+            : "us-00000000-0000-0000-0000-000000000003";
+
+        try
+        {
+            var customer = await customerService.IdentifyAsync(
+                new IdentifyCustomerRequest(
+                    request.PhoneNumber.Trim(),
+                    request.CustomerName?.Trim(),
+                    request.DeliveryAddress?.Trim(),
+                    branchId),
+                cancellationToken);
+
+            // Tự động resolve số lô thực tế theo FEFO nếu client chưa truyền hoặc truyền mã giả lập
+            var checkoutLines = new List<CheckoutLineRequest>();
+            foreach (var line in request.Lines)
+            {
+                var batchId = line.BatchId;
+                if (string.IsNullOrWhiteSpace(batchId) || batchId.StartsWith("BATCH-", StringComparison.OrdinalIgnoreCase))
+                {
+                    var availableBatches = await drugQueryService.GetBatchesAsync(branchId, line.DrugId, cancellationToken);
+                    var matchingBatch = availableBatches
+                        .Where(b => b.StockQuantity >= line.Quantity && b.ExpiryDate > DateTime.UtcNow)
+                        .OrderBy(b => b.ExpiryDate)
+                        .FirstOrDefault()
+                        ?? availableBatches
+                            .Where(b => b.StockQuantity > 0)
+                            .OrderBy(b => b.ExpiryDate)
+                            .FirstOrDefault();
+
+                    if (matchingBatch is null)
+                    {
+                        return UnprocessableEntity(new ProblemDetails
+                        {
+                            Title = "Tồn kho không đủ",
+                            Detail = $"Mặt hàng thuốc tại chi nhánh tạm thời hết hàng hoặc không có lô khả dụng.",
+                            Status = StatusCodes.Status422UnprocessableEntity
+                        });
+                    }
+
+                    batchId = matchingBatch.BatchId;
+                }
+
+                checkoutLines.Add(new CheckoutLineRequest(line.DrugId, batchId, line.Quantity));
+            }
+
+            var isPending = string.IsNullOrWhiteSpace(request.PaymentMethod) ||
+                            string.Equals(request.PaymentMethod, "CASH", StringComparison.OrdinalIgnoreCase);
+
+            var result = await checkoutService.CheckoutAsync(
+                new CheckoutRequest(
+                    branchId,
+                    cashierId,
+                    checkoutLines.ToArray(),
+                    customer.Id,
+                    request.PaymentMethod ?? "CASH",
+                    IsPendingPayment: isPending),
+                cancellationToken);
+
+            if (result.IsFailure)
+            {
+                return UnprocessableEntity(new ProblemDetails
+                {
+                    Title = result.Error,
+                    Status = StatusCodes.Status422UnprocessableEntity
+                });
+            }
+
+            return StatusCode(StatusCodes.Status201Created, result.Value);
+        }
+        catch (DigitalSignatureException exception)
+        {
+            logger.LogError(exception, "Lỗi ký số hóa đơn đặt thuốc online cho chi nhánh {BranchId}", branchId);
+            return Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Lỗi ký số hóa đơn điện tử.",
+                detail: "Đơn hàng bị hoàn tác vì không thể ký số hóa đơn.");
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Lỗi tiếp nhận đơn đặt thuốc online cho chi nhánh {BranchId}", branchId);
+            return Problem(
+                statusCode: StatusCodes.Status500InternalServerError,
+                title: "Lỗi máy chủ.",
+                detail: exception.Message);
+        }
+    }
+
+    [HttpGet("patient/orders")]
+    [HttpGet("~/api/v1/patient/orders")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IReadOnlyCollection<PatientOrderSummaryDto>>> GetPatientOrdersAsync(
+        [FromQuery] string phoneNumber,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Số điện thoại là bắt buộc.");
+        var cleanPhone = phoneNumber.Trim();
+        if (cleanPhone.Length < 9 || cleanPhone.Length > 15)
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Số điện thoại không hợp lệ.");
+
+        var orders = await invoiceQueryService.GetPatientOrdersAsync(cleanPhone, cancellationToken);
+        return Ok(new { items = orders, totalCount = orders.Count });
+    }
+
+    [HttpPost("{id}/confirm-payment")]
+    [Authorize(Roles = "SALES,OWNER")]
+    public async Task<ActionResult<InvoiceDetailResponse>> ConfirmPaymentAsync(
+        string id,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Mã hóa đơn không được rỗng.");
+
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId) || string.IsNullOrWhiteSpace(currentUserContext.UserId))
+            return Unauthorized();
+
+        try
+        {
+            var result = await invoiceQueryService.ConfirmPaymentAsync(
+                currentUserContext.BranchId,
+                id,
+                currentUserContext.UserId,
+                cancellationToken);
+
+            logger.LogInformation("Nhân viên {CashierId} xác nhận thu tiền hóa đơn {InvoiceId} tại chi nhánh {BranchId}",
+                currentUserContext.UserId, id, currentUserContext.BranchId);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
+        }
+    }
+
     [HttpPost("{id}/cancel")]
     [Authorize(Roles = "OWNER")]
     public async Task<ActionResult<InvoiceDetailResponse>> CancelAsync(
@@ -195,6 +354,14 @@ public sealed class InvoicesController : ControllerBase
 
 public sealed record CheckoutRequestBody(
     IReadOnlyCollection<CheckoutLineBody> Lines,
-    string? CustomerId = null);
+    string? CustomerId = null,
+    string PaymentMethod = "CASH");
 
 public sealed record CheckoutLineBody(string DrugId, string BatchId, int Quantity);
+public sealed record PatientCheckoutRequest(
+    string PhoneNumber,
+    string? CustomerName,
+    string? BranchId,
+    string? DeliveryAddress,
+    string? PaymentMethod,
+    IReadOnlyCollection<CheckoutLineBody> Lines);

@@ -39,6 +39,10 @@ public sealed class Invoice : EntityBase<string>
         // Cắt bớt ticks và đặt Kind = Unspecified để ODP.NET ghi chính xác giờ hiển thị xuống Oracle TIMESTAMP
         CreatedDate = new DateTime(timestamp.Ticks - timestamp.Ticks % 10, DateTimeKind.Unspecified);
         Status = InvoiceStatus.Draft;
+        PaymentMethod = "CASH";
+        PaymentStatus = "PAID";
+        PaidAmount = 0;
+        PaidAt = null;
     }
 
     public string InvoiceNumber { get; private set; } = null!;
@@ -54,6 +58,14 @@ public sealed class Invoice : EntityBase<string>
     public string? CustomerId { get; private set; }
 
     public InvoiceStatus Status { get; private set; }
+
+    public string PaymentMethod { get; private set; } = "CASH";
+
+    public string PaymentStatus { get; private set; } = "PAID";
+
+    public decimal PaidAmount { get; private set; }
+
+    public DateTime? PaidAt { get; private set; }
 
     public Branch Branch { get; private set; } = null!;
 
@@ -104,19 +116,41 @@ public sealed class Invoice : EntityBase<string>
         TotalAmount += item.SubTotal;
     }
 
-    public void MarkAsPaid()
+    public void SetPaymentPending(string? paymentMethod = null)
+    {
+        PaymentMethod = string.IsNullOrWhiteSpace(paymentMethod) ? "CASH" : paymentMethod.Trim();
+        PaymentStatus = "PENDING";
+        PaidAmount = 0;
+        PaidAt = null;
+    }
+
+    public void MarkAsPaid(string? paymentMethod = null)
     {
         if (Status != InvoiceStatus.Draft)
             throw new InvalidOperationException("Only draft invoices can be paid.");
 
+        if (!string.IsNullOrWhiteSpace(paymentMethod))
+            PaymentMethod = paymentMethod.Trim();
+        PaymentStatus = "PAID";
+        PaidAmount = TotalAmount;
+        PaidAt = VietnamTimeHelper.Now;
         Status = InvoiceStatus.Paid;
     }
 
     public void LockInvoice()
     {
-        if (Status != InvoiceStatus.Paid)
-            throw new InvalidOperationException("Only paid invoices can be locked.");
+        if (Status != InvoiceStatus.Paid && Status != InvoiceStatus.Draft)
+            throw new InvalidOperationException("Only draft or paid invoices can be locked.");
 
         Status = InvoiceStatus.Locked;
+    }
+
+    public void ConfirmPayment(decimal amount, DateTime paidAt)
+    {
+        if (PaymentStatus == "PAID")
+            throw new InvalidOperationException("Hóa đơn này đã được thanh toán.");
+        PaymentStatus = "PAID";
+        PaidAmount = amount;
+        PaidAt = paidAt;
     }
 }

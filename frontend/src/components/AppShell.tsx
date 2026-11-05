@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { ArrowLeftRight, Boxes, Building, ChevronDown, ClipboardCheck, FileText, HeartHandshake, KeyRound, LayoutDashboard, LogOut, Menu, PackagePlus, Pill, RotateCcw, Settings, ShieldCheck, ShoppingCart, Truck, Users } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { NotificationBell } from './notifications/NotificationBell';
 
 const navigation = [
   { label: 'Bán hàng tại quầy', to: '/checkout', icon: ShoppingCart },
@@ -113,16 +114,20 @@ export function AppShell() {
           <p className="hidden text-xs font-medium text-slate-500 lg:block">
             Chi nhánh: <span className="ml-1 font-semibold text-ink">{currentUser?.branchName || currentUser?.branchId}</span>
           </p>
-          <div ref={accountMenu} className="relative">
-            <button type="button" onClick={() => setAccountOpen(open => !open)} aria-label="Menu tài khoản" aria-expanded={accountOpen} className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-slate-50 sm:gap-3">
-              <span className="hidden text-right sm:block"><span className="block max-w-[240px] truncate text-[13px] font-bold text-ink">{currentUser?.fullName || currentUser?.username}</span><span className="block text-[11px] text-slate-500">{currentUser ? `${roleLabels[currentUser.role] ?? currentUser.role} (@${currentUser.username})` : ''}</span></span>
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mint font-display text-xs font-bold text-forest">{getInitials(currentUser?.fullName || currentUser?.username)}</span><ChevronDown size={14} className="text-slate-400" />
-            </button>
-            {accountOpen && <nav aria-label="Tài khoản" className="absolute right-0 top-full z-30 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-panel">
-              <Link to="/settings" onClick={() => setAccountOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-mint hover:text-forest"><Settings size={16} />Hồ sơ & Cài đặt</Link>
-              <Link to="/settings#password" onClick={() => setAccountOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-mint hover:text-forest"><KeyRound size={16} />Đổi mật khẩu</Link>
-              <button type="button" onClick={() => { setAccountOpen(false); void signOut(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"><LogOut size={16} />Đăng xuất</button>
-            </nav>}
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+
+            <div ref={accountMenu} className="relative">
+              <button type="button" onClick={() => setAccountOpen(open => !open)} aria-label="Menu tài khoản" aria-expanded={accountOpen} className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-slate-50 sm:gap-3">
+                <span className="hidden text-right sm:block"><span className="block max-w-[240px] truncate text-[13px] font-bold text-ink">{currentUser?.fullName || currentUser?.username}</span><span className="block text-[11px] text-slate-500">{currentUser ? `${roleLabels[currentUser.role] ?? currentUser.role} (@${currentUser.username})` : ''}</span></span>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mint font-display text-xs font-bold text-forest">{getInitials(currentUser?.fullName || currentUser?.username)}</span><ChevronDown size={14} className="text-slate-400" />
+              </button>
+              {accountOpen && <nav aria-label="Tài khoản" className="absolute right-0 top-full z-30 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-panel">
+                <Link to="/settings" onClick={() => setAccountOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-mint hover:text-forest"><Settings size={16} />Hồ sơ & Cài đặt</Link>
+                <Link to="/settings#password" onClick={() => setAccountOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-mint hover:text-forest"><KeyRound size={16} />Đổi mật khẩu</Link>
+                <button type="button" onClick={() => { setAccountOpen(false); void signOut(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"><LogOut size={16} />Đăng xuất</button>
+              </nav>}
+            </div>
           </div>
         </header>
 
