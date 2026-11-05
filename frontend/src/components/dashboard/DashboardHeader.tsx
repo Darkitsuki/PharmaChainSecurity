@@ -31,7 +31,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           <BranchScopeBadge branchName={branchName} branchId={branchId} />
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          Trung tâm điều hành kinh doanh, an toàn kho vận &amp; giám sát pháp lý hóa đơn điện tử HSM
+          Theo dõi doanh thu, tồn kho và hoạt động vận hành của chi nhánh
         </p>
       </div>
 
@@ -69,14 +69,14 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
         </button>
 
-        {/* Export Excel button */}
+        {/* CSV export */}
         <button
           type="button"
           onClick={onExport}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-2xs transition-all hover:bg-emerald-700 active:scale-98"
         >
           <FileSpreadsheet size={15} />
-          <span>Xuất Excel (.XLSX)</span>
+          <span>Xuất CSV</span>
         </button>
       </div>
     </div>
