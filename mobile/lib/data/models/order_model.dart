@@ -196,3 +196,65 @@ class CustomerOrderResult {
     );
   }
 }
+
+class PurchaseOrderLineInput {
+  const PurchaseOrderLineInput({
+    required this.drugId,
+    required this.quantity,
+    required this.estimatedUnitPrice,
+    this.notes,
+  });
+
+  final String drugId;
+  final int quantity;
+  final double estimatedUnitPrice;
+  final String? notes;
+
+  Map<String, dynamic> toJson() => {
+        'drugId': drugId,
+        'quantity': quantity,
+        'estimatedUnitPrice': estimatedUnitPrice,
+        if (notes != null) 'notes': notes,
+      };
+}
+
+class PurchaseOrderSummary {
+  const PurchaseOrderSummary({
+    required this.id,
+    required this.orderNo,
+    required this.branchId,
+    required this.supplierId,
+    required this.status,
+    required this.totalEstimatedAmount,
+    required this.createdDate,
+    this.notes,
+  });
+
+  final String id;
+  final String orderNo;
+  final String branchId;
+  final String supplierId;
+  final String status;
+  final double totalEstimatedAmount;
+  final DateTime createdDate;
+  final String? notes;
+
+  factory PurchaseOrderSummary.fromJson(Map<String, dynamic> json) {
+    final rawCreatedDate = json['createdDate'] as String?;
+    final createdDate = rawCreatedDate != null
+        ? (DateTime.tryParse(rawCreatedDate)?.toLocal() ?? DateTime.now())
+        : DateTime.now();
+
+    return PurchaseOrderSummary(
+      id: json['id'] as String? ?? '',
+      orderNo: json['orderNo'] as String? ?? '',
+      branchId: json['branchId'] as String? ?? '',
+      supplierId: json['supplierId'] as String? ?? '',
+      status: json['status'] as String? ?? 'DRAFT',
+      totalEstimatedAmount:
+          (json['totalEstimatedAmount'] as num?)?.toDouble() ?? 0.0,
+      createdDate: createdDate,
+      notes: json['notes'] as String?,
+    );
+  }
+}

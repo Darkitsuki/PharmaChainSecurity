@@ -266,6 +266,156 @@ void main() {
       expect(result.hashValueSha256.startsWith('sha256:'), isTrue);
       expect(service.orderHistory.length, 1);
     });
+
+    test('fetchPurchaseOrders requires bearer token', () async {
+      final service = OrderService(
+        api: ApiClient(baseUrl: 'https://unit.test/api/v1'),
+        tokenProvider: () => null,
+      );
+
+      expect(() => service.fetchPurchaseOrders(), throwsA(isA<ApiException>()));
+    });
+
+    test('fetchPurchaseOrders calls /purchase-orders with token and parses response', () async {
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/v1/purchase-orders') {
+          expect(request.headers['Authorization'], 'Bearer warehouse-jwt-token');
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'items': [
+                {
+                  'id': 'PO-001',
+                  'orderNo': 'PO-CN01-20261105-0001',
+                  'branchId': 'br-01',
+                  'supplierId': 'sup-01',
+                  'status': 'DRAFT',
+                  'totalEstimatedAmount': 5000000.0,
+                  'createdDate': '2026-11-05T08:00:00Z',
+                  'notes': 'Đơn đặt mua định kỳ',
+                }
+              ]
+            })),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final service = OrderService(
+        api: ApiClient(baseUrl: 'https://unit.test/api/v1', client: client),
+        tokenProvider: () => 'warehouse-jwt-token',
+      );
+
+      final orders = await service.fetchPurchaseOrders();
+      expect(orders.length, 1);
+      expect(orders.first.orderNo, 'PO-CN01-20261105-0001');
+      expect(orders.first.totalEstimatedAmount, 5000000.0);
+      expect(service.purchaseOrders.length, 1);
+    });
+
+    test('createPurchaseOrder requires bearer token', () async {
+      final service = OrderService(
+        api: ApiClient(baseUrl: 'https://unit.test/api/v1'),
+        tokenProvider: () => null,
+      );
+
+      expect(
+        () => service.createPurchaseOrder(
+          supplierId: 'sup-01',
+          items: [
+            const PurchaseOrderLineInput(drugId: 'D1', quantity: 10, estimatedUnitPrice: 30000),
+          ],
+        ),
+        throwsA(isA<ApiException>()),
+      );
+    });
+
+    test('createPurchaseOrder sends POST /purchase-orders with payload and parses result', () async {
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/v1/purchase-orders' && request.method == 'POST') {
+          expect(request.headers['Authorization'], 'Bearer warehouse-jwt-token');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['supplierId'], 'sup-01');
+          expect((body['items'] as List).length, 1);
+
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'id': 'PO-002',
+              'orderNo': 'PO-CN01-20261105-0002',
+              'branchId': 'br-01',
+              'supplierId': 'sup-01',
+              'status': 'DRAFT',
+              'totalEstimatedAmount': 300000.0,
+              'createdDate': '2026-11-05T09:00:00Z',
+              'notes': 'Cần gấp',
+            })),
+            201,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final service = OrderService(
+        api: ApiClient(baseUrl: 'https://unit.test/api/v1', client: client),
+        tokenProvider: () => 'warehouse-jwt-token',
+      );
+
+      final created = await service.createPurchaseOrder(
+        supplierId: 'sup-01',
+        notes: 'Cần gấp',
+        expectedDeliveryDate: DateTime(2026, 11, 10),
+        items: [
+          const PurchaseOrderLineInput(drugId: 'D1', quantity: 10, estimatedUnitPrice: 30000),
+        ],
+      );
+
+      expect(created.orderNo, 'PO-CN01-20261105-0002');
+      expect(created.totalEstimatedAmount, 300000.0);
+      expect(service.purchaseOrders.first.id, 'PO-002');
+    });
+
+    test('placeOrder uses /invoices/checkout when staff token is provided', () async {
+      String? invokedPath;
+      final client = MockClient((request) async {
+        invokedPath = request.url.path;
+        if (request.url.path == '/api/v1/invoices/checkout') {
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'invoiceId': 'INV-STAFF-001',
+              'invoiceNumber': 'HD-STAFF-001',
+              'totalAmount': 35000.0,
+              'hashValueSha256': 'sha256:staff-signature-hash',
+            })),
+            201,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final service = OrderService(
+        api: ApiClient(baseUrl: 'https://unit.test/api/v1', client: client),
+        tokenProvider: () => 'staff-bearer-token',
+        defaultBranchId: 'br-01',
+      );
+
+      const drug = DrugModel(drugId: 'D1', drugCode: 'PARA', name: 'Paracetamol', unit: 'Hộp', price: 35000);
+      final request = CustomerOrderRequest(
+        customerName: 'Khách Tại Quầy',
+        phoneNumber: '0901234567',
+        deliveryMethod: DeliveryMethod.pickup,
+        branchId: 'br-01',
+        branchName: 'Chi nhánh Quận 1',
+        paymentMethod: PaymentMethod.cod,
+        items: [CartItem(drug: drug, quantity: 1)],
+      );
+
+      final result = await service.placeOrder(request);
+      expect(invokedPath, '/api/v1/invoices/checkout');
+      expect(result.invoiceNumber, 'HD-STAFF-001');
+    });
   });
 
   group('CustomerAuthService Tests', () {

@@ -115,6 +115,25 @@ public sealed class OracleConnectionFactoryTests
             Times.Once);
     }
 
+    [Fact]
+    public void ExpandEnvironmentPlaceholders_WhenOraclePasswordMissing_ThrowsInvalidOperationException()
+    {
+        var originalPassword = Environment.GetEnvironmentVariable("ORACLE_PASSWORD");
+        try
+        {
+            Environment.SetEnvironmentVariable("ORACLE_PASSWORD", null);
+            var exception = Assert.Throws<InvalidOperationException>(
+                () => OracleConnectionFactory.ExpandEnvironmentPlaceholders("Password=${ORACLE_PASSWORD};"));
+
+            Assert.Contains("ORACLE_PASSWORD", exception.Message);
+            Assert.Contains("Secret Manager", exception.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ORACLE_PASSWORD", originalPassword);
+        }
+    }
+
     private static OracleConnectionFactory CreateFactory(ICurrentUserContext currentUser, string? activeBranch)
     {
         var configuration = new ConfigurationBuilder()
