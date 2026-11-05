@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, ArrowRight, ShieldBan, RotateCcw, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { InventoryAlert } from '../../types';
 import { FefoExpiryBadge } from '../common/FefoExpiryBadge';
@@ -13,17 +13,6 @@ export const FefoInventoryCard: React.FC<FefoInventoryCardProps> = ({
   alerts = [],
   loading = false,
 }) => {
-  const [actionNotice, setActionNotice] = React.useState<string | null>(null);
-
-  const handleAction = (type: string, batchNo: string, drugName: string) => {
-    let msg = '';
-    if (type === 'fefo') msg = `Đã gắn nhãn ưu tiên FEFO tại quầy POS cho lô ${batchNo} (${drugName}).`;
-    if (type === 'return') msg = `Đã lập yêu cầu đổi trả nhà cung cấp cho lô ${batchNo}.`;
-    if (type === 'dispose') msg = `Đã khóa lô ${batchNo} để lập hội đồng tiêu hủy thuốc hết hạn.`;
-    setActionNotice(msg);
-    setTimeout(() => setActionNotice(null), 4000);
-  };
-
   const displayAlerts = alerts.slice(0, 5);
 
   return (
@@ -51,12 +40,6 @@ export const FefoInventoryCard: React.FC<FefoInventoryCardProps> = ({
         </Link>
       </div>
 
-      {actionNotice && (
-        <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800 font-medium">
-          ✓ {actionNotice}
-        </div>
-      )}
-
       <div className="mt-4">
         {loading ? (
           <div className="py-8 text-center text-xs text-slate-400">Đang quét dữ liệu lô cận hạn...</div>
@@ -73,7 +56,6 @@ export const FefoInventoryCard: React.FC<FefoInventoryCardProps> = ({
                   <th className="pb-2.5">Số Lô</th>
                   <th className="pb-2.5">Tồn kho</th>
                   <th className="pb-2.5">Hạn dùng (FEFO)</th>
-                  <th className="pb-2.5 text-right">Tác vụ của Chủ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -90,36 +72,6 @@ export const FefoInventoryCard: React.FC<FefoInventoryCardProps> = ({
                     </td>
                     <td className="py-3">
                       <FefoExpiryBadge expiryDate={item.expiryDate} size="sm" />
-                    </td>
-                    <td className="py-3 text-right">
-                      <div className="inline-flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleAction('fefo', item.batchNo, item.drugName)}
-                          title="Ưu tiên đẩy bán tại quầy thu ngân"
-                          className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100 border border-amber-200 transition-colors"
-                        >
-                          <Zap size={11} />
-                          <span>Ưu tiên POS</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleAction('return', item.batchNo, item.drugName)}
-                          title="Lập phiếu đổi trả cho nhà cung cấp"
-                          className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 transition-colors"
-                        >
-                          <RotateCcw size={11} />
-                          <span>Trả NCC</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleAction('dispose', item.batchNo, item.drugName)}
-                          title="Khóa lô thuốc và lập biên bản tiêu hủy"
-                          className="grid h-6 w-6 place-items-center rounded-md text-rose-500 hover:bg-rose-50 hover:text-rose-700 border border-transparent hover:border-rose-200 transition-colors"
-                        >
-                          <ShieldBan size={13} />
-                        </button>
-                      </div>
                     </td>
                   </tr>
                 ))}
