@@ -3,6 +3,7 @@ import { CircleAlert, LoaderCircle, X, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError, apiClient } from '../services/apiClient';
 import type { Invoice, InventoryAlert, PageResult, SalesSummaryReport } from '../types';
+import type { PurchaseOrder } from '../services/purchaseOrders';
 
 // Dashboard components
 import { DashboardHeader } from '../components/dashboard/DashboardHeader';
@@ -25,6 +26,7 @@ export function ReportsPage() {
   const [report, setReport] = useState<SalesSummaryReport | null>(null);
   const [alerts, setAlerts] = useState<InventoryAlert[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [pendingOrdersCount, setPendingOrdersCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -36,10 +38,11 @@ export function ReportsPage() {
     setLoading(true);
     setError('');
     try {
-      const [reportData, alertsData, invoicesData] = await Promise.allSettled([
+      const [reportData, alertsData, invoicesData, pendingOrdersData] = await Promise.allSettled([
         apiClient<SalesSummaryReport>(`/reports/sales-summary?days=${selectedDays}`),
         apiClient<InventoryAlert[]>('/inventory/expiring-soon?days=90'),
         apiClient<PageResult<Invoice>>('/invoices?page=1&pageSize=6'),
+        apiClient<PageResult<PurchaseOrder>>('/purchase-orders?status=PENDING&page=1&pageSize=5'),
       ]);
 
       if (reportData.status === 'fulfilled') {
@@ -56,6 +59,7 @@ export function ReportsPage() {
       if (invoicesData.status === 'fulfilled') {
         setInvoices(invoicesData.value?.items || []);
       }
+      setPendingOrdersCount(pendingOrdersData.status === 'fulfilled' ? pendingOrdersData.value.totalCount : null);
     } catch (err) {
       setError('Lỗi khi tải dữ liệu tổng quan chi nhánh.');
     } finally {
@@ -73,18 +77,19 @@ export function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `BaoCao_ChiNhanh_${currentUser?.branchId || 'CN01'}_${days}ngay.csv`);
+    link.setAttribute('download', `BaoCao_ChiNhanh_${currentUser?.branchId || 'khong-xac-dinh'}_${days}ngay.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <div className="space-y-6">
       {/* 1. Header with RLS Scope & Time Selector */}
       <DashboardHeader
-        branchName={currentUser?.branchName || 'Chi nhánh 01'}
-        branchId={currentUser?.branchId || 'CN01'}
+        branchName={currentUser?.branchName}
+        branchId={currentUser?.branchId}
         days={days}
         onDaysChange={setDays}
         onRefresh={() => loadAllDashboardData(days)}
@@ -116,10 +121,8 @@ export function ReportsPage() {
           <DashboardKpiCards
             totalRevenue={report.totalRevenue}
             totalInvoices={report.totalInvoices}
-            hsmCompliantPercent={100}
             expiringBatchesCount={alerts.length}
-            cashDrawerAmount={4500000}
-            pendingExpensesCount={2}
+            pendingOrdersCount={pendingOrdersCount}
           />
 
           {/* 3. Middle Section: Revenue Trend & Top Selling Drugs */}
@@ -128,7 +131,6 @@ export function ReportsPage() {
             <div className="lg:col-span-2">
               <HourlyRevenueChart
                 dailySales={report.dailySales}
-                totalRevenue={report.totalRevenue}
               />
             </div>
 
@@ -189,7 +191,7 @@ export function ReportsPage() {
           <PendingExpensesCard />
 
           {/* 6. Security Assurance & Legal Compliance Banner */}
-          <SecurityAuditBanner branchId={currentUser?.branchId || 'CN01'} />
+          <SecurityAuditBanner />
         </>
       ) : null}
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, CreditCard, Banknote } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import type { DailySalesItem } from '../../types';
 
 const money = new Intl.NumberFormat('vi-VN', {
@@ -10,18 +10,12 @@ const money = new Intl.NumberFormat('vi-VN', {
 
 export interface HourlyRevenueChartProps {
   dailySales?: DailySalesItem[];
-  totalRevenue?: number;
 }
 
 export const HourlyRevenueChart: React.FC<HourlyRevenueChartProps> = ({
   dailySales = [],
-  totalRevenue = 0,
 }) => {
   const maxRevenue = Math.max(...dailySales.map((d) => d.revenue), 1);
-
-  // Simulated split: 65% VietQR, 35% Cash (typical modern retail pharmacy in VN)
-  const vietQrShare = Math.round(totalRevenue * 0.65);
-  const cashShare = totalRevenue - vietQrShare;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-2xs">
@@ -29,24 +23,13 @@ export const HourlyRevenueChart: React.FC<HourlyRevenueChartProps> = ({
         <div>
           <h2 className="font-display text-base font-bold text-slate-900 flex items-center gap-2">
             <TrendingUp size={18} className="text-emerald-600" />
-            Biểu đồ dòng tiền &amp; Doanh thu theo kỳ
+            Doanh thu theo ngày
           </h2>
           <p className="text-xs text-slate-500">
-            Xu hướng thanh toán qua VietQR và Tiền mặt tại quầy bán
+            Dữ liệu hóa đơn trong khoảng thời gian đã chọn
           </p>
         </div>
 
-        {/* Payment breakdown pill */}
-        <div className="flex items-center gap-3 text-xs">
-          <div className="flex items-center gap-1.5 font-medium text-slate-700">
-            <CreditCard size={14} className="text-blue-600" />
-            <span>VietQR: <strong className="text-slate-900">{money.format(vietQrShare)}</strong></span>
-          </div>
-          <div className="flex items-center gap-1.5 font-medium text-slate-700">
-            <Banknote size={14} className="text-emerald-600" />
-            <span>Tiền mặt: <strong className="text-slate-900">{money.format(cashShare)}</strong></span>
-          </div>
-        </div>
       </div>
 
       {/* Chart visualization */}

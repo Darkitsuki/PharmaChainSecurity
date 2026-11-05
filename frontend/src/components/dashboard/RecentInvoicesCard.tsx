@@ -1,8 +1,7 @@
 import React from 'react';
-import { FileText, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { FileText, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Invoice } from '../../types';
-import { HsmSignatureBadge } from '../common/HsmSignatureBadge';
 
 const money = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -24,17 +23,6 @@ export const RecentInvoicesCard: React.FC<RecentInvoicesCardProps> = ({
   invoices = [],
   loading = false,
 }) => {
-  const [verifiedMap, setVerifiedMap] = React.useState<Record<string, boolean>>({});
-  const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
-
-  const handleVerify = (invoiceId: string) => {
-    setVerifyingId(invoiceId);
-    setTimeout(() => {
-      setVerifiedMap((prev) => ({ ...prev, [invoiceId]: true }));
-      setVerifyingId(null);
-    }, 600);
-  };
-
   const displayInvoices = invoices.slice(0, 6);
 
   return (
@@ -46,10 +34,10 @@ export const RecentInvoicesCard: React.FC<RecentInvoicesCardProps> = ({
           </div>
           <div>
             <h2 className="font-display text-base font-bold text-slate-900">
-              Giao dịch xuất bán &amp; Ký số HSM
+              Hóa đơn gần đây
             </h2>
             <p className="text-xs text-slate-500">
-              Hóa đơn điện tử pháp lý lưu trữ chuỗi hash SHA-256 bất biến
+              Các giao dịch bán hàng mới nhất của chi nhánh
             </p>
           </div>
         </div>
@@ -77,16 +65,11 @@ export const RecentInvoicesCard: React.FC<RecentInvoicesCardProps> = ({
                   <th className="pb-2.5">Số Hóa Đơn</th>
                   <th className="pb-2.5">Thời gian</th>
                   <th className="pb-2.5">Tổng tiền</th>
-                  <th className="pb-2.5">Pháp lý Ký số</th>
-                  <th className="pb-2.5 text-right">Tính toàn vẹn</th>
+                  <th className="pb-2.5 text-right">Trạng thái</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {displayInvoices.map((inv) => {
-                  const isVerified = verifiedMap[inv.invoiceId];
-                  const isCurVerifying = verifyingId === inv.invoiceId;
-
-                  return (
+                {displayInvoices.map((inv) => (
                     <tr key={inv.invoiceId} className="group hover:bg-slate-50/80">
                       <td className="py-3 font-mono font-bold text-slate-900">
                         {inv.invoiceNumber}
@@ -97,32 +80,11 @@ export const RecentInvoicesCard: React.FC<RecentInvoicesCardProps> = ({
                       <td className="py-3 font-bold text-slate-900">
                         {money.format(inv.totalAmount)}
                       </td>
-                      <td className="py-3">
-                        <HsmSignatureBadge
-                          status={isVerified ? 'valid' : 'valid'}
-                          hashSha256={`0x${inv.invoiceId.replace(/-/g, '').slice(0, 16)}...`}
-                          onVerifyClick={() => handleVerify(inv.invoiceId)}
-                          isVerifying={isCurVerifying}
-                        />
-                      </td>
                       <td className="py-3 text-right">
-                        {isVerified ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                            <CheckCircle2 size={13} /> Khớp SHA-256
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleVerify(inv.invoiceId)}
-                            className="text-[11px] text-slate-400 hover:text-emerald-700 font-medium underline"
-                          >
-                            Xác thực Ledger
-                          </button>
-                        )}
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">{inv.status || 'Chưa xác định'}</span>
                       </td>
                     </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>
