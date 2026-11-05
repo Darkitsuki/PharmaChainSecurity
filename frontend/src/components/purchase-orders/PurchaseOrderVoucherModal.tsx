@@ -73,7 +73,7 @@ export const PurchaseOrderVoucherModal: React.FC<PurchaseOrderVoucherModalProps>
   isOpen,
   onClose,
   order,
-  branchName = 'Chi nhánh hệ thống',
+  branchName,
 }) => {
   if (!isOpen || !order) return null;
 
@@ -144,9 +144,6 @@ export const PurchaseOrderVoucherModal: React.FC<PurchaseOrderVoucherModalProps>
               <div className="mt-3 text-xs text-slate-600 space-y-0.5">
                 <p>
                   <strong>Chi nhánh:</strong> {branchName}
-                </p>
-                <p>
-                  <strong>Hotline hỗ trợ:</strong> 1900 6868 · <strong>Email:</strong> procurement@pharmachain.vn
                 </p>
               </div>
             </div>
