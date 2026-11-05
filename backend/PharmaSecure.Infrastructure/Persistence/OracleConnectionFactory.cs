@@ -171,8 +171,9 @@ public sealed class OracleConnectionFactory : IOracleConnectionFactory
             {
                 "ORACLE_DATA_SOURCE" => "192.168.1.30:1521/FREEPDB1",
                 "ORACLE_USER" => "PHARMA_ADMIN",
-                "ORACLE_PASSWORD" => "admin123",
-                _ => throw new InvalidOperationException($"Environment variable '{varName}' is required by the Oracle connection string.")
+                _ => throw new InvalidOperationException(
+                    $"Environment variable '{varName}' is required by the Oracle connection string. " +
+                    "Set it in the host environment or Secret Manager before starting the service.")
             };
         });
     }

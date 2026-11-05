@@ -10,12 +10,100 @@ class OrderService extends ChangeNotifier {
   final String? defaultBranchId;
 
   final List<CustomerOrderResult> _orderHistory = [];
+  final List<PurchaseOrderSummary> _purchaseOrders = [];
   bool _isLoading = false;
   String? _lastError;
 
   List<CustomerOrderResult> get orderHistory => List.unmodifiable(_orderHistory);
+  List<PurchaseOrderSummary> get purchaseOrders => List.unmodifiable(_purchaseOrders);
   bool get isLoading => _isLoading;
   String? get lastError => _lastError;
+
+  Future<List<PurchaseOrderSummary>> fetchPurchaseOrders() async {
+    final client = api;
+    final token = tokenProvider?.call();
+    if (client == null) {
+      return _purchaseOrders;
+    }
+
+    if (token == null || token.isEmpty) {
+      throw const ApiException('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.', statusCode: 401);
+    }
+
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+
+    try {
+      final res = await client.get('/purchase-orders', token: token);
+      final rawItems = res['items'] ?? res['data'];
+      final List<dynamic> data = rawItems is List ? rawItems : [];
+      final fetchedOrders = data
+          .whereType<Map<String, dynamic>>()
+          .map(PurchaseOrderSummary.fromJson)
+          .toList();
+
+      _purchaseOrders
+        ..clear()
+        ..addAll(fetchedOrders);
+      _isLoading = false;
+      notifyListeners();
+      return _purchaseOrders;
+    } catch (e) {
+      debugPrint('OrderService.fetchPurchaseOrders error: $e');
+      _lastError = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      if (e is ApiException) rethrow;
+      throw ApiException(e.toString());
+    }
+  }
+
+  Future<PurchaseOrderSummary> createPurchaseOrder({
+    required String supplierId,
+    DateTime? expectedDeliveryDate,
+    String? notes,
+    required List<PurchaseOrderLineInput> items,
+  }) async {
+    final client = api;
+    final token = tokenProvider?.call();
+
+    if (token == null || token.isEmpty) {
+      throw const ApiException('Yêu cầu đăng nhập để lập đơn đặt mua thuốc.', statusCode: 401);
+    }
+
+    if (client == null) {
+      throw const ApiException('Dịch vụ API chưa được cấu hình.');
+    }
+
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+
+    try {
+      final payload = {
+        'supplierId': supplierId,
+        'notes': notes,
+        if (expectedDeliveryDate != null)
+          'expectedDeliveryDate': expectedDeliveryDate.toIso8601String(),
+        'items': items.map((e) => e.toJson()).toList(),
+      };
+
+      final res = await client.post('/purchase-orders', body: payload, token: token);
+      final createdOrder = PurchaseOrderSummary.fromJson(res);
+      _purchaseOrders.insert(0, createdOrder);
+      _isLoading = false;
+      notifyListeners();
+      return createdOrder;
+    } catch (e) {
+      debugPrint('OrderService.createPurchaseOrder error: $e');
+      _lastError = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      if (e is ApiException) rethrow;
+      throw ApiException(e.toString());
+    }
+  }
 
   Future<List<CustomerOrderResult>> fetchCustomerOrders(String phoneNumber) async {
     final client = api;
@@ -88,16 +176,22 @@ class OrderService extends ChangeNotifier {
           });
         }
 
-        // 2. Post checkout: use /patient/checkout for online patient orders
-        const endpoint = '/patient/checkout';
-        final payload = {
-          'phoneNumber': request.phoneNumber,
-          'customerName': request.customerName,
-          'branchId': request.branchId,
-          'deliveryAddress': request.deliveryAddress,
-          'paymentMethod': request.paymentMethod == PaymentMethod.qrTransfer ? 'QR_CODE' : 'CASH',
-          'lines': lines,
-        };
+        // 2. Post checkout: use /invoices/checkout for staff, /patient/checkout for online patient
+        final isStaff = token != null && token.isNotEmpty;
+        final endpoint = isStaff ? '/invoices/checkout' : '/patient/checkout';
+        final payload = isStaff
+            ? {
+                'lines': lines,
+                'paymentMethod': request.paymentMethod == PaymentMethod.qrTransfer ? 'QR_CODE' : 'CASH',
+              }
+            : {
+                'phoneNumber': request.phoneNumber,
+                'customerName': request.customerName,
+                'branchId': request.branchId,
+                'deliveryAddress': request.deliveryAddress,
+                'paymentMethod': request.paymentMethod == PaymentMethod.qrTransfer ? 'QR_CODE' : 'CASH',
+                'lines': lines,
+              };
 
         final checkoutRes = await client.post(endpoint, body: payload, token: token);
 
