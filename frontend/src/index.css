@@ -22,6 +22,20 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   outline: 3px solid rgba(213, 111, 79, 0.48);
   outline-offset: 2px;
 }
+.login-input:focus-visible {
+  outline: none;
+}
+.login-password-input::-ms-reveal,
+.login-password-input::-ms-clear {
+  display: none;
+}
+.login-input:-webkit-autofill,
+.login-input:-webkit-autofill:hover,
+.login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #17312e;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+  caret-color: #17312e;
+}
 ::selection { color: #17312e; background: #c7e7dc; }
 
 @keyframes enter {
