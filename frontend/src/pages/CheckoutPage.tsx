@@ -4,6 +4,7 @@ import { ApiError, apiClient } from '../services/apiClient';
 import type { CheckoutResponse, Drug, DrugBatch, PageResult, Customer, CreateCustomerPayload } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { ReceiptPrintModal, type ReceiptData } from '../components/invoices/ReceiptPrintModal';
+import { generateUUID } from '../utils';
 
 interface CartLine {
   drug: Drug;
@@ -29,7 +30,7 @@ export function CheckoutPage() {
   const [receipt, setReceipt] = useState<CheckoutResponse | null>(null);
   const [printReceiptData, setPrintReceiptData] = useState<ReceiptData | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const idempotencyKey = useRef(crypto.randomUUID());
+  const idempotencyKey = useRef(generateUUID());
 
   // Customer State
   const [customerSearch, setCustomerSearch] = useState('');
@@ -183,7 +184,7 @@ export function CheckoutPage() {
 
       setReceipt(response);
       setCart([]);
-      idempotencyKey.current = crypto.randomUUID();
+      idempotencyKey.current = generateUUID();
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể hoàn tất thanh toán hóa đơn.');
     } finally {
