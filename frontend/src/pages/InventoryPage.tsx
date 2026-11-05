@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
 import { useAuth } from '../context/AuthContext';
-import type { Drug, InventoryAlert, InventoryRow, PageResult } from '../types';
+import type { Drug, DrugBatch, InventoryAlert, InventoryRow, PageResult } from '../types';
 import {
   Modal,
   DataTable,
@@ -42,6 +42,34 @@ export function InventoryPage() {
   const [isSubmittingAdjust, setIsSubmittingAdjust] = useState(false);
   const [adjustError, setAdjustError] = useState('');
 
+  const enrichAlertsWithMfgDate = async (alerts: InventoryAlert[]) => {
+    if (!alerts.length) {
+      setAlertRows([]);
+      return;
+    }
+    const uniqueDrugIds = Array.from(new Set(alerts.map((a) => a.drugId)));
+    const batchMfgMap: Record<string, string | null> = {};
+
+    await Promise.all(
+      uniqueDrugIds.map(async (drugId) => {
+        try {
+          const batches = await apiClient<DrugBatch[]>(`/drugs/${encodeURIComponent(drugId)}/batches`);
+          batches.forEach((b) => {
+            batchMfgMap[b.batchId] = b.mfgDate ?? null;
+          });
+        } catch {
+          // Ignore individual batch fetch errors
+        }
+      })
+    );
+
+    const enriched = alerts.map((a) => ({
+      ...a,
+      mfgDate: batchMfgMap[a.batchId] ?? null,
+    }));
+    setAlertRows(enriched);
+  };
+
   const loadData = () => {
     setLoading(true);
     setError('');
@@ -61,14 +89,18 @@ export function InventoryPage() {
         .finally(() => setLoading(false));
     } else if (activeTab === 'expiring') {
       apiClient<InventoryAlert[]>('/inventory/expiring-soon?days=90')
-        .then((alerts) => setAlertRows(alerts))
+        .then(async (alerts) => {
+          await enrichAlertsWithMfgDate(alerts);
+        })
         .catch((requestError) => {
           setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách lô cận hạn.');
         })
         .finally(() => setLoading(false));
     } else if (activeTab === 'low') {
       apiClient<InventoryAlert[]>('/inventory/low-stock?threshold=10')
-        .then((alerts) => setAlertRows(alerts))
+        .then(async (alerts) => {
+          await enrichAlertsWithMfgDate(alerts);
+        })
         .catch((requestError) => {
           setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách thuốc sắp hết hàng.');
         })
@@ -200,6 +232,27 @@ export function InventoryPage() {
     {
       header: 'Số Lô',
       cell: (alert) => <span className="font-mono text-[11px] text-slate-700 font-semibold">{alert.batchNo}</span>,
+    },
+    {
+      header: 'Ngày Sản Xuất',
+      cell: (alert) => {
+        if (!alert.mfgDate) {
+          return <span className="font-mono text-xs text-slate-400">—</span>;
+        }
+        try {
+          const d = new Date(alert.mfgDate);
+          if (isNaN(d.getTime())) {
+            return <span className="font-mono text-xs text-slate-400">—</span>;
+          }
+          return (
+            <span className="font-mono text-xs text-slate-600 font-medium">
+              {String(d.getDate()).padStart(2, '0')}/{String(d.getMonth() + 1).padStart(2, '0')}/{d.getFullYear()}
+            </span>
+          );
+        } catch {
+          return <span className="font-mono text-xs text-slate-400">—</span>;
+        }
+      },
     },
     {
       header: 'Hạn Sử Dụng (FEFO)',

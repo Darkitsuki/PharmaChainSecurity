@@ -126,6 +126,7 @@ export interface InventoryAlert {
   drugName: string;
   batchId: string;
   batchNo: string;
+  mfgDate?: string | null;
   expiryDate: string;
   quantity: number;
 }
