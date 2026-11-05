@@ -618,7 +618,7 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
         try
         {
             await using var lockCommand = CreateCommand("""
-                SELECT InvoiceNo, Status, NVL(PaymentStatus, 'PAID'), TotalAmount
+                SELECT InvoiceNo, Status, NVL(PaymentStatus, 'PAID'), TotalAmount, NVL(PaymentMethod, 'CASH')
                 FROM INVOICES
                 WHERE id = :id AND BranchId = :branchId
                 FOR UPDATE
@@ -629,6 +629,7 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             string invoiceNo;
             string status;
             string paymentStatus;
+            string paymentMethod;
             decimal totalAmount;
             await using (var reader = await lockCommand.ExecuteReaderAsync(cancellationToken))
             {
@@ -639,6 +640,7 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                 status = reader.IsDBNull(1) ? "COMPLETED" : reader.GetString(1);
                 paymentStatus = reader.GetString(2);
                 totalAmount = reader.GetDecimal(3);
+                paymentMethod = reader.GetString(4);
             }
 
             if (string.Equals(status, "CANCELLED", StringComparison.OrdinalIgnoreCase))
@@ -646,6 +648,9 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
 
             if (string.Equals(paymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"Hóa đơn {invoiceNo} đã được thanh toán từ trước.");
+
+            if (!string.Equals(paymentMethod, "CASH", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Chuyển khoản chỉ được xác nhận qua kênh đối soát ngân hàng đã cấu hình.");
 
             await using var updateCmd = CreateCommand("""
                 UPDATE INVOICES

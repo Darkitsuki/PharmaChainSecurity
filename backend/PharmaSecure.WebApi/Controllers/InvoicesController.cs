@@ -114,6 +114,17 @@ public sealed class InvoicesController : ControllerBase
         if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.UserId) || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
             return Unauthorized();
 
+        var paymentMethod = request.PaymentMethod?.Trim().ToUpperInvariant() ?? "CASH";
+        if (!string.Equals(paymentMethod, "CASH", StringComparison.Ordinal))
+        {
+            return UnprocessableEntity(new ProblemDetails
+            {
+                Status = StatusCodes.Status422UnprocessableEntity,
+                Title = "The selected payment method is not available.",
+                Detail = "Bank transfer requires a configured payment provider and verified payment confirmation."
+            });
+        }
+
         var cacheKey = !string.IsNullOrWhiteSpace(idempotencyKey)
             ? $"checkout:{currentUserContext.BranchId}:{idempotencyKey.Trim()}"
             : null;
@@ -132,7 +143,9 @@ public sealed class InvoicesController : ControllerBase
                     currentUserContext.BranchId,
                     currentUserContext.UserId,
                     request.Lines.Select(line => new CheckoutLineRequest(line.DrugId, line.BatchId, line.Quantity)).ToArray(),
-                    request.CustomerId),
+                    request.CustomerId,
+                    paymentMethod,
+                    IsPendingPayment: false),
                 cancellationToken);
         }
         catch (DigitalSignatureException exception)
@@ -176,6 +189,17 @@ public sealed class InvoicesController : ControllerBase
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Số điện thoại người nhận là bắt buộc.");
         if (request.Lines is null || request.Lines.Count == 0)
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Đơn hàng phải có ít nhất một mặt hàng thuốc.");
+
+        var patientPaymentMethod = request.PaymentMethod?.Trim().ToUpperInvariant() ?? "CASH";
+        if (!string.Equals(patientPaymentMethod, "CASH", StringComparison.Ordinal))
+        {
+            return UnprocessableEntity(new ProblemDetails
+            {
+                Status = StatusCodes.Status422UnprocessableEntity,
+                Title = "Phương thức thanh toán chưa khả dụng.",
+                Detail = "Chuyển khoản chỉ được kích hoạt khi hệ thống có thể xác minh giao dịch ngân hàng."
+            });
+        }
 
         var branchId = !string.IsNullOrWhiteSpace(request.BranchId)
             ? request.BranchId
@@ -228,17 +252,14 @@ public sealed class InvoicesController : ControllerBase
                 checkoutLines.Add(new CheckoutLineRequest(line.DrugId, batchId, line.Quantity));
             }
 
-            var isPending = string.IsNullOrWhiteSpace(request.PaymentMethod) ||
-                            string.Equals(request.PaymentMethod, "CASH", StringComparison.OrdinalIgnoreCase);
-
             var result = await checkoutService.CheckoutAsync(
                 new CheckoutRequest(
                     branchId,
                     cashierId,
                     checkoutLines.ToArray(),
                     customer.Id,
-                    request.PaymentMethod ?? "CASH",
-                    IsPendingPayment: isPending),
+                    patientPaymentMethod,
+                    IsPendingPayment: true),
                 cancellationToken);
 
             if (result.IsFailure)

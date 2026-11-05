@@ -1,7 +1,7 @@
 import {
-  ArrowLeftRight, Boxes, Building, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck,
+  ArrowLeftRight, Boxes, Building, ChevronDown, ClipboardCheck,
   FileText, HeartHandshake, KeyRound, LayoutDashboard, LogOut, Menu, PackagePlus, Pill,
-  RotateCcw, Settings, ShieldCheck, ShoppingCart, Truck, Users, X,
+  PanelLeftClose, PanelLeftOpen, ReceiptText, RotateCcw, Settings, ShieldCheck, Truck, Users, X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
@@ -15,7 +15,7 @@ const navigationGroups = [
     { label: 'Tổng quan chi nhánh', to: '/reports', icon: LayoutDashboard, roles: ['OWNER'] },
   ] },
   { id: 'sales', label: 'Bán hàng', roles: ['OWNER', 'SALES'], items: [
-    { label: 'Bán hàng tại quầy', to: '/checkout', icon: ShoppingCart, roles: ['OWNER', 'SALES'] },
+    { label: 'Bán hàng tại quầy', to: '/checkout', icon: ReceiptText, roles: ['OWNER', 'SALES'] },
     { label: 'Hóa đơn bán hàng', to: '/invoices', icon: FileText, roles: ['OWNER', 'SALES'] },
     { label: 'Đổi trả & Hoàn tiền', to: '/returns', icon: RotateCcw, roles: ['OWNER', 'SALES'] },
     { label: 'Khách hàng & Tích điểm', to: '/customers', icon: HeartHandshake, roles: ['OWNER', 'SALES'] },
@@ -54,7 +54,7 @@ export function AppShell() {
   const location = useLocation();
   const role = currentUser?.role as Role | undefined;
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.localStorage.getItem('pharmasecure.sidebar.collapsed') === 'true');
   const [accountOpen, setAccountOpen] = useState(false);
   const accountMenu = useRef<HTMLDivElement>(null);
   const groups = useMemo(() => navigationGroups
@@ -68,6 +68,10 @@ export function AppShell() {
     if (activeGroup) setOpenGroups(current => ({ ...current, [activeGroup]: true }));
     setMobileOpen(false);
   }, [activeGroup, location.pathname]);
+
+  useEffect(() => {
+    window.localStorage.setItem('pharmasecure.sidebar.collapsed', String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     function closeAccount(event: PointerEvent) {
@@ -92,7 +96,7 @@ export function AppShell() {
   }
 
   const navigation = (mobile = false) => (
-    <nav className="space-y-3" aria-label={mobile ? 'Điều hướng di động' : 'Điều hướng chính'}>
+    <nav className="space-y-2.5" aria-label={mobile ? 'Điều hướng di động' : 'Điều hướng chính'}>
       {groups.map(group => {
         const collapsed = sidebarCollapsed && !mobile;
         const expanded = mobile || collapsed || (openGroups[group.id] ?? group.id === activeGroup);
@@ -110,16 +114,16 @@ export function AppShell() {
     </nav>
   );
 
-  return <div className={`min-h-screen bg-canvas lg:grid ${sidebarCollapsed ? 'lg:grid-cols-[76px_minmax(0,1fr)]' : 'lg:grid-cols-[264px_minmax(0,1fr)]'}`}>
+  return <div className={`min-h-screen bg-canvas lg:grid lg:transition-[grid-template-columns] lg:duration-200 lg:ease-out ${sidebarCollapsed ? 'lg:grid-cols-[76px_minmax(0,1fr)]' : 'lg:grid-cols-[264px_minmax(0,1fr)]'}`}>
     <aside className="hidden min-w-0 border-r border-line bg-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
       <div className={`flex h-[76px] items-center border-b border-line ${sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-6'}`}>
         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-forest text-white"><Pill size={19} strokeWidth={2.2} /></div>
         {!sidebarCollapsed && <div><p className="font-display text-[15px] font-extrabold leading-none text-ink">PharmaSecure</p><p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Quản trị nhà thuốc</p></div>}
       </div>
-      <div className="flex-1 overflow-y-auto px-3 py-5">{navigation()}</div>
+      <div className="scrollbar-hidden flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">{navigation()}</div>
       <div className="border-t border-line p-3">
-        <button type="button" onClick={() => setSidebarCollapsed(value => !value)} className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-ink" aria-label={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'}>
-          {sidebarCollapsed ? <ChevronRight size={17} /> : <><ChevronLeft size={17} /><span>Thu gọn</span></>}
+        <button type="button" onClick={() => setSidebarCollapsed(value => !value)} title={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} className={`flex w-full items-center rounded-lg px-3 py-2.5 text-xs font-semibold text-slate-500 transition-colors duration-150 hover:bg-slate-50 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest ${sidebarCollapsed ? 'justify-center' : 'gap-3'}`} aria-label={sidebarCollapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} aria-pressed={sidebarCollapsed}>
+          {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <><PanelLeftClose size={18} /><span>Thu gọn</span></>}
         </button>
       </div>
     </aside>

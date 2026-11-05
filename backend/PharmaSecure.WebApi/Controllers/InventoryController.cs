@@ -68,6 +68,17 @@ public sealed class InventoryController : ControllerBase
         return Ok(await inventoryQueryService.GetLowStockAsync(branchId, threshold, cancellationToken));
     }
 
+    [HttpGet("available-by-drug")]
+    public async Task<ActionResult<IReadOnlyCollection<AvailableInventoryResponse>>> GetAvailableByDrugAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var branchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
+
+        return Ok(await inventoryQueryService.GetAvailableByDrugAsync(branchId, cancellationToken));
+    }
+
     [HttpPost("adjust")]
     [Authorize(Roles = "OWNER,WAREHOUSE")]
     public async Task<ActionResult> AdjustStockAsync(

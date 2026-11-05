@@ -19,4 +19,8 @@ public interface IInventoryQueryService
         string branchId,
         int threshold = 10,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyCollection<AvailableInventoryResponse>> GetAvailableByDrugAsync(
+        string branchId,
+        CancellationToken cancellationToken = default);
 }

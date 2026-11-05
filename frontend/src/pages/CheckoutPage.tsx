@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, LoaderCircle, Plus, Printer, Search, ShoppingBag, User, UserPlus, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Banknote, CalendarDays, Check, LoaderCircle, PackageCheck, Plus, Printer, QrCode, Search, ShoppingBag, User, UserPlus, X } from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
-import type { CheckoutResponse, Drug, DrugBatch, PageResult, Customer, CreateCustomerPayload } from '../types';
+import type { AvailableInventory, CheckoutResponse, Drug, DrugBatch, PageResult, Customer, CreateCustomerPayload } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { ReceiptPrintModal, type ReceiptData } from '../components/invoices/ReceiptPrintModal';
+import { Modal } from '../components/common';
 import { generateUUID } from '../utils';
 
 interface CartLine {
@@ -24,6 +25,8 @@ export function CheckoutPage() {
   const [quantity, setQuantity] = useState(1);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [isLoadingDrugs, setIsLoadingDrugs] = useState(true);
+  const [availableByDrug, setAvailableByDrug] = useState<Map<string, number>>(new Map());
+  const [inventoryStatus, setInventoryStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -47,6 +50,27 @@ export function CheckoutPage() {
   });
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const [customerModalError, setCustomerModalError] = useState('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showTransferNotice, setShowTransferNotice] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER'>('CASH');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+
+  const loadAvailableInventory = useCallback(async () => {
+    setInventoryStatus('loading');
+    try {
+      const result = await apiClient<AvailableInventory[]>('/inventory/available-by-drug');
+      setAvailableByDrug(new Map(result.map((item) => [item.drugId, item.availableQuantity])));
+      setInventoryStatus('ready');
+    } catch {
+      setAvailableByDrug(new Map());
+      setInventoryStatus('error');
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAvailableInventory();
+  }, [loadAvailableInventory]);
 
   // Search Drugs
   useEffect(() => {
@@ -78,7 +102,16 @@ export function CheckoutPage() {
     setIsLoadingBatches(true);
     setSelectedBatchId('');
     apiClient<DrugBatch[]>(`/drugs/${encodeURIComponent(selectedDrug.drugId)}/batches`)
-      .then((result) => { if (active) setBatches(result); })
+      .then((result) => {
+        if (!active) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const eligible = result
+          .filter((batch) => batch.stockQuantity > 0 && batch.expiryDate.slice(0, 10) >= today)
+          .sort((left, right) => left.expiryDate.localeCompare(right.expiryDate));
+        setBatches(eligible);
+        setSelectedBatchId(eligible[0]?.batchId ?? '');
+        window.requestAnimationFrame(() => quantityInputRef.current?.focus());
+      })
       .catch((requestError) => { if (active) setError(requestError instanceof ApiError ? requestError.message : 'Could not load batches.'); })
       .finally(() => { if (active) setIsLoadingBatches(false); });
     return () => { active = false; };
@@ -131,6 +164,9 @@ export function CheckoutPage() {
     setCart(existingIndex < 0
       ? [...cart, { drug: selectedDrug, batch: selectedBatch, quantity }]
       : cart.map((line, index) => index === existingIndex ? { ...line, quantity: line.quantity + quantity } : line));
+    setSelectedDrug(null);
+    setQuantity(1);
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
   }
 
   function updateQuantity(index: number, nextQuantity: number) {
@@ -152,6 +188,7 @@ export function CheckoutPage() {
         headers: { 'Idempotency-Key': idempotencyKey.current },
         body: JSON.stringify({
           customerId: selectedCustomer?.id ?? null,
+          paymentMethod: 'CASH',
           lines: cart.map(({ drug, batch, quantity: lineQuantity }) => ({
             drugId: drug.drugId,
             batchId: batch.batchId,
@@ -183,8 +220,10 @@ export function CheckoutPage() {
       });
 
       setReceipt(response);
+      setShowPaymentModal(false);
       setCart([]);
       idempotencyKey.current = generateUUID();
+      void loadAvailableInventory();
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể hoàn tất thanh toán hóa đơn.');
     } finally {
@@ -218,16 +257,9 @@ export function CheckoutPage() {
   }
 
   return (
-    <div className="animate-enter">
-      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.13em] text-forest">Quầy thu ngân</p>
-          <h1 className="mt-2 font-display text-3xl font-extrabold tracking-tight text-ink">Bán hàng tại quầy</h1>
-          <p className="mt-1.5 text-sm text-slate-500">Tạo hóa đơn bán lẻ trực tiếp từ tồn kho chi nhánh.</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-xs font-semibold text-slate-600">
-          <ShoppingBag size={15} className="text-forest" /> {itemCount} sản phẩm trong giỏ
-        </div>
+    <div>
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]">Bán hàng tại quầy</h1>
       </div>
 
       {error && (
@@ -249,7 +281,8 @@ export function CheckoutPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Tìm tên thuốc hoặc mã thuốc..."
+                ref={searchInputRef}
+                placeholder="Tìm thuốc theo tên..."
                 className="h-10 w-full rounded-md border border-line bg-white pl-9 pr-3 text-xs text-ink placeholder:text-slate-400 focus:border-forest focus:outline-none"
               />
             </label>
@@ -261,24 +294,50 @@ export function CheckoutPage() {
             </div>
           ) : drugs.length ? (
             <div className="overflow-hidden rounded-md border border-line bg-white shadow-panel">
-              {drugs.map((drug) => (
-                <button
-                  key={drug.drugId}
-                  onClick={() => setSelectedDrug(drug)}
-                  className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-line px-4 py-4 text-left last:border-b-0 hover:bg-[#f8faf9] sm:grid-cols-[minmax(0,1fr)_110px_90px] ${
-                    selectedDrug?.drugId === drug.drugId ? 'bg-[#f0f7f3]' : ''
-                  }`}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-bold text-ink">{drug.name}</span>
-                    <span className="mt-1 block truncate text-[11px] text-slate-500">
-                      {drug.drugCode} · {drug.unit}{drug.activeIngredient ? ` · ${drug.activeIngredient}` : ''}
+              <div className="hidden grid-cols-[minmax(0,1.6fr)_80px_110px_120px] gap-3 border-b border-line bg-slate-50 px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500 sm:grid">
+                <span>Tên thuốc</span><span>ĐVT</span><span className="text-right">Đơn giá</span><span className="text-right">Tồn khả dụng</span>
+              </div>
+              {inventoryStatus === 'error' && (
+                <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                  <span>Không thể xác minh tồn kho. Tạm thời không thể chọn thuốc để bán.</span>
+                  <button type="button" onClick={() => void loadAvailableInventory()} className="shrink-0 font-bold underline underline-offset-2">Tải lại</button>
+                </div>
+              )}
+              {drugs.map((drug) => {
+                const available = availableByDrug.get(drug.drugId) ?? 0;
+                const isUnknown = inventoryStatus !== 'ready';
+                const isInactive = drug.isActive === false;
+                const isUnavailable = isUnknown || isInactive || available <= 0;
+                const availabilityLabel = isInactive
+                  ? 'Ngừng kinh doanh'
+                  : isUnknown
+                    ? (inventoryStatus === 'loading' ? 'Đang tải…' : 'Chưa xác định')
+                    : available > 0 ? available.toLocaleString('vi-VN') : 'Hết hàng';
+                return (
+                  <button
+                    key={drug.drugId}
+                    type="button"
+                    disabled={isUnavailable}
+                    onClick={() => { setSelectedDrug(drug); setQuantity(1); }}
+                    className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-line px-4 py-3.5 text-left transition-colors last:border-b-0 sm:grid-cols-[minmax(0,1.6fr)_80px_110px_120px] ${
+                      selectedDrug?.drugId === drug.drugId ? 'bg-[#f0f7f3]' : 'hover:bg-[#f8faf9]'
+                    } disabled:cursor-not-allowed disabled:bg-slate-50/70 disabled:hover:bg-slate-50/70`}
+                    aria-label={`${drug.name}, tồn khả dụng ${availabilityLabel}`}
+                  >
+                    <span className="min-w-0">
+                      <span className={`block truncate text-sm font-bold ${isUnavailable ? 'text-slate-500' : 'text-ink'}`}>{drug.name}</span>
+                      {drug.activeIngredient && <span className="mt-1 block truncate text-[11px] text-slate-500">{drug.activeIngredient}</span>}
+                      <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:hidden">
+                        <span className="text-slate-500">ĐVT: <strong className="text-slate-700">{drug.unit}</strong></span>
+                        <span className="font-mono font-semibold text-forest">{money.format(drug.price)}</span>
+                      </span>
                     </span>
-                  </span>
-                  <span className="hidden text-right text-xs font-semibold text-slate-600 sm:block">{drug.unit}</span>
-                  <span className="text-right font-mono text-xs font-semibold text-forest">{money.format(drug.price)}</span>
-                </button>
-              ))}
+                    <span className="hidden text-xs font-semibold text-slate-600 sm:block">{drug.unit}</span>
+                    <span className="hidden text-right font-mono text-xs font-semibold text-forest sm:block">{money.format(drug.price)}</span>
+                    <span className={`text-right text-xs font-bold ${isUnknown ? 'text-amber-700' : available > 0 && !isInactive ? 'text-forest' : 'text-slate-500'}`}>{availabilityLabel}</span>
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-md border border-dashed border-line bg-white px-5 py-12 text-center text-sm text-slate-500">
@@ -286,51 +345,6 @@ export function CheckoutPage() {
             </div>
           )}
 
-          <div className="mt-5 grid gap-3 rounded-md border border-line bg-white p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px_auto] sm:items-end">
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Thuốc đã chọn</span>
-              <span className="flex h-10 items-center truncate rounded-md bg-slate-50 px-3 text-xs font-semibold text-ink">
-                {selectedDrug?.name ?? 'Chọn thuốc từ danh mục'}
-              </span>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Lô thuốc (FEFO)</span>
-              <span className="relative block">
-                <select
-                  disabled={!selectedDrug || isLoadingBatches}
-                  value={selectedBatchId}
-                  onChange={(event) => setSelectedBatchId(event.target.value)}
-                  className="h-10 w-full appearance-none rounded-md border border-line bg-white px-3 pr-8 text-xs text-ink disabled:bg-slate-50 disabled:text-slate-400"
-                >
-                  <option value="">{isLoadingBatches ? 'Đang tải…' : 'Chọn lô xuất bán'}</option>
-                  {batches.map((batch) => (
-                    <option key={batch.batchId} value={batch.batchId}>
-                      {batch.batchNo} · Còn {batch.stockQuantity} {selectedDrug?.unit ?? 'đơn vị'}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              </span>
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-[11px] font-bold text-slate-600">Số lượng</span>
-              <input
-                type="number"
-                min="1"
-                max={selectedBatch?.stockQuantity ?? 1}
-                value={quantity}
-                onChange={(event) => setQuantity(Number(event.target.value))}
-                className="h-10 w-full rounded-md border border-line px-3 text-xs text-ink"
-              />
-            </label>
-            <button
-              onClick={addToCart}
-              disabled={!selectedDrug || !selectedBatch || quantity < 1 || quantity > (selectedBatch?.stockQuantity ?? 0)}
-              className="flex h-10 items-center justify-center gap-2 rounded-md bg-ink px-4 text-xs font-bold text-white hover:bg-forest disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Plus size={15} /> Thêm
-            </button>
-          </div>
         </section>
 
         {/* Right Column: Customer Info & Cart */}
@@ -421,12 +435,9 @@ export function CheckoutPage() {
             )}
           </div>
 
-          {/* Cart Header */}
+          {/* Current sale header */}
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
-            <h2 className="font-display text-base font-extrabold text-ink">Đơn hàng hiện tại</h2>
-            <span className="rounded bg-mint px-2 py-1 text-[10px] font-bold uppercase text-forest">
-              {cart.length} dòng thuốc
-            </span>
+            <h2 className="font-display text-base font-extrabold text-ink">Đơn bán hiện tại</h2>
           </div>
 
           {/* Cart Items */}
@@ -435,7 +446,7 @@ export function CheckoutPage() {
               <div className="grid min-h-[140px] place-items-center text-center text-xs text-slate-400">
                 <div>
                   <ShoppingBag className="mx-auto mb-2 text-slate-300" size={21} />
-                  Giỏ hàng đang trống
+                  Chưa chọn thuốc cho đơn bán
                 </div>
               </div>
             ) : (
@@ -486,6 +497,9 @@ export function CheckoutPage() {
 
           {/* Cart Footer */}
           <div className="border-t border-line bg-[#fafcfb] px-5 py-4">
+            <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+              <span>{cart.length} loại thuốc · {itemCount} đơn vị</span>
+            </div>
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span>Tạm tính</span>
               <span className="font-mono">{money.format(total)}</span>
@@ -501,7 +515,7 @@ export function CheckoutPage() {
               <span className="font-mono text-xl font-semibold text-forest">{money.format(total)}</span>
             </div>
             <button
-              onClick={submitCheckout}
+              onClick={() => { setPaymentMethod('CASH'); setShowPaymentModal(true); }}
               disabled={!cart.length || isSubmitting}
               className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-md bg-coral text-sm font-bold text-white transition-colors hover:bg-[#bd5b3d] disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -511,7 +525,7 @@ export function CheckoutPage() {
                 </>
               ) : (
                 <>
-                  Thanh toán &amp; Xuất hóa đơn <Check size={16} />
+                  Tiến hành thanh toán <Check size={16} />
                 </>
               )}
             </button>
@@ -519,28 +533,103 @@ export function CheckoutPage() {
         </aside>
       </div>
 
-      {/* Quick Create Customer Modal */}
-      {showCreateCustomerModal && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-ink/55 p-4"
-          role="presentation"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowCreateCustomerModal(false); }}
-        >
-          <div role="dialog" aria-modal="true" className="w-full max-w-[460px] rounded-lg bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-line px-6 py-4">
-              <h3 className="font-display text-base font-extrabold text-ink flex items-center gap-2">
-                <UserPlus size={18} className="text-forest" /> Thêm khách hàng mới
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowCreateCustomerModal(false)}
-                className="grid h-8 w-8 place-items-center rounded text-slate-400 hover:bg-slate-100"
-              >
-                <X size={16} />
+      <Modal
+        isOpen={Boolean(selectedDrug)}
+        onClose={() => setSelectedDrug(null)}
+        title={selectedDrug?.name ?? 'Chọn lô thuốc'}
+        subtitle={selectedDrug ? `${selectedDrug.unit} · ${money.format(selectedDrug.price)}` : undefined}
+        icon={PackageCheck}
+        maxWidth="lg"
+      >
+        {isLoadingBatches ? (
+          <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-slate-500">
+            <LoaderCircle size={17} className="animate-spin" /> Đang tải lô khả dụng...
+          </div>
+        ) : batches.length ? (
+          <div className="space-y-5">
+            <fieldset>
+              <legend className="mb-2 text-xs font-bold text-slate-700">Lô xuất bán theo FEFO</legend>
+              <div className="space-y-2">
+                {batches.map((batch, index) => (
+                  <label key={batch.batchId} className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 transition-colors ${selectedBatchId === batch.batchId ? 'border-forest bg-mint/45' : 'border-line hover:bg-slate-50'}`}>
+                    <span className="flex min-w-0 items-center gap-3">
+                      <input type="radio" name="sale-batch" value={batch.batchId} checked={selectedBatchId === batch.batchId} onChange={(event) => setSelectedBatchId(event.target.value)} className="accent-forest" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-bold text-ink">Lô {batch.batchNo}</span>
+                        <span className="mt-1 flex items-center gap-1 text-xs text-slate-500"><CalendarDays size={13} /> HSD {new Date(batch.expiryDate).toLocaleDateString('vi-VN')}</span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right text-xs font-semibold text-forest">Còn {batch.stockQuantity} {selectedDrug?.unit}</span>
+                    {index === 0 && <span className="sr-only">Lô được ưu tiên theo FEFO</span>}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <div className="grid gap-3 sm:grid-cols-[120px_1fr] sm:items-end">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-bold text-slate-700">Số lượng</span>
+                <input ref={quantityInputRef} type="number" min="1" max={selectedBatch?.stockQuantity ?? 1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} onKeyDown={(event) => { if (event.key === 'Enter') addToCart(); }} className="h-11 w-full rounded-lg border border-line px-3 text-sm text-ink focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/15" />
+              </label>
+              <button type="button" onClick={addToCart} disabled={!selectedBatch || quantity < 1 || quantity > (selectedBatch?.stockQuantity ?? 0)} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-ink px-5 text-sm font-bold text-white transition-colors hover:bg-forest disabled:cursor-not-allowed disabled:opacity-40">
+                <Plus size={16} /> Thêm vào đơn
               </button>
             </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-900">Thuốc này không có lô còn hàng và còn hạn sử dụng tại chi nhánh hiện tại.</div>
+        )}
+      </Modal>
 
-            <form onSubmit={handleCreateCustomer} className="p-6 space-y-4">
+      <Modal
+        isOpen={showPaymentModal}
+        onClose={() => { if (!isSubmitting) setShowPaymentModal(false); }}
+        title="Chọn phương thức thanh toán"
+        subtitle={`Tổng thanh toán: ${money.format(total)}`}
+        icon={Banknote}
+        maxWidth="md"
+        closeOnOverlayClick={false}
+        footer={paymentMethod === 'CASH' ? <>
+          <button type="button" onClick={() => setShowPaymentModal(false)} disabled={isSubmitting} className="h-10 rounded-lg border border-line px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Quay lại</button>
+          <button type="button" onClick={submitCheckout} disabled={isSubmitting} className="flex h-10 items-center gap-2 rounded-lg bg-coral px-5 text-xs font-bold text-white hover:bg-[#bd5b3d] disabled:opacity-50">{isSubmitting ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} Thanh toán &amp; Xuất hóa đơn</button>
+        </> : undefined}
+      >
+        <div className="space-y-3">
+          <button type="button" onClick={() => setPaymentMethod('CASH')} className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors ${paymentMethod === 'CASH' ? 'border-forest bg-mint/45' : 'border-line hover:bg-slate-50'}`} aria-pressed={paymentMethod === 'CASH'}>
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-forest"><Banknote size={20} /></span>
+            <span><span className="block text-sm font-bold text-ink">Tiền mặt</span><span className="mt-0.5 block text-xs text-slate-500">Phát hành hóa đơn sau khi xác nhận đã thu đủ tiền.</span></span>
+          </button>
+          <button type="button" onClick={() => { setPaymentMethod('BANK_TRANSFER'); setShowPaymentModal(false); setShowTransferNotice(true); }} className="flex w-full items-center gap-3 rounded-xl border border-line p-4 text-left transition-colors hover:border-sky-300 hover:bg-sky-50/50" aria-label="Chuyển khoản, đang phát triển">
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-sky-100 text-sky-700"><QrCode size={20} /></span>
+            <span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="block text-sm font-bold text-ink">Chuyển khoản</span><span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">Đang phát triển</span></span><span className="mt-0.5 block text-xs text-slate-500">Thanh toán qua ngân hàng và mã QR sẽ được hỗ trợ trong phiên bản sau.</span></span>
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showTransferNotice}
+        onClose={() => { setShowTransferNotice(false); setPaymentMethod('CASH'); }}
+        title="Thanh toán chuyển khoản đang phát triển"
+        icon={QrCode}
+        maxWidth="sm"
+        footer={<>
+          <button type="button" onClick={() => { setShowTransferNotice(false); setPaymentMethod('CASH'); }} className="h-10 rounded-lg border border-line px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50">Đã hiểu</button>
+          <button type="button" onClick={() => { setShowTransferNotice(false); setPaymentMethod('CASH'); setShowPaymentModal(true); }} className="h-10 rounded-lg bg-forest px-4 text-xs font-bold text-white hover:bg-forest/90">Chọn tiền mặt</button>
+        </>}
+      >
+        <p className="text-sm leading-6 text-slate-600">Phương thức thanh toán qua chuyển khoản ngân hàng và mã QR chưa khả dụng trong phiên bản hiện tại. Vui lòng sử dụng thanh toán tiền mặt để hoàn tất giao dịch.</p>
+      </Modal>
+
+      {/* Quick Create Customer Modal */}
+      <Modal
+        isOpen={showCreateCustomerModal}
+        onClose={() => { if (!isCreatingCustomer) setShowCreateCustomerModal(false); }}
+        title="Thêm khách hàng mới"
+        subtitle="Khách hàng mới sẽ được chọn cho đơn bán hiện tại."
+        icon={UserPlus}
+        maxWidth="md"
+        closeOnOverlayClick={false}
+      >
+        <form onSubmit={handleCreateCustomer} className="space-y-4">
               {customerModalError && (
                 <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
                   {customerModalError}
@@ -613,11 +702,8 @@ export function CheckoutPage() {
                   {isCreatingCustomer ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} Lưu &amp; Chọn
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
+        </form>
+      </Modal>
       {/* Sale Receipt Modal */}
       {receipt && (
         <div

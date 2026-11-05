@@ -50,13 +50,13 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
           <Route index element={<DefaultHomeRoute />} />
-          <Route path="checkout" element={<CheckoutPage />} />
-          <Route path="invoices" element={<InvoicesPage />} />
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="settings" element={<SettingsPage />} />
 
           {/* Role-guarded routes */}
           <Route element={<RequireAuth allowedRoles={['OWNER', 'SALES']} />}>
+            <Route path="checkout" element={<CheckoutPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
             <Route path="customers" element={<CustomersPage />} />
             <Route path="returns" element={<ReturnsPage />} />
           </Route>
