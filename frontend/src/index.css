@@ -44,6 +44,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .animate-enter { animation: enter 300ms ease-out both; }
 
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }

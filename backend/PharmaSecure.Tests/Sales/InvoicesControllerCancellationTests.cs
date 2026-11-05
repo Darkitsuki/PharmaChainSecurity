@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Moq;
 using PharmaSecure.Application.Common;
+using PharmaSecure.Application.Features.Customers;
 using PharmaSecure.Application.Features.Invoices;
 using PharmaSecure.Application.Features.Sales;
+using PharmaSecure.Application.Features.Security;
 using PharmaSecure.Application.Interfaces;
 using PharmaSecure.WebApi.Controllers;
 using Xunit;
@@ -130,5 +132,64 @@ public class InvoicesControllerCancellationTests
         var problem = Assert.IsType<ProblemDetails>(objectResult.Value);
         Assert.Equal(StatusCodes.Status400BadRequest, problem.Status);
         Assert.Equal("Hóa đơn đã bị hủy từ trước, không thể hủy lại.", problem.Title);
+    }
+
+    [Fact]
+    public async Task CheckoutAsync_WhenCash_ForwardsExplicitPaidCashRequest()
+    {
+        var expected = new CheckoutResponse("inv-1", "HD-1", 100000m, "hash");
+        checkoutServiceMock.Setup(service => service.CheckoutAsync(
+                It.Is<CheckoutRequest>(request => request.PaymentMethod == "CASH" && !request.IsPendingPayment),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<CheckoutResponse>.Success(expected));
+        var controller = CreateController();
+
+        var result = await controller.CheckoutAsync(new CheckoutRequestBody(
+            [new CheckoutLineBody("drug-1", "batch-1", 1)],
+            PaymentMethod: "cash"));
+
+        var created = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status201Created, created.StatusCode);
+        Assert.Same(expected, created.Value);
+    }
+
+    [Theory]
+    [InlineData("BANK_TRANSFER")]
+    [InlineData("QR_CODE")]
+    public async Task CheckoutAsync_WhenPaymentMethodIsNotSupported_FailsClosed(string paymentMethod)
+    {
+        var controller = CreateController();
+
+        var result = await controller.CheckoutAsync(new CheckoutRequestBody(
+            [new CheckoutLineBody("drug-1", "batch-1", 1)],
+            PaymentMethod: paymentMethod));
+
+        var rejected = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        var problem = Assert.IsType<ProblemDetails>(rejected.Value);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, problem.Status);
+        checkoutServiceMock.Verify(service => service.CheckoutAsync(
+            It.IsAny<CheckoutRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task PatientCheckoutAsync_WhenBankTransferIsNotConfigured_FailsBeforeCustomerOrInventoryWork()
+    {
+        var customerService = new Mock<ICustomerService>();
+        var drugQueryService = new Mock<IDrugQueryService>();
+        var controller = CreateController(isAuthenticated: false);
+        var request = new PatientCheckoutRequest(
+            "0901234567", "Khách hàng", null, null, "BANK_TRANSFER",
+            [new CheckoutLineBody("drug-1", "batch-1", 1)]);
+
+        var result = await controller.PatientCheckoutAsync(
+            request, customerService.Object, drugQueryService.Object);
+
+        var rejected = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        var problem = Assert.IsType<ProblemDetails>(rejected.Value);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, problem.Status);
+        customerService.VerifyNoOtherCalls();
+        drugQueryService.VerifyNoOtherCalls();
+        checkoutServiceMock.Verify(service => service.CheckoutAsync(
+            It.IsAny<CheckoutRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

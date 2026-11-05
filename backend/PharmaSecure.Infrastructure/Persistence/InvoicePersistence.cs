@@ -61,7 +61,7 @@ public sealed class InvoicePersistence : IInvoicePersistence
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        if (!string.IsNullOrWhiteSpace(invoice.CustomerId))
+        if (!string.IsNullOrWhiteSpace(invoice.CustomerId) && string.Equals(invoice.PaymentStatus, "PAID", StringComparison.OrdinalIgnoreCase))
         {
             var pointsEarned = (int)(invoice.TotalAmount / 10000m);
             await using var customerCmd = CreateCommand("""

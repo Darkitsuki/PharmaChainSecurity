@@ -46,7 +46,7 @@ public sealed class ReportService : IReportService
             {
                 cmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 cmd.BindByName = true;
-                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId";
+                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND NVL(PaymentStatus, 'PAID') = 'PAID'";
                 cmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
 
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
@@ -62,7 +62,7 @@ public sealed class ReportService : IReportService
             {
                 cmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 cmd.BindByName = true;
-                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND CreatedDate >= :todayStart";
+                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND NVL(PaymentStatus, 'PAID') = 'PAID' AND CreatedDate >= :todayStart";
                 cmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
                 cmd.Parameters.Add("todayStart", OracleDbType.TimeStamp).Value = todayStart;
 
@@ -79,7 +79,7 @@ public sealed class ReportService : IReportService
             {
                 cmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 cmd.BindByName = true;
-                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND CreatedDate >= :monthStart";
+                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND NVL(PaymentStatus, 'PAID') = 'PAID' AND CreatedDate >= :monthStart";
                 cmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
                 cmd.Parameters.Add("monthStart", OracleDbType.TimeStamp).Value = monthStart;
 
@@ -102,7 +102,7 @@ public sealed class ReportService : IReportService
                     FROM INVOICE_ITEMS item
                     JOIN INVOICES inv ON item.InvoiceId = inv.id
                     JOIN DRUGS d ON item.DrugId = d.id
-                    WHERE inv.BranchId = :branchId
+                    WHERE inv.BranchId = :branchId AND NVL(inv.PaymentStatus, 'PAID') = 'PAID'
                     GROUP BY item.DrugId, d.DrugCode, d.Name
                     ORDER BY SUM(item.Quantity) DESC
                     FETCH FIRST 5 ROWS ONLY
@@ -130,7 +130,7 @@ public sealed class ReportService : IReportService
                 cmd.CommandText = """
                     SELECT TO_CHAR(CreatedDate, 'YYYY-MM-DD'), NVL(SUM(TotalAmount), 0), COUNT(*)
                     FROM INVOICES
-                    WHERE BranchId = :branchId AND CreatedDate >= :intervalStart
+                    WHERE BranchId = :branchId AND NVL(PaymentStatus, 'PAID') = 'PAID' AND CreatedDate >= :intervalStart
                     GROUP BY TO_CHAR(CreatedDate, 'YYYY-MM-DD')
                     ORDER BY TO_CHAR(CreatedDate, 'YYYY-MM-DD') ASC
                     """;
