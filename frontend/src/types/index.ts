@@ -76,6 +76,11 @@ export interface InventoryRow {
   quantity: number;
 }
 
+export interface AvailableInventory {
+  drugId: string;
+  availableQuantity: number;
+}
+
 export interface Invoice {
   invoiceId: string;
   invoiceNumber: string;

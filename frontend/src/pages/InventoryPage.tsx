@@ -49,6 +49,7 @@ export function InventoryPage() {
     }
     const uniqueDrugIds = Array.from(new Set(alerts.map((a) => a.drugId)));
     const batchMfgMap: Record<string, string | null> = {};
+    let failedBatchLookups = 0;
 
     await Promise.all(
       uniqueDrugIds.map(async (drugId) => {
@@ -58,7 +59,7 @@ export function InventoryPage() {
             batchMfgMap[b.batchId] = b.mfgDate ?? null;
           });
         } catch {
-          // Ignore individual batch fetch errors
+          failedBatchLookups += 1;
         }
       })
     );
@@ -68,6 +69,9 @@ export function InventoryPage() {
       mfgDate: batchMfgMap[a.batchId] ?? null,
     }));
     setAlertRows(enriched);
+    if (failedBatchLookups > 0) {
+      setError(`Không thể tải ngày sản xuất cho ${failedBatchLookups} thuốc. Dữ liệu tồn kho khác vẫn được giữ nguyên.`);
+    }
   };
 
   const loadData = () => {

@@ -567,7 +567,7 @@ export function PurchaseOrdersPage() {
         isOpen={!!voucherOrder}
         onClose={() => setVoucherOrder(null)}
         order={voucherOrder}
-        branchName={currentUser?.branchName || 'Chi nhánh hệ thống'}
+        branchName={currentUser?.branchName || voucherOrder?.branchId || 'Chưa xác định'}
       />
     </div>
   );

@@ -74,6 +74,36 @@ public class InventoryControllerTests
     }
 
     [Fact]
+    public async Task GetAvailableByDrugAsync_UsesAuthenticatedBranch()
+    {
+        var expected = new List<AvailableInventoryResponse>
+        {
+            new("drug-1", 443),
+            new("drug-2", 7)
+        };
+        queryServiceMock
+            .Setup(service => service.GetAvailableByDrugAsync("branch-01", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        var result = await CreateController().GetAvailableByDrugAsync();
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal(expected, Assert.IsAssignableFrom<IReadOnlyCollection<AvailableInventoryResponse>>(okResult.Value));
+        queryServiceMock.Verify(service => service.GetAvailableByDrugAsync(
+            "branch-01", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetAvailableByDrugAsync_WhenBranchClaimIsMissing_ReturnsForbid()
+    {
+        var result = await CreateController(branchId: string.Empty).GetAvailableByDrugAsync();
+
+        Assert.IsType<ForbidResult>(result.Result);
+        queryServiceMock.Verify(service => service.GetAvailableByDrugAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task AdjustStockAsync_WhenValid_PassesUserIdAndReturnsNoContent()
     {
         var controller = CreateController("branch-01", "user-thukho", "WAREHOUSE");

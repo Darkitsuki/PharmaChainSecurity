@@ -4,5 +4,6 @@
 **/obj/
 frontend/node_modules/
 backend/PharmaSecure.WebApi/appsettings.Email.local.json
+backend/PharmaSecure.WebApi/appsettings.PayOS.local.json
 backend/PharmaSecure.WebApi/appsettings.Development.json
 backend/PharmaSecure.WebApi/appsettings.json

@@ -150,6 +150,45 @@ public sealed class InventoryQueryService : IInventoryQueryService
         }
     }
 
+    public async Task<IReadOnlyCollection<AvailableInventoryResponse>> GetAvailableByDrugAsync(
+        string branchId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(branchId))
+            throw new ArgumentException("Branch ID is required.", nameof(branchId));
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            var items = new List<AvailableInventoryResponse>();
+            await using var command = CreateCommand("""
+                SELECT i.DrugId, SUM(i.Quantity)
+                FROM INVENTORIES i
+                INNER JOIN DRUGS d ON d.id = i.DrugId
+                INNER JOIN DRUG_BATCHES b ON b.id = i.BatchId AND b.DrugId = i.DrugId
+                WHERE i.BranchId = :branchId
+                  AND i.Quantity > 0
+                  AND b.ExpiryDate >= TRUNC(SYSDATE)
+                  AND NVL(d.IsActive, 1) = 1
+                GROUP BY i.DrugId
+                ORDER BY i.DrugId
+                """);
+            command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                items.Add(new AvailableInventoryResponse(reader.GetString(0), reader.GetInt32(1)));
+
+            await unitOfWork.CommitAsync(cancellationToken);
+            return items;
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
     private async Task<int> ExecuteCountAsync(string branchId, CancellationToken cancellationToken)
     {
         await using var command = CreateCommand("SELECT COUNT(*) FROM INVENTORIES WHERE BranchId = :branchId");

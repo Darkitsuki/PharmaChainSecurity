@@ -11,12 +11,13 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import type { NotificationItem, NotificationSummary } from '../../types';
+import { useAuth } from '../../context/AuthContext';
 
-const SEEN_NOTIFICATIONS_STORAGE_KEY = 'pharmasecure:seen_notification_ids';
+const SEEN_NOTIFICATIONS_STORAGE_PREFIX = 'pharmasecure:seen_notification_ids';
 
-function getInitialSeenIds(): string[] {
+function getInitialSeenIds(storageKey: string): string[] {
   try {
-    const raw = localStorage.getItem(SEEN_NOTIFICATIONS_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -27,10 +28,13 @@ function getInitialSeenIds(): string[] {
 
 export function NotificationBell() {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const seenStorageKey = `${SEEN_NOTIFICATIONS_STORAGE_PREFIX}:${currentUser?.userId ?? 'anonymous'}:${currentUser?.branchId ?? 'none'}`;
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'ALL' | 'ORDER' | 'PROCUREMENT' | 'INVENTORY'>('ALL');
   const [isLoading, setIsLoading] = useState(false);
-  const [seenIds, setSeenIds] = useState<string[]>(getInitialSeenIds);
+  const [seenIds, setSeenIds] = useState<string[]>(() => getInitialSeenIds(seenStorageKey));
+  const [loadError, setLoadError] = useState('');
   const [, setNowTick] = useState<number>(Date.now());
   const [summary, setSummary] = useState<NotificationSummary>({
     totalUnread: 0,
@@ -48,13 +52,18 @@ export function NotificationBell() {
       const data = await apiClient<NotificationSummary>('/notifications/summary');
       if (data) {
         setSummary(data);
+        setLoadError('');
       }
     } catch {
-      // Ignore background notification fetch errors
+      setLoadError('Không thể tải thông báo. Dữ liệu hiện tại có thể chưa được cập nhật.');
     } finally {
       if (showLoading) setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    setSeenIds(getInitialSeenIds(seenStorageKey));
+  }, [seenStorageKey]);
 
   // Polling every 12s when page is visible for real-time responsiveness
   useEffect(() => {
@@ -93,13 +102,13 @@ export function NotificationBell() {
       const currentIds = itemsToMark.map((i) => i.id);
       const combined = Array.from(new Set([...currentIds, ...prev])).slice(0, 200);
       try {
-        localStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(combined));
+        localStorage.setItem(seenStorageKey, JSON.stringify(combined));
       } catch {
         // Ignore localStorage quota errors
       }
       return combined;
     });
-  }, []);
+  }, [seenStorageKey]);
 
   // Automatically mark items as seen if popover is open when new items arrive
   useEffect(() => {
@@ -289,7 +298,15 @@ export function NotificationBell() {
 
           {/* Notification Items List */}
           <div className="max-h-[380px] divide-y divide-slate-100 overflow-y-auto">
-            {filteredItems.length === 0 ? (
+            {loadError && (
+              <div role="alert" className="flex items-center justify-between gap-3 bg-amber-50 px-4 py-3 text-[11px] text-amber-900">
+                <span>{loadError}</span>
+                <button type="button" onClick={() => fetchNotifications(true)} className="shrink-0 font-bold underline underline-offset-2">
+                  Thử lại
+                </button>
+              </div>
+            )}
+            {filteredItems.length === 0 && !loadError ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <CheckCircle2 size={36} className="text-emerald-500" />
                 <p className="mt-2 text-xs font-bold text-ink">Không có thông báo nào</p>
@@ -305,10 +322,11 @@ export function NotificationBell() {
                 const isItemUnseen = !seenIds.includes(item.id);
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className={`group flex cursor-pointer items-start gap-3 p-3.5 transition-colors hover:bg-slate-50 ${
+                    className={`group flex w-full cursor-pointer items-start gap-3 p-3.5 text-left transition-colors hover:bg-slate-50 ${
                       isItemUnseen ? 'bg-emerald-50/30' : ''
                     }`}
                   >
@@ -356,7 +374,7 @@ export function NotificationBell() {
                       size={14}
                       className="shrink-0 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100 group-hover:text-forest"
                     />
-                  </div>
+                  </button>
                 );
               })
             )}
