@@ -1,4 +1,5 @@
 import type { ApiProblemDetails } from '../types';
+import { generateUUID } from '../utils';
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 
@@ -22,7 +23,7 @@ function resolveUrl(endpoint: string): string {
 
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('auth_token');
-  const correlationId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+  const correlationId = generateUUID();
   const headers = new Headers(options.headers);
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   headers.set('X-Correlation-ID', headers.get('X-Correlation-ID') ?? correlationId);
