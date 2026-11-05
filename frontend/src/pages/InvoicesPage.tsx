@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   BadgeCheck,
+  CheckCircle2,
   Ban,
   Eye,
   FileText,
@@ -34,6 +35,26 @@ export function InvoicesPage() {
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<InvoiceVerificationResult | null>(null);
   const [verifiedMap, setVerifiedMap] = useState<Record<string, InvoiceVerificationResult>>({});
+  const [payingId, setPayingId] = useState<string | null>(null);
+
+  async function handleConfirmPayment(invoiceId: string) {
+    if (!invoiceId) return;
+    setPayingId(invoiceId);
+    try {
+      await apiClient(`/invoices/${encodeURIComponent(invoiceId)}/confirm-payment`, {
+        method: 'POST',
+      });
+      // Refresh list and modal
+      fetchInvoices(page);
+      if (selectedInvoice && selectedInvoice.invoiceId === invoiceId) {
+        handleViewDetail(invoiceId);
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể xác nhận thanh toán.');
+    } finally {
+      setPayingId(null);
+    }
+  }
 
   // Detail Modal State
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
@@ -245,16 +266,19 @@ export function InvoicesPage() {
       header: 'Trạng Thái',
       cell: (invoice) => {
         const isCancelled = invoice.status === 'CANCELLED';
+        const isPending = invoice.paymentStatus === 'PENDING';
         return (
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
               isCancelled
                 ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                : isPending
+                ? 'bg-amber-50 text-amber-800 border border-amber-300'
                 : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${isCancelled ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-            {isCancelled ? 'Đã hủy' : 'Đã thanh toán'}
+            <span className={`h-1.5 w-1.5 rounded-full ${isCancelled ? 'bg-rose-500' : isPending ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+            {isCancelled ? 'Đã hủy' : isPending ? 'Chờ thanh toán tại quầy' : 'Đã thanh toán'}
           </span>
         );
       },
@@ -304,6 +328,22 @@ export function InvoicesPage() {
       align: 'right',
       cell: (invoice) => (
         <div className="inline-flex items-center gap-2">
+          {invoice.status !== 'CANCELLED' && invoice.paymentStatus === 'PENDING' && (
+            <button
+              type="button"
+              onClick={() => handleConfirmPayment(invoice.invoiceId)}
+              disabled={payingId === invoice.invoiceId}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-400 bg-amber-50 px-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 cursor-pointer transition-colors shadow-2xs"
+              title="Khách thanh toán tiền mặt tại quầy - bấm để xác nhận thu tiền"
+            >
+              {payingId === invoice.invoiceId ? (
+                <LoaderCircle size={13} className="animate-spin" />
+              ) : (
+                <CheckCircle2 size={13} className="text-amber-600" />
+              )}
+              <span>Thu tiền</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleOpenPrint(invoice.invoiceId)}

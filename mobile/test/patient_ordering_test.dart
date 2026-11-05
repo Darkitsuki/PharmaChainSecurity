@@ -206,6 +206,46 @@ void main() {
       expect(service.orderHistory.length, 1);
     });
 
+    test('placeOrder succeeds for anonymous patient without token via /patient/checkout', () async {
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/v1/patient/checkout') {
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'invoiceId': 'INV-PATIENT-001',
+              'invoiceNumber': 'HD-ONLINE-001',
+              'totalAmount': 70000.0,
+              'hashValueSha256': 'sha256:patient-hash-123',
+            })),
+            201,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final service = OrderService(
+        api: ApiClient(baseUrl: 'https://unit.test/api/v1', client: client),
+        tokenProvider: () => null,
+        defaultBranchId: 'br-01',
+      );
+
+      const drug = DrugModel(drugId: 'D1', drugCode: 'PARA', name: 'Paracetamol', unit: 'Hộp', price: 35000);
+      final request = CustomerOrderRequest(
+        customerName: 'Bệnh Nhân Online',
+        phoneNumber: '0908888777',
+        deliveryMethod: DeliveryMethod.delivery,
+        branchId: 'br-01',
+        branchName: 'Chi nhánh Quận 1',
+        paymentMethod: PaymentMethod.cod,
+        items: [CartItem(drug: drug, quantity: 2)],
+      );
+
+      final result = await service.placeOrder(request);
+      expect(result.invoiceNumber, 'HD-ONLINE-001');
+      expect(result.totalAmount, 70000.0);
+      expect(service.orderHistory.length, 1);
+    });
+
     test('placeOrder fallback generates local signed order when offline', () async {
       final service = OrderService();
       const drug = DrugModel(drugId: 'D1', drugCode: 'PARA', name: 'Paracetamol', unit: 'Hộp', price: 35000);
@@ -247,6 +287,44 @@ void main() {
 
       auth.logout();
       expect(auth.isLoggedIn, isFalse);
+    });
+
+    test('authenticateOrRegister calls API when api is provided', () async {
+      final client = MockClient((request) async {
+        if (request.url.path == '/api/v1/customers/identify') {
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({
+              'id': 'cus-server-001',
+              'customerCode': 'KH0908123456',
+              'fullName': 'Nguyễn Văn An',
+              'phoneNumber': '0908123456',
+              'address': '123 Hai Bà Trưng, Q.1',
+              'points': 50,
+              'totalSpent': 500000.0,
+            })),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      final auth = CustomerAuthService.instance;
+      auth.logout();
+
+      final api = ApiClient(baseUrl: 'https://unit.test/api/v1', client: client);
+      final user = await auth.authenticateOrRegister(
+        phoneNumber: '0908123456',
+        fullName: 'Nguyễn Văn An',
+        address: '123 Hai Bà Trưng, Q.1',
+        api: api,
+      );
+
+      expect(user.id, 'cus-server-001');
+      expect(user.customerCode, 'KH0908123456');
+      expect(user.points, 50);
+      expect(user.totalSpent, 500000.0);
+      expect(auth.isLoggedIn, isTrue);
     });
   });
 

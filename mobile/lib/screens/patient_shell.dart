@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/auth/auth_session.dart';
 import '../core/theme/app_theme.dart';
 import '../services/cart_service.dart';
+import '../services/customer_auth_service.dart';
 import '../services/drug_service.dart';
 import '../services/order_service.dart';
 import 'cart_screen.dart';
@@ -50,6 +51,7 @@ class _PatientShellState extends State<PatientShell> {
       tokenProvider: () => widget.session?.token,
       defaultBranchId: widget.session?.user?.branchId,
     );
+    CustomerAuthService.instance.setApi(widget.session?.api);
   }
 
   @override

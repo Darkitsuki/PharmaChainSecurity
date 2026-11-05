@@ -12,6 +12,10 @@ public sealed record InvoiceResponse(
     string BranchId,
     string CashierId,
     string Status = "COMPLETED",
+    string PaymentMethod = "CASH",
+    string PaymentStatus = "PAID",
+    decimal PaidAmount = 0,
+    DateTime? PaidAt = null,
     string? CancelledById = null,
     string? CancelledByName = null,
     DateTime? CancelledDate = null,
@@ -51,6 +55,10 @@ public sealed record InvoiceDetailResponse(
     string? CustomerName = null,
     string? CustomerPhone = null,
     string Status = "COMPLETED",
+    string PaymentMethod = "CASH",
+    string PaymentStatus = "PAID",
+    decimal PaidAmount = 0,
+    DateTime? PaidAt = null,
     string? CancelledById = null,
     string? CancelledByName = null,
     DateTime? CancelledDate = null,
@@ -70,6 +78,35 @@ public sealed record InvoiceVerificationResult(
     string Message,
     DateTime? LastVerifiedAt = null,
     string? VerifiedByName = null);
+
+public sealed record PatientOrderItemDto(
+    string DrugId,
+    string DrugCode,
+    string DrugName,
+    string BatchId,
+    int Quantity,
+    decimal UnitPrice,
+    decimal SubTotal);
+
+public sealed record PatientOrderSummaryDto(
+    string InvoiceId,
+    string InvoiceNumber,
+    DateTime CreatedDate,
+    decimal TotalAmount,
+    string BranchId,
+    string BranchName,
+    string Status,
+    string PaymentMethod,
+    string PaymentStatus,
+    decimal PaidAmount,
+    DateTime? PaidAt,
+    string? CancelReason,
+    DateTime? CancelledDate,
+    string? HashValueSha256,
+    string? CustomerName,
+    string? PhoneNumber,
+    string? DeliveryAddress,
+    IReadOnlyCollection<PatientOrderItemDto> Items);
 
 public interface IInvoiceQueryService
 {
@@ -100,5 +137,15 @@ public interface IInvoiceQueryService
         string invoiceId,
         string ownerId,
         CancelInvoiceRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<InvoiceDetailResponse> ConfirmPaymentAsync(
+        string branchId,
+        string invoiceId,
+        string cashierId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyCollection<PatientOrderSummaryDto>> GetPatientOrdersAsync(
+        string phoneNumber,
         CancellationToken cancellationToken = default);
 }

@@ -169,7 +169,7 @@ public sealed class OracleConnectionFactory : IOracleConnectionFactory
             // Safe development fallbacks when environment variables are not set
             return varName switch
             {
-                "ORACLE_DATA_SOURCE" => "192.168.2.166:1521/FREEPDB1",
+                "ORACLE_DATA_SOURCE" => "192.168.1.30:1521/FREEPDB1",
                 "ORACLE_USER" => "PHARMA_ADMIN",
                 "ORACLE_PASSWORD" => "admin123",
                 _ => throw new InvalidOperationException($"Environment variable '{varName}' is required by the Oracle connection string.")

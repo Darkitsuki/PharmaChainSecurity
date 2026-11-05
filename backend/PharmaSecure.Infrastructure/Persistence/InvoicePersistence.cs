@@ -36,8 +36,14 @@ public sealed class InvoicePersistence : IInvoicePersistence
         CancellationToken cancellationToken = default)
     {
         await using (var command = CreateCommand("""
-            INSERT INTO INVOICES (id, InvoiceNo, CreatedDate, TotalAmount, BranchId, CashierId, CustomerId)
-            VALUES (:id, :invoiceNo, :createdDate, :totalAmount, :branchId, :cashierId, :customerId)
+            INSERT INTO INVOICES (
+                id, InvoiceNo, CreatedDate, TotalAmount, BranchId, CashierId, CustomerId,
+                PaymentMethod, PaymentStatus, PaidAmount, PaidAt, Status
+            )
+            VALUES (
+                :id, :invoiceNo, :createdDate, :totalAmount, :branchId, :cashierId, :customerId,
+                :paymentMethod, :paymentStatus, :paidAmount, :paidAt, :status
+            )
             """))
         {
             command.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = invoice.Id;
@@ -47,6 +53,11 @@ public sealed class InvoicePersistence : IInvoicePersistence
             command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = invoice.BranchId;
             command.Parameters.Add("cashierId", OracleDbType.Varchar2, 50).Value = invoice.CashierId;
             command.Parameters.Add("customerId", OracleDbType.Varchar2, 50).Value = (object?)invoice.CustomerId ?? DBNull.Value;
+            command.Parameters.Add("paymentMethod", OracleDbType.Varchar2, 20).Value = invoice.PaymentMethod;
+            command.Parameters.Add("paymentStatus", OracleDbType.Varchar2, 20).Value = invoice.PaymentStatus;
+            command.Parameters.Add("paidAmount", OracleDbType.Decimal).Value = invoice.PaidAmount;
+            command.Parameters.Add("paidAt", OracleDbType.TimeStamp).Value = (object?)invoice.PaidAt ?? DBNull.Value;
+            command.Parameters.Add("status", OracleDbType.Varchar2, 20).Value = "COMPLETED";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 

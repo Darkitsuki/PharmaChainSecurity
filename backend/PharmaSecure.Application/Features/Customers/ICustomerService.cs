@@ -7,4 +7,5 @@ public interface ICustomerService
     Task<CustomerResponse?> GetByPhoneAsync(string phone, CancellationToken cancellationToken = default);
     Task<CustomerResponse> CreateAsync(CreateCustomerRequest request, string branchId, CancellationToken cancellationToken = default);
     Task<CustomerResponse?> UpdateAsync(string id, UpdateCustomerRequest request, CancellationToken cancellationToken = default);
+    Task<CustomerResponse> IdentifyAsync(IdentifyCustomerRequest request, CancellationToken cancellationToken = default);
 }

@@ -6,6 +6,7 @@ import '../services/cart_service.dart';
 import '../services/customer_auth_service.dart';
 import '../services/drug_service.dart';
 import '../widgets/customer_auth_modal.dart';
+import '../widgets/customer_profile_modal.dart';
 import '../widgets/ui_components.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -176,7 +177,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   customer != null ? Icons.account_circle : Icons.account_circle_outlined,
                   color: customer != null ? AppColors.forest : null,
                 ),
-                onPressed: () => CustomerAuthModal.show(context),
+                onPressed: () {
+                  if (CustomerAuthService.instance.isLoggedIn) {
+                    CustomerProfileModal.show(
+                      context,
+                      onViewOrders: widget.onNavigateToOrders,
+                    );
+                  } else {
+                    CustomerAuthModal.show(context, api: widget.drugService.api);
+                  }
+                },
               );
             },
           ),

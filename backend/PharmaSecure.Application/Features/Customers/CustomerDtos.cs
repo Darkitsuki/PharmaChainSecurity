@@ -26,3 +26,9 @@ public sealed record UpdateCustomerRequest(
     string? Email = null,
     string? Address = null,
     bool? IsActive = null);
+
+public sealed record IdentifyCustomerRequest(
+    string PhoneNumber,
+    string? FullName = null,
+    string? Address = null,
+    string? BranchId = null);

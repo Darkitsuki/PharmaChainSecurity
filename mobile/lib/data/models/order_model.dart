@@ -46,6 +46,38 @@ class CustomerOrderRequest {
   double get totalAmount => items.fold(0.0, (sum, item) => sum + item.subtotal);
 }
 
+class OrderItemDetail {
+  const OrderItemDetail({
+    required this.drugId,
+    required this.drugCode,
+    required this.drugName,
+    required this.batchId,
+    required this.quantity,
+    required this.unitPrice,
+    required this.subTotal,
+  });
+
+  final String drugId;
+  final String drugCode;
+  final String drugName;
+  final String batchId;
+  final int quantity;
+  final double unitPrice;
+  final double subTotal;
+
+  factory OrderItemDetail.fromJson(Map<String, dynamic> json) {
+    return OrderItemDetail(
+      drugId: json['drugId'] as String? ?? '',
+      drugCode: json['drugCode'] as String? ?? '',
+      drugName: json['drugName'] as String? ?? '',
+      batchId: json['batchId'] as String? ?? '',
+      quantity: (json['quantity'] as num?)?.toInt() ?? 1,
+      unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0.0,
+      subTotal: (json['subTotal'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
 class CustomerOrderResult {
   const CustomerOrderResult({
     required this.invoiceId,
@@ -59,6 +91,14 @@ class CustomerOrderResult {
     required this.deliveryMethod,
     required this.createdAt,
     this.isPrescriptionOrder = false,
+    this.status = 'COMPLETED',
+    this.paymentStatus = 'PENDING',
+    this.paymentMethod = 'CASH',
+    this.paidAmount = 0.0,
+    this.paidAt,
+    this.cancelReason,
+    this.cancelledDate,
+    this.items = const [],
   });
 
   final String invoiceId;
@@ -72,6 +112,18 @@ class CustomerOrderResult {
   final DeliveryMethod deliveryMethod;
   final DateTime createdAt;
   final bool isPrescriptionOrder;
+  final String status;
+  final String paymentStatus;
+  final String paymentMethod;
+  final double paidAmount;
+  final DateTime? paidAt;
+  final String? cancelReason;
+  final DateTime? cancelledDate;
+  final List<OrderItemDetail> items;
+
+  bool get isCancelled => status.toUpperCase() == 'CANCELLED';
+  bool get isPaid => paymentStatus.toUpperCase() == 'PAID';
+  bool get isPendingPayment => !isCancelled && !isPaid;
 
   factory CustomerOrderResult.fromJson(
     Map<String, dynamic> json, {
@@ -94,7 +146,53 @@ class CustomerOrderResult {
       deliveryMethod: deliveryMethod,
       createdAt: DateTime.now(),
       isPrescriptionOrder: isPrescriptionOrder,
+      status: json['status'] as String? ?? 'COMPLETED',
+      paymentStatus: json['paymentStatus'] as String? ?? 'PENDING',
+      paymentMethod: json['paymentMethod'] as String? ?? 'CASH',
+    );
+  }
+
+  factory CustomerOrderResult.fromApiJson(Map<String, dynamic> json) {
+    final rawItems = json['items'] as List<dynamic>? ?? [];
+    final itemsList = rawItems
+        .whereType<Map<String, dynamic>>()
+        .map(OrderItemDetail.fromJson)
+        .toList();
+
+    final rawCreatedDate = json['createdDate'] as String?;
+    final createdAt = rawCreatedDate != null
+        ? DateTime.tryParse(rawCreatedDate)?.toLocal() ?? DateTime.now()
+        : DateTime.now();
+
+    final rawPaidAt = json['paidAt'] as String?;
+    final paidAt = rawPaidAt != null ? DateTime.tryParse(rawPaidAt)?.toLocal() : null;
+
+    final rawCancelledDate = json['cancelledDate'] as String?;
+    final cancelledDate = rawCancelledDate != null ? DateTime.tryParse(rawCancelledDate)?.toLocal() : null;
+
+    final deliveryAddress = json['deliveryAddress'] as String?;
+
+    return CustomerOrderResult(
+      invoiceId: json['invoiceId'] as String? ?? json['id'] as String? ?? '',
+      invoiceNumber: json['invoiceNumber'] as String? ?? json['invoiceNo'] as String? ?? '',
+      totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0.0,
+      hashValueSha256: json['hashValueSha256'] as String? ?? '',
+      customerName: json['customerName'] as String? ?? 'Khách hàng',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
+      branchName: json['branchName'] as String? ?? 'Nhà thuốc PharmaSecure',
+      deliveryAddress: deliveryAddress,
+      deliveryMethod: (deliveryAddress != null && deliveryAddress.trim().isNotEmpty)
+          ? DeliveryMethod.delivery
+          : DeliveryMethod.pickup,
+      createdAt: createdAt,
+      status: json['status'] as String? ?? 'COMPLETED',
+      paymentStatus: json['paymentStatus'] as String? ?? 'PENDING',
+      paymentMethod: json['paymentMethod'] as String? ?? 'CASH',
+      paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0.0,
+      paidAt: paidAt,
+      cancelReason: json['cancelReason'] as String?,
+      cancelledDate: cancelledDate,
+      items: itemsList,
     );
   }
 }
-

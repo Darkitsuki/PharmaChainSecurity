@@ -80,7 +80,14 @@ public sealed class CheckoutService : ICheckoutService
                 invoice.AddItem(new InvoiceItem(invoice.Id, line.DrugId, line.BatchId, line.Quantity, unitPrice.Value));
             }
 
-            invoice.MarkAsPaid();
+            if (request.IsPendingPayment)
+            {
+                invoice.SetPaymentPending(request.PaymentMethod);
+            }
+            else
+            {
+                invoice.MarkAsPaid(request.PaymentMethod);
+            }
             invoice.LockInvoice();
             InvoiceSignatureResult signatureResult;
             try
@@ -111,7 +118,8 @@ public sealed class CheckoutService : ICheckoutService
                 invoice.TotalAmount,
                 signatureResult.HashValueSha256,
                 invoice.CustomerId,
-                customerName));
+                customerName,
+                invoice.PaymentStatus));
         }
         catch
         {
