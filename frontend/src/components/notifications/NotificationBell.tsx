@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -12,11 +12,26 @@ import {
 import { apiClient } from '../../services/apiClient';
 import type { NotificationItem, NotificationSummary } from '../../types';
 
+const SEEN_NOTIFICATIONS_STORAGE_KEY = 'pharmasecure:seen_notification_ids';
+
+function getInitialSeenIds(): string[] {
+  try {
+    const raw = localStorage.getItem(SEEN_NOTIFICATIONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function NotificationBell() {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'ALL' | 'ORDER' | 'PROCUREMENT' | 'INVENTORY'>('ALL');
   const [isLoading, setIsLoading] = useState(false);
+  const [seenIds, setSeenIds] = useState<string[]>(getInitialSeenIds);
+  const [, setNowTick] = useState<number>(Date.now());
   const [summary, setSummary] = useState<NotificationSummary>({
     totalUnread: 0,
     ordersCount: 0,
@@ -41,14 +56,14 @@ export function NotificationBell() {
     }
   }, []);
 
-  // Polling every 30s
+  // Polling every 12s when page is visible for real-time responsiveness
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         fetchNotifications();
       }
-    }, 30000);
+    }, 12000);
 
     const handleWindowFocus = () => fetchNotifications();
     const handleCustomRefresh = () => fetchNotifications();
@@ -62,6 +77,36 @@ export function NotificationBell() {
       window.removeEventListener('pharmasecure:refresh-notifications', handleCustomRefresh);
     };
   }, [fetchNotifications]);
+
+  // Live timer tick every 30s so relative time labels ('Vừa xong', 'X phút trước') update dynamically
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTick(Date.now());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Helper to persist seen notification IDs to localStorage
+  const markItemsAsSeen = useCallback((itemsToMark: NotificationItem[]) => {
+    if (!itemsToMark.length) return;
+    setSeenIds((prev) => {
+      const currentIds = itemsToMark.map((i) => i.id);
+      const combined = Array.from(new Set([...currentIds, ...prev])).slice(0, 200);
+      try {
+        localStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(combined));
+      } catch {
+        // Ignore localStorage quota errors
+      }
+      return combined;
+    });
+  }, []);
+
+  // Automatically mark items as seen if popover is open when new items arrive
+  useEffect(() => {
+    if (isOpen && summary.items.length > 0) {
+      markItemsAsSeen(summary.items);
+    }
+  }, [isOpen, summary.items, markItemsAsSeen]);
 
   // Click outside and Esc handler
   useEffect(() => {
@@ -86,10 +131,29 @@ export function NotificationBell() {
     };
   }, [isOpen]);
 
+  // Calculate unread badge count: only items that have NOT been viewed
+  const unseenItems = useMemo(
+    () => summary.items.filter((item) => !seenIds.includes(item.id)),
+    [summary.items, seenIds]
+  );
+  const unseenCount = unseenItems.length;
+
   const filteredItems = summary.items.filter((item) => {
     if (activeTab === 'ALL') return true;
     return item.category === activeTab;
   });
+
+  const handleToggleOpen = () => {
+    const nextOpen = !isOpen;
+    setIsOpen(nextOpen);
+    if (nextOpen) {
+      fetchNotifications(true);
+      // Immediately clear badge count on user click
+      if (summary.items.length > 0) {
+        markItemsAsSeen(summary.items);
+      }
+    }
+  };
 
   const handleItemClick = (item: NotificationItem) => {
     setIsOpen(false);
@@ -100,9 +164,16 @@ export function NotificationBell() {
 
   const formatTime = (isoString: string) => {
     try {
+      if (!isoString) return '';
       const date = new Date(isoString);
+      if (isNaN(date.getTime())) return '';
       const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
+      let diffMs = now.getTime() - date.getTime();
+
+      // Guard against minor client-server clock skew
+      if (diffMs < 0 && Math.abs(diffMs) < 120000) {
+        diffMs = 0;
+      }
       const diffMins = Math.floor(diffMs / 60000);
       const diffHours = Math.floor(diffMins / 60);
 
@@ -120,20 +191,18 @@ export function NotificationBell() {
       {/* Bell Button */}
       <button
         type="button"
-        onClick={() => {
-          setIsOpen((prev) => !prev);
-          if (!isOpen) fetchNotifications(true);
-        }}
+        onClick={handleToggleOpen}
         aria-label="Thông báo chi nhánh"
         aria-expanded={isOpen}
-        className="relative grid h-9 w-9 place-items-center rounded-lg border border-line bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-ink focus:outline-none focus:ring-2 focus:ring-forest/20"
+        className="relative grid h-9 w-9 place-items-center rounded-lg border border-line bg-white text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-ink focus:outline-none focus:ring-2 focus:ring-forest/20 cursor-pointer"
         title="Thông báo chi nhánh"
       >
         <Bell size={18} strokeWidth={2} />
 
-        {summary.totalUnread > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-extrabold text-white shadow-sm ring-2 ring-white">
-            {summary.totalUnread > 99 ? '99+' : summary.totalUnread}
+        {/* Badge number: only displayed when there are unseen notifications */}
+        {unseenCount > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-extrabold text-white shadow-sm ring-2 ring-white animate-in zoom-in-75 duration-150">
+            {unseenCount > 99 ? '99+' : unseenCount}
           </span>
         )}
       </button>
@@ -147,8 +216,13 @@ export function NotificationBell() {
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-ink">Trung tâm thông báo</span>
                 {summary.totalUnread > 0 && (
-                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700">
-                    {summary.totalUnread} mới
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                    {summary.totalUnread} cần xử lý
+                  </span>
+                )}
+                {unseenCount > 0 && (
+                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-bold text-rose-700 animate-pulse">
+                    {unseenCount} mới
                   </span>
                 )}
               </div>
@@ -158,7 +232,7 @@ export function NotificationBell() {
               type="button"
               onClick={() => fetchNotifications(true)}
               disabled={isLoading}
-              className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-ink disabled:opacity-50"
+              className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-ink disabled:opacity-50 cursor-pointer"
               title="Làm mới thông báo"
             >
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
@@ -170,7 +244,7 @@ export function NotificationBell() {
             <button
               type="button"
               onClick={() => setActiveTab('ALL')}
-              className={`flex-1 rounded-lg py-1.5 text-center transition-all ${
+              className={`flex-1 rounded-lg py-1.5 text-center transition-all cursor-pointer ${
                 activeTab === 'ALL'
                   ? 'bg-white text-forest font-bold shadow-sm'
                   : 'hover:text-ink text-slate-500'
@@ -181,7 +255,7 @@ export function NotificationBell() {
             <button
               type="button"
               onClick={() => setActiveTab('ORDER')}
-              className={`flex-1 rounded-lg py-1.5 text-center transition-all ${
+              className={`flex-1 rounded-lg py-1.5 text-center transition-all cursor-pointer ${
                 activeTab === 'ORDER'
                   ? 'bg-white text-forest font-bold shadow-sm'
                   : 'hover:text-ink text-slate-500'
@@ -192,7 +266,7 @@ export function NotificationBell() {
             <button
               type="button"
               onClick={() => setActiveTab('PROCUREMENT')}
-              className={`flex-1 rounded-lg py-1.5 text-center transition-all ${
+              className={`flex-1 rounded-lg py-1.5 text-center transition-all cursor-pointer ${
                 activeTab === 'PROCUREMENT'
                   ? 'bg-white text-forest font-bold shadow-sm'
                   : 'hover:text-ink text-slate-500'
@@ -203,7 +277,7 @@ export function NotificationBell() {
             <button
               type="button"
               onClick={() => setActiveTab('INVENTORY')}
-              className={`flex-1 rounded-lg py-1.5 text-center transition-all ${
+              className={`flex-1 rounded-lg py-1.5 text-center transition-all cursor-pointer ${
                 activeTab === 'INVENTORY'
                   ? 'bg-white text-forest font-bold shadow-sm'
                   : 'hover:text-ink text-slate-500'
@@ -228,12 +302,15 @@ export function NotificationBell() {
                 const isOrder = item.category === 'ORDER';
                 const isProcurement = item.category === 'PROCUREMENT';
                 const isInventory = item.category === 'INVENTORY';
+                const isItemUnseen = !seenIds.includes(item.id);
 
                 return (
                   <div
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className="group flex cursor-pointer items-start gap-3 p-3.5 transition-colors hover:bg-slate-50"
+                    className={`group flex cursor-pointer items-start gap-3 p-3.5 transition-colors hover:bg-slate-50 ${
+                      isItemUnseen ? 'bg-emerald-50/30' : ''
+                    }`}
                   >
                     {/* Icon Badge */}
                     <div
@@ -255,9 +332,17 @@ export function NotificationBell() {
                     {/* Content */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <p className="truncate text-xs font-bold text-ink group-hover:text-forest">
-                          {item.title}
-                        </p>
+                        <div className="flex items-center gap-1.5 truncate">
+                          {isItemUnseen && (
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+                              title="Thông báo mới chưa xem"
+                            />
+                          )}
+                          <p className="truncate text-xs font-bold text-ink group-hover:text-forest">
+                            {item.title}
+                          </p>
+                        </div>
                         <span className="shrink-0 text-[10px] text-slate-400">
                           {formatTime(item.timestamp)}
                         </span>
@@ -279,14 +364,14 @@ export function NotificationBell() {
 
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-line bg-slate-50/50 px-4 py-2.5">
-            <span className="text-[11px] text-slate-400">Tự động đồng bộ mỗi 30s</span>
+            <span className="text-[11px] text-slate-400">Tự động đồng bộ mỗi 12s</span>
             <button
               type="button"
               onClick={() => {
                 setIsOpen(false);
                 navigate('/invoices');
               }}
-              className="text-[11px] font-bold text-forest hover:underline"
+              className="text-[11px] font-bold text-forest hover:underline cursor-pointer"
             >
               Xem hóa đơn bán hàng →
             </button>
