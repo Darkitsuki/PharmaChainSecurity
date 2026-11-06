@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using PharmaSecure.Application.Features.Returns;
+using PharmaSecure.Application.Interfaces;
 using PharmaSecure.WebApi.Controllers;
 using Xunit;
 
@@ -11,12 +12,13 @@ namespace PharmaSecure.Tests.Sales;
 public class ReturnsControllerTests
 {
     private readonly Mock<IReturnService> returnServiceMock = new();
+    private readonly Mock<IIdempotencyService> idempotencyServiceMock = new();
     private const string TestBranchId = "br-00000000-0000-0000-0000-000000000001";
     private const string TestCashierId = "us-00000000-0000-0000-0000-000000000003";
 
     private ReturnsController CreateController(bool withUserClaims = true, bool withUserId = true)
     {
-        var controller = new ReturnsController(returnServiceMock.Object);
+        var controller = new ReturnsController(returnServiceMock.Object, idempotencyServiceMock.Object);
         var httpContext = new DefaultHttpContext();
 
         if (withUserClaims)
@@ -176,7 +178,7 @@ public class ReturnsControllerTests
         var controller = CreateController();
 
         // Act
-        var result = await controller.CreateAsync(request);
+        var result = await controller.CreateAsync(request, "return-test-1");
 
         // Assert
         var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
@@ -205,11 +207,11 @@ public class ReturnsControllerTests
         var controller = CreateController();
 
         // Act
-        var result = await controller.CreateAsync(request);
+        var result = await controller.CreateAsync(request, "return-test-2");
 
         // Assert
         var badRequest = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, badRequest.StatusCode);
     }
 
     [Fact]
@@ -221,9 +223,58 @@ public class ReturnsControllerTests
             new List<CreateReturnItemRequest> { new("drug-1", "batch-1", 1, 100000m) });
         var controller = CreateController(withUserId: false);
 
-        var result = await controller.CreateAsync(request);
+        var result = await controller.CreateAsync(request, "return-test-3");
 
         Assert.IsType<ForbidResult>(result.Result);
+        returnServiceMock.Verify(service => service.CreateReturnAsync(
+            It.IsAny<CreateReturnRequest>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_WhenIdempotencyKeyIsMissing_ReturnsBadRequestWithoutCallingService()
+    {
+        var request = new CreateReturnRequest(
+            "inv-1",
+            "Damaged item",
+            new List<CreateReturnItemRequest> { new("drug-1", "batch-1", 1, 100000m) });
+        var controller = CreateController();
+
+        var result = await controller.CreateAsync(request);
+
+        var badRequest = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
+        returnServiceMock.Verify(service => service.CreateReturnAsync(
+            It.IsAny<CreateReturnRequest>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_WhenIdempotencyResponseExists_ReplaysWithoutCallingService()
+    {
+        var request = new CreateReturnRequest(
+            "inv-1",
+            "Damaged item",
+            new List<CreateReturnItemRequest> { new("drug-1", "batch-1", 1, 100000m) });
+        var cached = new ReturnResponse(
+            "ret-1", "TH001", "inv-1", "HD001", TestBranchId, TestCashierId, "Cashier",
+            null, null, 100000m, "Damaged item", "COMPLETED", DateTime.UtcNow,
+            Array.Empty<ReturnItemResponse>());
+        var cacheKey = $"return:{TestBranchId}:duplicate-key";
+        idempotencyServiceMock
+            .Setup(service => service.TryGet<ReturnResponse>(cacheKey, out cached))
+            .Returns(true);
+        var controller = CreateController();
+
+        var result = await controller.CreateAsync(request, "duplicate-key");
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Same(cached, ok.Value);
+        Assert.Equal("true", controller.Response.Headers["X-Idempotent-Replayed"]);
         returnServiceMock.Verify(service => service.CreateReturnAsync(
             It.IsAny<CreateReturnRequest>(),
             It.IsAny<string>(),

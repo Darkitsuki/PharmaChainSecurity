@@ -1,721 +1,335 @@
-import { dateTime } from '../utils/formatters';
-import { money as moneyFormatter } from '../utils/formatters';
-import { PageHeader } from '../components/common/PageHeader';
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Eye,
-  Plus,
-  RotateCcw,
-  Search,
-  Undo2,
-} from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { ArrowRightLeft, Plus, RotateCcw, Search, Undo2 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { AlertBanner, DataTable, Modal, PageHeader, SearchToolbar, StatCard, type Column } from '../components/common';
 import { ApiError, apiClient } from '../services/apiClient';
 import type {
+  AvailableInventory,
+  CreateExchangeItemPayload,
+  CreateReturnItemPayload,
+  CreateReturnPayload,
+  Drug,
+  DrugBatch,
+  PageResult,
   ReturnOrder,
   ReturnableInvoice,
-  CreateReturnPayload,
-  CreateReturnItemPayload,
 } from '../types';
-import {
-  Modal,
-  DataTable,
-  SearchToolbar,
-  AlertBanner,
-  StatCard,
-  type Column,
-} from '../components/common';
+import { dateTime as dateTimeFormatter, money as moneyFormatter } from '../utils/formatters';
 
+const money = (value: number) => moneyFormatter.format(value);
+const dateTime = (value: Date | number) => dateTimeFormatter.format(value);
 
+type ReturnSelection = {
+  quantity: number;
+  actionType: 'RESTOCK' | 'DISCARD';
+  restockInspectionConfirmed: boolean;
+};
+
+type ReplacementSelection = CreateExchangeItemPayload & {
+  drugName: string;
+  batchNo: string;
+  unitPrice: number;
+  availableQuantity: number;
+};
+
+const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-forest focus:ring-2 focus:ring-forest/10 disabled:bg-slate-100 disabled:text-slate-400';
 
 export function ReturnsPage() {
   const [searchParams] = useSearchParams();
-  const linkedReturnId = searchParams.get('returnId');
   const [returns, setReturns] = useState<ReturnOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-
-  // View detail modal
+  const [success, setSuccess] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [selectedReturn, setSelectedReturn] = useState<ReturnOrder | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
 
-  // Create return modal
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [transactionType, setTransactionType] = useState<'RETURN' | 'EXCHANGE'>('RETURN');
   const [invoiceQuery, setInvoiceQuery] = useState('');
-  const [searchingInvoice, setSearchingInvoice] = useState(false);
-  const [lookupError, setLookupError] = useState('');
-  const [lookupInvoice, setLookupInvoice] = useState<ReturnableInvoice | null>(null);
-  const [returnReason, setReturnReason] = useState('');
+  const [invoice, setInvoice] = useState<ReturnableInvoice | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [reason, setReason] = useState('');
+  const [selections, setSelections] = useState<Record<string, ReturnSelection>>({});
+  const [replacementDrugs, setReplacementDrugs] = useState<Drug[]>([]);
+  const [replacementDrugId, setReplacementDrugId] = useState('');
+  const [replacementBatches, setReplacementBatches] = useState<DrugBatch[]>([]);
+  const [replacementBatchId, setReplacementBatchId] = useState('');
+  const [replacementQuantity, setReplacementQuantity] = useState(1);
+  const [replacements, setReplacements] = useState<ReplacementSelection[]>([]);
+  const [settlementConfirmed, setSettlementConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [createFormError, setCreateFormError] = useState('');
-
-  // Selected return items mapping: { [drugId_batchId]: { quantity: number, actionType: 'RESTOCK' | 'DISCARD' } }
-  const [selectedItems, setSelectedItems] = useState<
-    Record<string, { quantity: number; actionType: 'RESTOCK' | 'DISCARD' }>
-  >({});
-
-  useEffect(() => {
-    loadReturns();
-  }, []);
-
-  useEffect(() => {
-    if (!linkedReturnId) return;
-    let active = true;
-    setLoadingDetail(true);
-    apiClient<ReturnOrder>(`/returns/${encodeURIComponent(linkedReturnId)}`)
-      .then(data => { if (active) setSelectedReturn(data); })
-      .catch(() => { if (active) setError('Không thể tải phiếu đổi trả được liên kết.'); })
-      .finally(() => { if (active) setLoadingDetail(false); });
-    return () => { active = false; };
-  }, [linkedReturnId]);
+  const [idempotencyKey, setIdempotencyKey] = useState('');
+  const pageSize = 10;
 
   async function loadReturns() {
     setLoading(true);
     setError('');
     try {
-      const data = await apiClient<ReturnOrder[]>('/returns');
-      setReturns(data);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.detail || err.message);
-      } else {
-        setError('Không thể kết nối đến máy chủ.');
-      }
+      setReturns(await apiClient<ReturnOrder[]>('/returns'));
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.detail || cause.message : 'Không thể kết nối đến máy chủ.');
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleOpenDetail(ret: ReturnOrder) {
-    setLoadingDetail(true);
-    setSelectedReturn(ret);
-    try {
-      const full = await apiClient<ReturnOrder>(`/returns/${ret.id}`);
-      setSelectedReturn(full);
-    } catch {
-      // Giữ nguyên dữ liệu ban đầu nếu lỗi load items
-    } finally {
-      setLoadingDetail(false);
-    }
+  useEffect(() => { void loadReturns(); }, []);
+
+  useEffect(() => {
+    const returnId = searchParams.get('returnId');
+    if (!returnId) return;
+    setDetailLoading(true);
+    apiClient<ReturnOrder>(`/returns/${encodeURIComponent(returnId)}`)
+      .then(setSelectedReturn)
+      .catch(() => setError('Không thể tải phiếu đổi trả được liên kết.'))
+      .finally(() => setDetailLoading(false));
+  }, [searchParams]);
+
+  async function loadReplacementDrugs() {
+    const [drugPage, available] = await Promise.all([
+      apiClient<PageResult<Drug>>('/drugs?page=1&pageSize=100'),
+      apiClient<AvailableInventory[]>('/inventory/available-by-drug'),
+    ]);
+    const availableIds = new Set(available.filter(item => item.availableQuantity > 0).map(item => item.drugId));
+    setReplacementDrugs(drugPage.items.filter(item => item.isActive !== false && availableIds.has(item.drugId)));
   }
 
-  function handleOpenCreateModal() {
+  function openCreate() {
+    setTransactionType('RETURN');
     setInvoiceQuery('');
-    setLookupInvoice(null);
-    setLookupError('');
-    setCreateFormError('');
-    setReturnReason('');
-    setSelectedItems({});
-    setShowCreateModal(true);
+    setInvoice(null);
+    setReason('');
+    setSelections({});
+    setReplacements([]);
+    setReplacementDrugId('');
+    setReplacementBatches([]);
+    setReplacementBatchId('');
+    setSettlementConfirmed(false);
+    setFormError('');
+    setIdempotencyKey(crypto.randomUUID());
+    setCreateOpen(true);
   }
 
-  async function handleLookupInvoice(e?: React.FormEvent) {
-    if (e) e.preventDefault();
+  async function lookupInvoice() {
     if (!invoiceQuery.trim()) {
-      setLookupError('Vui lòng nhập mã hóa đơn.');
+      setFormError('Vui lòng nhập mã hóa đơn gốc.');
       return;
     }
-
-    setSearchingInvoice(true);
-    setLookupError('');
-    setLookupInvoice(null);
-    setSelectedItems({});
-
+    setLookupLoading(true);
+    setFormError('');
     try {
-      const invoice = await apiClient<ReturnableInvoice>(
-        `/returns/lookup-invoice/${encodeURIComponent(invoiceQuery.trim())}`
-      );
-      setLookupInvoice(invoice);
-
-      // Mặc định khởi tạo selectedItems với quantity = 0
-      const initialMap: Record<string, { quantity: number; actionType: 'RESTOCK' | 'DISCARD' }> = {};
-      invoice.items.forEach(item => {
-        initialMap[`${item.drugId}_${item.batchId}`] = {
-          quantity: 0,
-          actionType: 'RESTOCK',
-        };
-      });
-      setSelectedItems(initialMap);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setLookupError(err.detail || err.message);
-      } else {
-        setLookupError('Không tìm thấy hóa đơn hoặc hóa đơn không thuộc chi nhánh hiện tại.');
-      }
+      const result = await apiClient<ReturnableInvoice>(`/returns/lookup-invoice/${encodeURIComponent(invoiceQuery.trim())}`);
+      setInvoice(result);
+      setSelections(Object.fromEntries(result.items.map(item => [
+        `${item.drugId}_${item.batchId}`,
+        { quantity: 0, actionType: 'DISCARD', restockInspectionConfirmed: false },
+      ])));
+    } catch (cause) {
+      setInvoice(null);
+      setFormError(cause instanceof ApiError ? cause.detail || cause.message : 'Không tìm thấy hóa đơn hợp lệ.');
     } finally {
-      setSearchingInvoice(false);
+      setLookupLoading(false);
     }
   }
 
-  function handleItemQuantityChange(key: string, qty: number, maxQty: number) {
-    const validQty = Math.max(0, Math.min(qty, maxQty));
-    setSelectedItems(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        quantity: validQty,
-      },
-    }));
+  async function chooseReplacementDrug(drugId: string) {
+    setReplacementDrugId(drugId);
+    setReplacementBatchId('');
+    setReplacementBatches([]);
+    if (!drugId) return;
+    try {
+      const batches = await apiClient<DrugBatch[]>(`/drugs/${encodeURIComponent(drugId)}/batches`);
+      const today = new Date().toISOString().slice(0, 10);
+      setReplacementBatches(batches.filter(batch => batch.stockQuantity > 0 && batch.expiryDate.slice(0, 10) >= today));
+    } catch (cause) {
+      setFormError(cause instanceof ApiError ? cause.detail || cause.message : 'Không thể tải lô thuốc.');
+    }
   }
 
-  function handleItemActionChange(key: string, action: 'RESTOCK' | 'DISCARD') {
-    setSelectedItems(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        actionType: action,
-      },
-    }));
-  }
-
-  // Tính tổng tiền hoàn trả dự kiến
-  const calculatedRefundTotal = useMemo(() => {
-    if (!lookupInvoice) return 0;
-    return lookupInvoice.items.reduce((sum, item) => {
-      const key = `${item.drugId}_${item.batchId}`;
-      const entry = selectedItems[key];
-      if (entry && entry.quantity > 0) {
-        return sum + entry.quantity * item.unitPrice;
-      }
-      return sum;
-    }, 0);
-  }, [lookupInvoice, selectedItems]);
-
-  async function handleCreateReturnSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setCreateFormError('');
-
-    if (!lookupInvoice) {
-      setCreateFormError('Vui lòng tra cứu hóa đơn hợp lệ trước.');
+  function addReplacement() {
+    const drug = replacementDrugs.find(item => item.drugId === replacementDrugId);
+    const batch = replacementBatches.find(item => item.batchId === replacementBatchId);
+    if (!drug || !batch || replacementQuantity <= 0 || replacementQuantity > batch.stockQuantity) {
+      setFormError('Vui lòng chọn thuốc, lô và số lượng hợp lệ.');
       return;
     }
-
-    if (!returnReason.trim()) {
-      setCreateFormError('Vui lòng nhập lý do đổi trả hàng.');
+    if (replacements.some(item => item.drugId === drug.drugId && item.batchId === batch.batchId)) {
+      setFormError('Lô thuốc này đã có trong danh sách đổi.');
       return;
     }
+    setReplacements(items => [...items, {
+      drugId: drug.drugId,
+      batchId: batch.batchId,
+      quantity: replacementQuantity,
+      drugName: drug.name,
+      batchNo: batch.batchNo,
+      unitPrice: drug.price,
+      availableQuantity: batch.stockQuantity,
+    }]);
+    setReplacementQuantity(1);
+    setFormError('');
+  }
 
-    const itemsToSubmit: CreateReturnItemPayload[] = [];
-    lookupInvoice.items.forEach(item => {
-      const key = `${item.drugId}_${item.batchId}`;
-      const entry = selectedItems[key];
-      if (entry && entry.quantity > 0) {
-        itemsToSubmit.push({
-          drugId: item.drugId,
-          batchId: item.batchId,
-          quantity: entry.quantity,
-          refundPrice: item.unitPrice,
-          actionType: entry.actionType,
-        });
-      }
+  const refundTotal = useMemo(() => invoice?.items.reduce((sum, item) => {
+    const selection = selections[`${item.drugId}_${item.batchId}`];
+    return sum + (selection?.quantity ?? 0) * item.unitPrice;
+  }, 0) ?? 0, [invoice, selections]);
+  const replacementTotal = useMemo(() => replacements.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0), [replacements]);
+  const difference = replacementTotal - refundTotal;
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!invoice || !reason.trim()) {
+      setFormError('Vui lòng tra cứu hóa đơn và nhập lý do.');
+      return;
+    }
+    const items: CreateReturnItemPayload[] = invoice.items.flatMap(item => {
+      const selection = selections[`${item.drugId}_${item.batchId}`];
+      return selection?.quantity > 0 ? [{
+        drugId: item.drugId,
+        batchId: item.batchId,
+        quantity: selection.quantity,
+        refundPrice: item.unitPrice,
+        actionType: selection.actionType,
+        restockInspectionConfirmed: selection.restockInspectionConfirmed,
+      }] : [];
     });
-
-    if (itemsToSubmit.length === 0) {
-      setCreateFormError('Vui lòng chọn ít nhất 1 sản phẩm có số lượng trả lớn hơn 0.');
+    if (!items.length) {
+      setFormError('Vui lòng chọn ít nhất một mặt hàng trả.');
       return;
     }
+    if (transactionType === 'EXCHANGE' && (!replacements.length || !settlementConfirmed)) {
+      setFormError('Vui lòng chọn thuốc mới và xác nhận phương án chênh lệch.');
+      return;
+    }
+
+    const payload: CreateReturnPayload = {
+      invoiceId: invoice.invoiceId,
+      reason: reason.trim(),
+      items,
+      transactionType,
+      replacementItems: transactionType === 'EXCHANGE'
+        ? replacements.map(({ drugId, batchId, quantity }) => ({ drugId, batchId, quantity }))
+        : undefined,
+      paymentMethod: 'CASH',
+      settlementConfirmed: transactionType === 'EXCHANGE' && settlementConfirmed,
+    };
 
     setSubmitting(true);
+    setFormError('');
     try {
-      const payload: CreateReturnPayload = {
-        invoiceId: lookupInvoice.invoiceId,
-        reason: returnReason.trim(),
-        items: itemsToSubmit,
-      };
-
       const created = await apiClient<ReturnOrder>('/returns', {
         method: 'POST',
+        headers: { 'Idempotency-Key': idempotencyKey },
         body: JSON.stringify(payload),
       });
-
-      setReturns(prev => [created, ...prev]);
-      setShowCreateModal(false);
-      setSuccessMsg(`Tạo phiếu trả hàng "${created.returnNo}" thành công. Đã hoàn tiền ${moneyFormatter.format(created.totalRefundAmount)}.`);
-      setTimeout(() => setSuccessMsg(''), 5000);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setCreateFormError(err.detail || err.message);
-      } else {
-        setCreateFormError('Không thể tạo phiếu đổi trả.');
-      }
+      setReturns(current => [created, ...current]);
+      setCreateOpen(false);
+      setSuccess(created.transactionType === 'EXCHANGE'
+        ? `Đã ghi nhận phiếu đổi ${created.returnNo} và hóa đơn mới ${created.exchangeInvoiceNo}.`
+        : `Đã ghi nhận phiếu trả ${created.returnNo}. Khoản ${money(created.totalRefundAmount)} cần được hoàn cho khách.`);
+    } catch (cause) {
+      setFormError(cause instanceof ApiError ? cause.detail || cause.message : 'Không thể hoàn tất giao dịch.');
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Lọc và Tìm kiếm
-  const filteredReturns = useMemo(() => {
-    return returns.filter(r => {
-      const matchSearch =
-        r.returnNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.invoiceNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (r.customerName && r.customerName.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filtered = useMemo(() => returns.filter(item => [item.returnNo, item.invoiceNo, item.exchangeInvoiceNo, item.customerName, item.reason]
+    .some(value => value?.toLowerCase().includes(search.toLowerCase()))), [returns, search]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => setPage(current => Math.min(current, totalPages)), [totalPages]);
 
-      return matchSearch;
-    });
-  }, [returns, searchTerm]);
-
-  // Phân trang
-  const paginatedReturns = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredReturns.slice(start, start + pageSize);
-  }, [filteredReturns, currentPage]);
-
-  const totalPages = Math.ceil(filteredReturns.length / pageSize) || 1;
-  useEffect(() => setCurrentPage(value => Math.min(value, totalPages)), [totalPages]);
-
-  // Thống kê KPIs
-  const stats = useMemo(() => {
-    const totalCount = returns.length;
-    const totalAmount = returns.reduce((sum, r) => sum + r.totalRefundAmount, 0);
-    return { totalCount, totalAmount };
-  }, [returns]);
+  async function openDetail(item: ReturnOrder) {
+    setSelectedReturn(item);
+    setDetailLoading(true);
+    try { setSelectedReturn(await apiClient<ReturnOrder>(`/returns/${encodeURIComponent(item.id)}`)); }
+    finally { setDetailLoading(false); }
+  }
 
   const columns: Column<ReturnOrder>[] = [
-    {
-      header: 'Mã phiếu / Ngày lập',
-      cell: r => (
-        <div>
-          <div className="font-mono font-bold text-xs text-forest">{r.returnNo}</div>
-          <div className="text-xs text-slate-400 mt-0.5">
-            {dateTime.format(new Date(r.createdDate))}
-          </div>
-        </div>
-      ),
-    },
-    {
-      header: 'Hóa đơn gốc',
-      cell: r => (
-        <span className="font-mono text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded">
-          {r.invoiceNo}
-        </span>
-      ),
-    },
-    {
-      header: 'Khách hàng & Thu ngân',
-      cell: r => (
-        <div className="text-xs">
-          <div className="font-medium text-ink">
-            {r.customerName ? r.customerName : <span className="text-slate-400 italic">Khách lẻ vãng lai</span>}
-          </div>
-          <div className="text-xs text-slate-400 mt-0.5">Thu ngân: {r.cashierName}</div>
-        </div>
-      ),
-    },
-    {
-      header: 'Tiền hoàn trả',
-      cell: r => (
-        <span className="font-mono font-bold text-xs text-rose-600">
-          {moneyFormatter.format(r.totalRefundAmount)}
-        </span>
-      ),
-    },
-    {
-      header: 'Lý do trả hàng',
-      cell: r => (
-        <span className="text-xs text-slate-600 line-clamp-1 max-w-[200px]" title={r.reason}>
-          {r.reason}
-        </span>
-      ),
-    },
-    {
-      header: 'Trạng thái',
-      cell: () => (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <CheckCircle2 size={12} /> Hoàn tất
-        </span>
-      ),
-    },
-    {
-      header: 'Thao tác',
-      cell: r => (
-        <button
-          onClick={() => handleOpenDetail(r)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-mint hover:text-forest cursor-pointer"
-          title="Xem chi tiết phiếu trả"
-        >
-          <Eye size={15} /> Chi tiết
-        </button>
-      ),
-    },
+    { header: 'Phiếu / Ngày lập', cell: item => <div><strong className="text-forest">{item.returnNo}</strong><p className="text-xs text-slate-500">{dateTime(new Date(item.createdDate))}</p></div> },
+    { header: 'Loại', cell: item => <span className="font-medium">{item.transactionType === 'EXCHANGE' ? 'Đổi thuốc' : 'Trả hàng'}</span> },
+    { header: 'Hóa đơn', cell: item => <div><span>{item.invoiceNo}</span>{item.exchangeInvoiceNo && <p className="text-xs text-slate-500">Mới: {item.exchangeInvoiceNo}</p>}</div> },
+    { header: 'Khách hàng', cell: item => item.customerName || 'Khách lẻ' },
+    { header: 'Giá trị', cell: item => <div className="text-right"><strong>{money(item.totalRefundAmount)}</strong>{item.transactionType === 'EXCHANGE' && <p className="text-xs text-slate-500">Chênh lệch: {money(item.balanceDifference)}</p>}</div> },
+    { header: 'Trạng thái tiền', cell: item => settlementLabel(item.settlementStatus) },
   ];
 
-  return (
-    <div className="ui-page">
-      {/* Header */}
-      <PageHeader title="Đổi trả & Hoàn tiền" actions={<>
-<button
-          onClick={handleOpenCreateModal}
-          className="inline-flex items-center justify-center gap-2 bg-forest hover:bg-forest/90 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors cursor-pointer"
-        >
-          <Plus size={16} />
-          <span>Tạo phiếu đổi trả</span>
-        </button>
-</>} />
+  return <div className="ui-page">
+    <PageHeader title="Đổi trả & Hoàn tiền" actions={<button type="button" onClick={openCreate} className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-sm font-semibold text-white hover:bg-forest/90"><Plus size={16}/>Tạo giao dịch</button>} />
+    {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
+    {success && <AlertBanner type="success" message={success} onClose={() => setSuccess('')} />}
 
-      {/* Thông báo */}
-      {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
-      {successMsg && <AlertBanner type="success" message={successMsg} onClose={() => setSuccessMsg('')} />}
-
-      {/* Thống kê KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <StatCard
-          loading={loading} unavailable={Boolean(error)}
-          icon={RotateCcw}
-          title="Tổng lượt đổi trả"
-          value={stats.totalCount}
-          subValue="Phiếu trả hàng đã thực hiện tại chi nhánh"
-          colorTheme="blue"
-        />
-        <StatCard
-          loading={loading} unavailable={Boolean(error)}
-          icon={Undo2}
-          title="Tổng tiền đã hoàn trả"
-          value={moneyFormatter.format(stats.totalAmount)}
-          subValue="Số tiền hoàn lại cho khách hàng"
-          colorTheme="amber"
-        />
-      </div>
-
-      {/* Bộ lọc và Tìm kiếm */}
-        <SearchToolbar
-          searchValue={searchTerm}
-          onSearchChange={t => {
-            setSearchTerm(t);
-            setCurrentPage(1);
-          }}
-          searchPlaceholder="Tìm theo mã phiếu trả (TH...), mã hóa đơn (HD...), tên khách hàng, lý do..."
-          onRefresh={loadReturns}
-          loading={loading}
-        />
-
-      {/* Bảng danh sách phiếu trả hàng */}
-      <DataTable<ReturnOrder>
-        columns={columns}
-        data={paginatedReturns}
-        keyExtractor={r => r.id}
-        loading={loading}
-        emptyMessage="Chưa có phiếu đổi trả hàng nào."
-        pagination={{
-          page: currentPage,
-          totalPages,
-          totalCount: filteredReturns.length,
-          pageSize,
-          onPageChange: setCurrentPage,
-        }}
-      />
-
-      {/* Modal Xem chi tiết phiếu trả hàng */}
-      <Modal
-        isOpen={Boolean(selectedReturn)}
-        title={`Chi tiết phiếu đổi trả: ${selectedReturn?.returnNo}`}
-        onClose={() => setSelectedReturn(null)}
-      >
-        {selectedReturn && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
-              <div>
-                <span className="text-slate-400 block">Hóa đơn gốc:</span>
-                <span className="font-mono font-bold text-ink">{selectedReturn.invoiceNo}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block">Ngày thực hiện:</span>
-                <span className="text-ink">
-                  {dateTime.format(new Date(selectedReturn.createdDate))}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 block">Khách hàng:</span>
-                <span className="font-semibold text-ink">
-                  {selectedReturn.customerName || 'Khách lẻ vãng lai'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-400 block">Dược sĩ tiếp nhận:</span>
-                <span className="text-ink">{selectedReturn.cashierName}</span>
-              </div>
-              <div className="sm:col-span-2">
-                <span className="text-slate-400 block">Lý do đổi trả:</span>
-                <span className="text-slate-700 italic">{selectedReturn.reason}</span>
-              </div>
-            </div>
-
-            {/* Danh sách mặt hàng trong phiếu trả */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Mặt hàng trả lại
-              </h4>
-              {loadingDetail ? (
-                <div className="py-6 text-center text-xs text-slate-400">Đang tải chi tiết...</div>
-              ) : selectedReturn.items && selectedReturn.items.length > 0 ? (
-                <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100 text-xs">
-                  <div className="grid grid-cols-[1fr_80px_70px_80px_90px] bg-slate-50 px-3 py-2 font-bold text-slate-500 text-xs">
-                    <span>Tên thuốc & Lô</span>
-                    <span className="text-center">Số lượng</span>
-                    <span className="text-right">Đơn giá</span>
-                    <span className="text-right">Thành tiền</span>
-                    <span className="text-center">Xử lý kho</span>
-                  </div>
-                  {selectedReturn.items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="grid grid-cols-[1fr_80px_70px_80px_90px] px-3 py-2 items-center"
-                    >
-                      <div>
-                        <div className="font-semibold text-ink">{item.drugName}</div>
-                        <div className="text-xs text-slate-400 font-mono">Lô: {item.batchNo}</div>
-                      </div>
-                      <div className="text-center font-bold text-ink">{item.quantity}</div>
-                      <div className="text-right font-mono text-slate-600">
-                        {moneyFormatter.format(item.refundPrice)}
-                      </div>
-                      <div className="text-right font-mono font-bold text-rose-600">
-                        {moneyFormatter.format(item.subTotal)}
-                      </div>
-                      <div className="text-center">
-                        <span
-                          className={`inline-block px-1.5 py-0.5 rounded text-xs font-semibold ${
-                            item.actionType === 'RESTOCK'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-rose-100 text-rose-800'
-                          }`}
-                        >
-                          {item.actionType === 'RESTOCK' ? 'Nhập lại kho' : 'Xuất hủy'}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-4 text-center text-xs text-slate-400">Không có dữ liệu mặt hàng</div>
-              )}
-            </div>
-
-            {/* Tổng tiền */}
-            <div className="flex justify-between items-center bg-rose-50 p-3 rounded-lg border border-rose-200 text-xs font-bold text-rose-900">
-              <span>Tổng tiền đã hoàn trả khách:</span>
-              <span className="text-sm font-mono text-rose-700">
-                {moneyFormatter.format(selectedReturn.totalRefundAmount)}
-              </span>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setSelectedReturn(null)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      {/* Modal Tạo phiếu đổi trả mới */}
-      <Modal
-        isOpen={showCreateModal}
-        title="Tạo phiếu đổi trả hàng & Hoàn tiền"
-        onClose={() => setShowCreateModal(false)}
-      >
-        <form onSubmit={handleCreateReturnSubmit} className="space-y-4">
-          {createFormError && <AlertBanner type="error" message={createFormError} />}
-
-          {/* Bước 1: Tra cứu hóa đơn gốc */}
-          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
-            <label className="block text-xs font-semibold text-slate-700">
-              Tra cứu Hóa đơn gốc cần đổi trả <span className="text-rose-500">*</span>
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={invoiceQuery}
-                onChange={e => setInvoiceQuery(e.target.value)}
-                placeholder="Nhập mã hóa đơn (ví dụ: HD20261019...)"
-                className="flex-1 text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest font-mono uppercase bg-white"
-              />
-              <button
-                type="button"
-                onClick={() => handleLookupInvoice()}
-                disabled={searchingInvoice}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                <Search size={14} />
-                <span>{searchingInvoice ? 'Đang tìm...' : 'Tra cứu'}</span>
-              </button>
-            </div>
-            {lookupError && (
-              <p className="text-xs text-rose-600 flex items-center gap-1 mt-1">
-                <AlertCircle size={13} /> {lookupError}
-              </p>
-            )}
-          </div>
-
-          {/* Hiển thị thông tin hóa đơn và các dòng mặt hàng có thể trả */}
-          {lookupInvoice && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-mint/30 p-3 rounded-lg border border-forest/20 text-xs">
-                <div>
-                  <span className="text-slate-500 block text-xs">Số HĐ:</span>
-                  <span className="font-mono font-bold text-ink">{lookupInvoice.invoiceNumber}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-xs">Khách hàng:</span>
-                  <span className="font-semibold text-ink">
-                    {lookupInvoice.customerName
-                      ? `${lookupInvoice.customerName} (${lookupInvoice.customerPhone || ''})`
-                      : 'Khách lẻ vãng lai'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-xs">Tổng tiền đơn:</span>
-                  <span className="font-mono font-bold text-forest">
-                    {moneyFormatter.format(lookupInvoice.totalAmount)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Bảng chọn mặt hàng trả */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-                    Chọn mặt hàng trả lại
-                  </label>
-                  <span className="text-xs text-slate-400">
-                    Chỉ những mặt hàng có số lượng khả dụng mới được trả
-                  </span>
-                </div>
-
-                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
-                  <div className="grid grid-cols-[minmax(0,1.5fr)_70px_70px_80px_100px] bg-slate-100/70 px-3 py-2 font-bold text-slate-500 text-xs">
-                    <span>Tên thuốc & Lô</span>
-                    <span className="text-center">Đã mua</span>
-                    <span className="text-center">Có thể trả</span>
-                    <span className="text-center">SL Trả</span>
-                    <span className="text-center">Xử lý kho</span>
-                  </div>
-
-                  {lookupInvoice.items.map(item => {
-                    const key = `${item.drugId}_${item.batchId}`;
-                    const entry = selectedItems[key] || { quantity: 0, actionType: 'RESTOCK' };
-
-                    return (
-                      <div
-                        key={key}
-                        className={`grid grid-cols-[minmax(0,1.5fr)_70px_70px_80px_100px] px-3 py-2.5 items-center gap-1.5 transition-colors ${
-                          entry.quantity > 0 ? 'bg-mint/10' : 'bg-white'
-                        }`}
-                      >
-                        <div>
-                          <div className="font-semibold text-ink leading-tight">{item.drugName}</div>
-                          <div className="text-xs text-slate-400 font-mono mt-0.5">
-                            Lô: {item.batchNo} · {moneyFormatter.format(item.unitPrice)}/đv
-                          </div>
-                        </div>
-
-                        <div className="text-center text-slate-500">{item.originalQuantity}</div>
-
-                        <div className="text-center font-bold text-slate-700">
-                          {item.availableToReturnQuantity > 0 ? (
-                            item.availableToReturnQuantity
-                          ) : (
-                            <span className="text-rose-500 text-xs">Đã hết</span>
-                          )}
-                        </div>
-
-                        <div className="text-center">
-                          <input
-                            type="number"
-                            min={0}
-                            max={item.availableToReturnQuantity}
-                            value={entry.quantity}
-                            onChange={e =>
-                              handleItemQuantityChange(
-                                key,
-                                parseInt(e.target.value, 10) || 0,
-                                item.availableToReturnQuantity
-                              )
-                            }
-                            disabled={item.availableToReturnQuantity <= 0}
-                            className="w-16 px-2 py-1 text-center font-bold border border-slate-200 rounded focus:outline-none focus:border-forest disabled:bg-slate-100 disabled:text-slate-400 text-xs"
-                          />
-                        </div>
-
-                        <div className="text-center">
-                          <select
-                            value={entry.actionType}
-                            onChange={e =>
-                              handleItemActionChange(key, e.target.value as 'RESTOCK' | 'DISCARD')
-                            }
-                            disabled={entry.quantity <= 0}
-                            className="w-full text-xs px-1.5 py-1 border border-slate-200 rounded bg-white focus:outline-none focus:border-forest disabled:bg-slate-100 disabled:text-slate-400"
-                          >
-                            <option value="RESTOCK">Nhập kho</option>
-                            <option value="DISCARD">Xuất hủy</option>
-                          </select>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Lý do trả hàng */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Lý do đổi trả hàng <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  value={returnReason}
-                  onChange={e => setReturnReason(e.target.value)}
-                  placeholder="Ví dụ: Bác sĩ đổi phác đồ điều trị, vỏ hộp bị móp méo khi mua..."
-                  rows={2}
-                  className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest resize-none"
-                  required
-                />
-              </div>
-
-              {/* Tổng kết tiền hoàn trả */}
-              <div className="flex justify-between items-center bg-rose-50 p-3.5 rounded-xl border border-rose-200">
-                <div>
-                  <span className="text-xs font-bold text-rose-900 block">Tổng tiền hoàn trả khách:</span>
-                  <span className="text-xs text-rose-600">
-                    Số tiền sẽ được trích xuất hoàn lại cho khách hàng
-                  </span>
-                </div>
-                <div className="text-lg font-mono font-extrabold text-rose-600">
-                  {moneyFormatter.format(calculatedRefundTotal)}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Action buttons */}
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(false)}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !lookupInvoice || calculatedRefundTotal <= 0}
-              className="px-5 py-2 text-xs font-medium bg-forest hover:bg-forest/90 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              {submitting ? 'Đang xử lý...' : 'Xác nhận Đổi trả & Hoàn tiền'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+    <div className="grid gap-4 sm:grid-cols-3">
+      <StatCard loading={loading} unavailable={Boolean(error)} icon={RotateCcw} title="Tổng giao dịch" value={returns.length} subValue="Phiếu đã ghi nhận" colorTheme="blue" />
+      <StatCard loading={loading} unavailable={Boolean(error)} icon={Undo2} title="Trả hàng" value={returns.filter(item => item.transactionType === 'RETURN').length} subValue="Khoản hoàn cần xử lý" colorTheme="amber" />
+      <StatCard loading={loading} unavailable={Boolean(error)} icon={ArrowRightLeft} title="Đổi thuốc" value={returns.filter(item => item.transactionType === 'EXCHANGE').length} subValue="Có hóa đơn mới liên kết" colorTheme="emerald" />
     </div>
-  );
+
+    <SearchToolbar searchValue={search} onSearchChange={value => { setSearch(value); setPage(1); }} searchPlaceholder="Tìm mã phiếu, hóa đơn, khách hàng..." onRefresh={loadReturns} loading={loading} />
+    <DataTable
+      columns={columns}
+      data={paged}
+      keyExtractor={item => item.id}
+      loading={loading}
+      emptyMessage="Chưa có giao dịch đổi trả."
+      onRowClick={item => void openDetail(item)}
+      rowLabel={item => `Mở chi tiết phiếu ${item.returnNo}`}
+      pagination={{ page, totalPages, totalCount: filtered.length, pageSize, onPageChange: setPage }}
+    />
+
+    <Modal isOpen={Boolean(selectedReturn)} onClose={() => setSelectedReturn(null)} title={`Chi tiết ${selectedReturn?.returnNo ?? ''}`} maxWidth="3xl">
+      {detailLoading ? <p className="py-10 text-center text-sm text-slate-500">Đang tải chi tiết...</p> : selectedReturn && <ReturnDetail item={selectedReturn} />}
+    </Modal>
+
+    <Modal isOpen={createOpen} onClose={() => !submitting && setCreateOpen(false)} title="Tạo giao dịch đổi trả" subtitle="Giá và số tiền được Backend xác định từ dữ liệu hóa đơn" maxWidth="5xl" closeOnOverlayClick={!submitting}>
+      <form onSubmit={submit} className="space-y-6">
+        {formError && <AlertBanner type="error" message={formError} />}
+        <section>
+          <h3 className="mb-3 text-sm font-bold text-ink">1. Loại giao dịch</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(['RETURN', 'EXCHANGE'] as const).map(type => <button key={type} type="button" onClick={() => { setTransactionType(type); setSettlementConfirmed(false); if (type === 'EXCHANGE' && !replacementDrugs.length) void loadReplacementDrugs().catch(() => setFormError('Không thể tải danh mục thuốc.')); }} className={`rounded-xl border p-4 text-left transition-colors ${transactionType === type ? 'border-forest bg-mint text-forest' : 'border-slate-200 hover:border-forest/40'}`}><strong>{type === 'RETURN' ? 'Trả hàng & Hoàn tiền' : 'Đổi thuốc'}</strong><p className="mt-1 text-xs text-slate-500">{type === 'RETURN' ? 'Ghi nhận hàng trả và khoản tiền cần hoàn.' : 'Nhận thuốc trả, xuất thuốc mới và tạo hóa đơn ký số.'}</p></button>)}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="mb-3 text-sm font-bold text-ink">2. Hóa đơn gốc</h3>
+          <div className="flex flex-col gap-2 sm:flex-row"><input value={invoiceQuery} onChange={event => setInvoiceQuery(event.target.value)} className={inputClass} placeholder="Nhập mã hóa đơn"/><button type="button" onClick={() => void lookupInvoice()} disabled={lookupLoading} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"><Search size={15}/>{lookupLoading ? 'Đang tìm...' : 'Tra cứu'}</button></div>
+          {invoice && <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3"><p><span className="text-slate-500">Hóa đơn:</span> <strong>{invoice.invoiceNumber}</strong></p><p><span className="text-slate-500">Khách:</span> {invoice.customerName || 'Khách lẻ'}</p><p><span className="text-slate-500">Tổng:</span> <strong>{money(invoice.totalAmount)}</strong></p></div>}
+        </section>
+
+        {invoice && <ReturnItemEditor invoice={invoice} selections={selections} onChange={setSelections} />}
+        {invoice && transactionType === 'EXCHANGE' && <ReplacementEditor drugs={replacementDrugs} drugId={replacementDrugId} batches={replacementBatches} batchId={replacementBatchId} quantity={replacementQuantity} items={replacements} onDrugChange={value => void chooseReplacementDrug(value)} onBatchChange={setReplacementBatchId} onQuantityChange={setReplacementQuantity} onAdd={addReplacement} onRemove={index => setReplacements(items => items.filter((_, itemIndex) => itemIndex !== index))} />}
+
+        {invoice && <section><h3 className="mb-2 text-sm font-bold text-ink">{transactionType === 'EXCHANGE' ? '5' : '4'}. Lý do và ghi chú</h3><textarea value={reason} onChange={event => setReason(event.target.value)} rows={3} className={inputClass} placeholder="Mô tả lý do đổi trả"/></section>}
+        {invoice && <section className="border-t border-slate-200 pt-4"><div className="grid gap-3 text-sm sm:grid-cols-3"><p>Giá trị thuốc trả<br/><strong className="text-lg">{money(refundTotal)}</strong></p>{transactionType === 'EXCHANGE' && <><p>Giá trị thuốc mới<br/><strong className="text-lg">{money(replacementTotal)}</strong></p><p>Chênh lệch<br/><strong className={difference < 0 ? 'text-rose-600' : 'text-forest'}>{difference > 0 ? `Khách trả thêm ${money(difference)}` : difference < 0 ? `Cần hoàn khách ${money(Math.abs(difference))}` : 'Không phát sinh'}</strong></p></>}</div>{transactionType === 'EXCHANGE' && <label className="mt-4 flex items-start gap-2 text-sm"><input type="checkbox" checked={settlementConfirmed} onChange={event => setSettlementConfirmed(event.target.checked)} className="mt-1"/><span>Tôi đã đối chiếu phương án chênh lệch tiền mặt. Khoản cần hoàn cho khách vẫn được ghi nhận là <strong>cần xử lý</strong> do hệ thống chưa lưu xác nhận chi tiền riêng.</span></label>}</section>}
+
+        <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-200 bg-white pt-4"><button type="button" onClick={() => setCreateOpen(false)} disabled={submitting} className="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100">Hủy</button><button type="submit" disabled={submitting || !invoice || refundTotal <= 0} className="rounded-lg bg-forest px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">{submitting ? 'Đang xử lý...' : 'Xác nhận giao dịch'}</button></div>
+      </form>
+    </Modal>
+  </div>;
+}
+
+function ReturnItemEditor({ invoice, selections, onChange }: { invoice: ReturnableInvoice; selections: Record<string, ReturnSelection>; onChange: React.Dispatch<React.SetStateAction<Record<string, ReturnSelection>>> }) {
+  return <section><h3 className="mb-3 text-sm font-bold text-ink">3. Thuốc khách trả và xử lý kho</h3><div className="overflow-x-auto rounded-xl border border-slate-200"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">Thuốc / Lô</th><th className="p-3 text-center">Có thể trả</th><th className="p-3 text-center">Số lượng</th><th className="p-3">Xử lý kho</th><th className="p-3">Xác nhận kiểm tra</th></tr></thead><tbody>{invoice.items.map(item => { const key = `${item.drugId}_${item.batchId}`; const value = selections[key]; return <tr key={key} className="border-t border-slate-100"><td className="p-3"><strong>{item.drugName}</strong><p className="text-xs text-slate-500">Lô {item.batchNo} · {money(item.unitPrice)}</p></td><td className="p-3 text-center">{item.availableToReturnQuantity}</td><td className="p-3"><input type="number" min={0} max={item.availableToReturnQuantity} value={value?.quantity ?? 0} onChange={event => onChange(current => ({ ...current, [key]: { ...current[key], quantity: Math.min(item.availableToReturnQuantity, Math.max(0, Number(event.target.value))) } }))} className={`${inputClass} mx-auto w-20 text-center`}/></td><td className="p-3"><select value={value?.actionType ?? 'DISCARD'} onChange={event => onChange(current => ({ ...current, [key]: { ...current[key], actionType: event.target.value as 'RESTOCK' | 'DISCARD', restockInspectionConfirmed: false } }))} className={inputClass} disabled={!value?.quantity}><option value="DISCARD">Không nhập lại kho</option><option value="RESTOCK">Nhập lại kho</option></select></td><td className="p-3">{value?.actionType === 'RESTOCK' ? <label className="flex gap-2"><input type="checkbox" checked={value.restockInspectionConfirmed} onChange={event => onChange(current => ({ ...current, [key]: { ...current[key], restockInspectionConfirmed: event.target.checked } }))}/><span className="text-xs">Đã kiểm tra, đủ điều kiện tiếp tục lưu thông</span></label> : <span className="text-xs text-slate-500">Không tăng tồn bán được</span>}</td></tr>; })}</tbody></table></div><p className="mt-2 text-xs text-slate-500">“Nhập lại kho” chỉ dùng sau khi nhân viên kiểm tra hàng đủ điều kiện tiếp tục lưu thông. Hệ thống không ghi nhận biên bản kiểm định hoặc tiêu hủy.</p></section>;
+}
+
+function ReplacementEditor({ drugs, drugId, batches, batchId, quantity, items, onDrugChange, onBatchChange, onQuantityChange, onAdd, onRemove }: { drugs: Drug[]; drugId: string; batches: DrugBatch[]; batchId: string; quantity: number; items: ReplacementSelection[]; onDrugChange: (value: string) => void; onBatchChange: (value: string) => void; onQuantityChange: (value: number) => void; onAdd: () => void; onRemove: (index: number) => void }) {
+  return <section><h3 className="mb-3 text-sm font-bold text-ink">4. Thuốc mới</h3><div className="grid gap-3 md:grid-cols-[2fr_2fr_100px_auto]"><select value={drugId} onChange={event => onDrugChange(event.target.value)} className={inputClass}><option value="">Chọn thuốc</option>{drugs.map(item => <option key={item.drugId} value={item.drugId}>{item.name} · {money(item.price)}</option>)}</select><select value={batchId} onChange={event => onBatchChange(event.target.value)} className={inputClass} disabled={!drugId}><option value="">Chọn lô theo FEFO</option>{batches.map(item => <option key={item.batchId} value={item.batchId}>{item.batchNo} · còn {item.stockQuantity} · HSD {item.expiryDate.slice(0, 10)}</option>)}</select><input type="number" min={1} value={quantity} onChange={event => onQuantityChange(Math.max(1, Number(event.target.value)))} className={inputClass}/><button type="button" onClick={onAdd} className="rounded-lg border border-forest px-4 py-2 text-sm font-semibold text-forest hover:bg-mint">Thêm</button></div>{items.length > 0 && <div className="mt-3 divide-y divide-slate-100 border-y border-slate-200">{items.map((item, index) => <div key={`${item.drugId}_${item.batchId}`} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"><span><strong>{item.drugName}</strong> · Lô {item.batchNo} · {item.quantity} × {money(item.unitPrice)}</span><button type="button" onClick={() => onRemove(index)} className="text-rose-600 hover:underline">Bỏ</button></div>)}</div>}</section>;
+}
+
+function ReturnDetail({ item }: { item: ReturnOrder }) {
+  return <div className="space-y-5 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><span className="text-slate-500">Loại:</span> {item.transactionType === 'EXCHANGE' ? 'Đổi thuốc' : 'Trả hàng & hoàn tiền'}</p><p><span className="text-slate-500">Ngày:</span> {dateTime(new Date(item.createdDate))}</p><p><span className="text-slate-500">Hóa đơn gốc:</span> {item.invoiceNo}</p>{item.exchangeInvoiceNo && <p><span className="text-slate-500">Hóa đơn mới:</span> <Link to={`/invoices?invoiceId=${encodeURIComponent(item.exchangeInvoiceId!)}`} className="font-semibold text-forest underline">{item.exchangeInvoiceNo}</Link></p>}<p><span className="text-slate-500">Khách:</span> {item.customerName || 'Khách lẻ'}</p><p><span className="text-slate-500">Nhân viên:</span> {item.cashierName}</p></div><div><strong>Thuốc trả</strong><div className="mt-2 divide-y divide-slate-100 border-y border-slate-200">{item.items.map(returnItem => <div key={`${returnItem.drugId}_${returnItem.batchId}`} className="flex flex-wrap justify-between gap-2 py-3"><span>{returnItem.drugName} · Lô {returnItem.batchNo} · SL {returnItem.quantity}</span><span>{returnItem.actionType === 'RESTOCK' ? 'Nhập lại kho' : 'Không nhập lại kho'} · {money(returnItem.subTotal)}</span></div>)}</div></div><div className="grid gap-2 border-t border-slate-200 pt-4 sm:grid-cols-3"><p>Giá trị thuốc trả<br/><strong>{money(item.totalRefundAmount)}</strong></p>{item.transactionType === 'EXCHANGE' && <><p>Hóa đơn mới<br/><strong>{money(item.replacementTotalAmount)}</strong></p><p>Chênh lệch<br/><strong>{money(item.balanceDifference)}</strong></p></>}</div><p className="text-slate-600"><strong>Lý do:</strong> {item.reason}</p><p className="rounded-lg bg-amber-50 p-3 text-amber-900">{settlementLabel(item.settlementStatus)}</p></div>;
+}
+
+function settlementLabel(status: ReturnOrder['settlementStatus']) {
+  if (status === 'SETTLED') return 'Đã xác nhận thanh toán phần chênh lệch';
+  if (status === 'NO_DIFFERENCE') return 'Không phát sinh chênh lệch';
+  if (status === 'PAYMENT_PENDING') return 'Chờ xác nhận thanh toán';
+  return 'Cần hoàn tiền cho khách — chưa có xác nhận chi tiền trong hệ thống';
 }

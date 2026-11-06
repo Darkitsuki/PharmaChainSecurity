@@ -419,6 +419,12 @@ export interface ReturnOrder {
   customerId: string | null;
   customerName: string | null;
   totalRefundAmount: number;
+  exchangeInvoiceId: string | null;
+  exchangeInvoiceNo: string | null;
+  replacementTotalAmount: number;
+  balanceDifference: number;
+  transactionType: 'RETURN' | 'EXCHANGE';
+  settlementStatus: 'REFUND_REQUIRED' | 'NO_DIFFERENCE' | 'SETTLED' | 'PAYMENT_PENDING';
   reason: string;
   status: 'COMPLETED' | 'REJECTED';
   createdDate: string;
@@ -431,12 +437,23 @@ export interface CreateReturnItemPayload {
   quantity: number;
   refundPrice: number;
   actionType: 'RESTOCK' | 'DISCARD';
+  restockInspectionConfirmed: boolean;
+}
+
+export interface CreateExchangeItemPayload {
+  drugId: string;
+  batchId: string;
+  quantity: number;
 }
 
 export interface CreateReturnPayload {
   invoiceId: string;
   reason: string;
   items: CreateReturnItemPayload[];
+  transactionType: 'RETURN' | 'EXCHANGE';
+  replacementItems?: CreateExchangeItemPayload[];
+  paymentMethod: 'CASH';
+  settlementConfirmed: boolean;
 }
 
 export interface ReturnableInvoiceItem {

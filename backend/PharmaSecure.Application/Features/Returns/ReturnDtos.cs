@@ -22,22 +22,62 @@ public sealed record ReturnResponse(
     string? CustomerId,
     string? CustomerName,
     decimal TotalRefundAmount,
+    string? ExchangeInvoiceId,
+    string? ExchangeInvoiceNo,
+    decimal ReplacementTotalAmount,
+    decimal BalanceDifference,
+    string TransactionType,
+    string SettlementStatus,
     string Reason,
     string Status,
     DateTime CreatedDate,
-    IReadOnlyList<ReturnItemResponse> Items);
+    IReadOnlyList<ReturnItemResponse> Items)
+{
+    public ReturnResponse(
+        string id,
+        string returnNo,
+        string invoiceId,
+        string invoiceNo,
+        string branchId,
+        string cashierId,
+        string cashierName,
+        string? customerId,
+        string? customerName,
+        decimal totalRefundAmount,
+        string reason,
+        string status,
+        DateTime createdDate,
+        IReadOnlyList<ReturnItemResponse> items)
+        : this(
+            id, returnNo, invoiceId, invoiceNo, branchId, cashierId, cashierName,
+            customerId, customerName, totalRefundAmount, null, null, 0m,
+            -totalRefundAmount, "RETURN", "REFUND_REQUIRED", reason, status,
+            createdDate, items)
+    {
+    }
+}
 
 public sealed record CreateReturnItemRequest(
     string DrugId,
     string BatchId,
     int Quantity,
     decimal RefundPrice,
-    string ActionType = "RESTOCK");
+    string ActionType = "DISCARD",
+    bool RestockInspectionConfirmed = false);
+
+public sealed record CreateExchangeItemRequest(
+    string DrugId,
+    string BatchId,
+    int Quantity);
 
 public sealed record CreateReturnRequest(
     string InvoiceId,
     string Reason,
-    IReadOnlyList<CreateReturnItemRequest> Items);
+    IReadOnlyList<CreateReturnItemRequest> Items,
+    string TransactionType = "RETURN",
+    IReadOnlyList<CreateExchangeItemRequest>? ReplacementItems = null,
+    string PaymentMethod = "CASH",
+    bool SettlementConfirmed = false);
 
 public sealed record ReturnableInvoiceItemResponse(
     string DrugId,
