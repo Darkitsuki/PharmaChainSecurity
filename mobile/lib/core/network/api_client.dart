@@ -14,11 +14,13 @@ class ApiClient {
   ApiClient(
       {required this.baseUrl,
       http.Client? client,
-      this.timeout = const Duration(seconds: 15)})
+      this.timeout = const Duration(seconds: 15),
+      this.onUnauthorized})
       : _httpClient = client ?? http.Client();
   final String baseUrl;
   final http.Client _httpClient;
   final Duration timeout;
+  void Function()? onUnauthorized;
 
   Future<Map<String, dynamic>> get(String endpoint,
           {String? token, String? correlationId}) =>
@@ -46,6 +48,9 @@ class ApiClient {
               http.Response.fromStream(await _httpClient.send(request)))()
           .timeout(timeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        if (response.statusCode == 401 && token != null) {
+          onUnauthorized?.call();
+        }
         // Never surface raw responses: they may contain diagnostics or secrets.
         throw ApiException(
             switch (response.statusCode) {

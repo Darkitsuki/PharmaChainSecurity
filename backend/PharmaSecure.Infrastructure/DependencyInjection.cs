@@ -53,6 +53,7 @@ public static class DependencyInjection
             return provider.GetRequiredService<GmailAuditOtpDelivery>();
         });
         services.AddScoped<SecurityAuditWriter>();
+        services.AddSingleton<IActiveSessionTracker, MemoryActiveSessionTracker>();
         services.AddScoped<SessionCredentialValidator>();
         services.AddScoped<IAccountSettingsService, AccountSettingsService>();
         services.AddScoped<IAuditAccessService, AuditAccessService>();
@@ -109,7 +110,28 @@ public static class DependencyInjection
                     {
                         if (!await context.HttpContext.RequestServices.GetRequiredService<SessionCredentialValidator>()
                             .ValidateAsync(context.Principal!, context.HttpContext.RequestAborted))
-                            context.Fail("Phiên đăng nhập đã thay đổi. Vui lòng đăng nhập lại.");
+                            context.Fail("Session expired or superseded by another login.");
+                    },
+                    OnChallenge = async context =>
+                    {
+                        context.HandleResponse();
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        context.Response.ContentType = "application/problem+json";
+
+                        var failureMessage = context.AuthenticateFailure?.Message;
+                        var title = string.IsNullOrWhiteSpace(failureMessage)
+                            ? "Unauthorized access or token expired."
+                            : failureMessage;
+
+                        var problem = new Microsoft.AspNetCore.Mvc.ProblemDetails
+                        {
+                            Status = StatusCodes.Status401Unauthorized,
+                            Title = title,
+                            Detail = title,
+                            Instance = context.Request.Path
+                        };
+
+                        await context.Response.WriteAsJsonAsync(problem);
                     }
                 };
             });

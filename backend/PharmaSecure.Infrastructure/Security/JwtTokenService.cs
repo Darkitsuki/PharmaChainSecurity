@@ -17,7 +17,7 @@ public sealed class JwtTokenService : IJwtTokenService
         this.options = options.Value;
     }
 
-    public string GenerateToken(string userId, string username, UserRole role, string branchId, string? passwordHash = null)
+    public (string Token, string Jti) GenerateTokenWithJti(string userId, string username, UserRole role, string branchId, string? passwordHash = null)
     {
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("User ID is required.", nameof(userId));
@@ -32,10 +32,11 @@ public sealed class JwtTokenService : IJwtTokenService
         if (string.IsNullOrWhiteSpace(options.Issuer) || string.IsNullOrWhiteSpace(options.Audience))
             throw new InvalidOperationException("JWT issuer and audience must be configured.");
 
+        var jti = Guid.NewGuid().ToString("N");
         var roleCode = role.ToString();
         var claims = new[]
         {
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new Claim(JwtRegisteredClaimNames.Jti, jti),
             new Claim("pwdv", passwordHash is null ? "" : SessionCredentialValidator.Stamp(passwordHash, secretKey)),
             new Claim("UserId", userId),
             new Claim("RoleCode", roleCode),
@@ -55,7 +56,12 @@ public sealed class JwtTokenService : IJwtTokenService
             expires: DateTime.UtcNow.AddMinutes(options.ExpiryMinutes),
             signingCredentials: credentials);
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return (new JwtSecurityTokenHandler().WriteToken(token), jti);
+    }
+
+    public string GenerateToken(string userId, string username, UserRole role, string branchId, string? passwordHash = null)
+    {
+        return GenerateTokenWithJti(userId, username, role, branchId, passwordHash).Token;
     }
 
     private static string ExpandEnvironmentPlaceholder(string value, string variableName)

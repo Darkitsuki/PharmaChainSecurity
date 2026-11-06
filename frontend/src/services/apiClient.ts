@@ -35,9 +35,18 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
   });
 
   if (response.status === 401) {
+    const hadToken = Boolean(localStorage.getItem('auth_token'));
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
-    window.dispatchEvent(new Event('pharmasecure:unauthorized'));
+    if (hadToken) {
+      window.dispatchEvent(
+        new CustomEvent('pharmasecure:unauthorized', {
+          detail: {
+            message: 'Phiên làm việc đã kết thúc do tài khoản được đăng nhập trên thiết bị khác.',
+          },
+        })
+      );
+    }
   }
 
   if (!response.ok) {

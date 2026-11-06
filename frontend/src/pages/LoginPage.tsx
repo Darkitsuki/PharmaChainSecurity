@@ -10,6 +10,9 @@ import { ApiError } from '../services/apiClient';
 export function LoginPage() {
   const location = useLocation();
   const notice = typeof location.state?.notice === 'string' ? location.state.notice : '';
+  const noticeType =
+    (location.state?.noticeType as 'error' | 'success' | 'warning' | 'info') ||
+    (location.state?.superseded ? 'warning' : 'success');
   const { signIn } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -50,7 +53,7 @@ export function LoginPage() {
       <AuthHeader />
       <main className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
         <div className="w-full max-w-[460px]">
-          <AlertBanner type="success" message={notice} className="mb-4" />
+          <AlertBanner type={noticeType} message={notice} className="mb-4" />
           <LoginForm
             username={username}
             password={password}

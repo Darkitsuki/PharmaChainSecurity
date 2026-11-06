@@ -23,9 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(Boolean(localStorage.getItem('auth_token')));
 
   useEffect(() => {
-    const onUnauthorized = () => {
+    const onUnauthorized = (event: Event) => {
       setCurrentUser(null);
-      navigate('/login', { replace: true });
+      const customEvent = event as CustomEvent<{ message?: string }>;
+      const notice =
+        customEvent.detail?.message ||
+        'Phiên làm việc đã kết thúc do tài khoản được đăng nhập trên thiết bị khác.';
+      navigate('/login', { replace: true, state: { notice, noticeType: 'warning', superseded: true } });
     };
     window.addEventListener('pharmasecure:unauthorized', onUnauthorized);
     return () => window.removeEventListener('pharmasecure:unauthorized', onUnauthorized);
@@ -95,8 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('auth_user', JSON.stringify(user));
   }
   function clearSession(notice?: string) {
-    localStorage.removeItem('auth_token'); localStorage.removeItem('auth_user');
-    setCurrentUser(null); navigate('/login', { replace: true, state: { notice } });
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    setCurrentUser(null);
+    navigate('/login', { replace: true, state: { notice } });
   }
 
   return (
