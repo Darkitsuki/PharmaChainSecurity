@@ -163,4 +163,45 @@ public class CheckoutServiceTests
         Assert.Equal("Customer was not found or is inactive.", result.Error);
         unitOfWork.Verify(w => w.RollbackAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task CheckoutAsync_WithStableSigningKey_PersistsOnceAndVerifiesAfterServiceRecreation()
+    {
+        // Arrange: real signing, isolated transaction/inventory/persistence doubles.
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var options = Microsoft.Extensions.Options.Options.Create(new PharmaSecure.Infrastructure.Cryptography.DigitalSignatureOptions
+        {
+            PrivateKeyPkcs8Base64 = Convert.ToBase64String(rsa.ExportPkcs8PrivateKey()),
+            CertificateSerial = "CHECKOUT-STABLE-TEST"
+        });
+        var signing = new PharmaSecure.Infrastructure.Cryptography.DigitalSignatureService(options);
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var inventory = new Mock<IInventoryRepository>();
+        inventory.Setup(repository => repository.LockRowForUpdateAsync("branch-1", "drug-1", "batch-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PharmaSecure.Domain.Entities.Inventory("branch-1", "drug-1", "batch-1", 10));
+        var persistence = new Mock<IInvoicePersistence>();
+        persistence.Setup(repository => repository.GetDrugPriceAsync("drug-1", It.IsAny<CancellationToken>())).ReturnsAsync(12.35m);
+        Invoice? savedInvoice = null;
+        DigitalSignature? savedSignature = null;
+        persistence.Setup(repository => repository.SaveAsync(It.IsAny<Invoice>(), It.IsAny<DigitalSignature>(), It.IsAny<CancellationToken>()))
+            .Callback<Invoice, DigitalSignature, CancellationToken>((invoice, signature, _) => { savedInvoice = invoice; savedSignature = signature; })
+            .Returns(Task.CompletedTask);
+        var service = new CheckoutService(unitOfWork.Object, inventory.Object, persistence.Object, signing);
+
+        // Act.
+        var response = await service.CheckoutAsync(new CheckoutRequest("branch-1", "cashier-1", [new CheckoutLineRequest("drug-1", "batch-1", 3)]));
+
+        // Assert: committed signature remains valid with the same key, without signing again.
+        Assert.True(response.IsSuccess);
+        Assert.NotNull(savedInvoice);
+        Assert.NotNull(savedSignature);
+        var originalSignature = savedSignature.SignatureData;
+        var verifier = new PharmaSecure.Infrastructure.Cryptography.DigitalSignatureService(options);
+        Assert.True(verifier.VerifyIntegrity(savedInvoice, savedSignature));
+        Assert.Equal(originalSignature, savedSignature.SignatureData);
+        Assert.Equal(37.05m, savedInvoice.TotalAmount);
+        persistence.Verify(repository => repository.SaveAsync(It.IsAny<Invoice>(), It.IsAny<DigitalSignature>(), It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(work => work.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(work => work.RollbackAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

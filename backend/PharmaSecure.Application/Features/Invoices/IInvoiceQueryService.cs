@@ -22,7 +22,9 @@ public sealed record InvoiceResponse(
     string? CancelReason = null,
     DateTime? LastVerifiedAt = null,
     string? VerifiedById = null,
-    string? VerifiedByName = null);
+    string? VerifiedByName = null,
+    string? CashierName = null,
+    string? SignatureStatus = null);
 
 public sealed record InvoiceItemResponse(
     string DrugId,
@@ -31,7 +33,8 @@ public sealed record InvoiceItemResponse(
     string BatchId,
     int Quantity,
     decimal UnitPrice,
-    decimal SubTotal);
+    decimal SubTotal,
+    string? BatchNo = null);
 
 public sealed record InvoiceSignatureResponse(
     string HashValueSha256,
@@ -65,7 +68,8 @@ public sealed record InvoiceDetailResponse(
     string? CancelReason = null,
     DateTime? LastVerifiedAt = null,
     string? VerifiedById = null,
-    string? VerifiedByName = null);
+    string? VerifiedByName = null,
+    string? CashierName = null);
 
 public sealed record InvoiceVerificationResult(
     string InvoiceId,
@@ -77,7 +81,8 @@ public sealed record InvoiceVerificationResult(
     DateTime SignedAt,
     string Message,
     DateTime? LastVerifiedAt = null,
-    string? VerifiedByName = null);
+    string? VerifiedByName = null,
+    string? VerificationStatus = null);
 
 public sealed record PatientOrderItemDto(
     string DrugId,

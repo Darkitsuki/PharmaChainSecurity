@@ -36,6 +36,10 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
         ArgumentNullException.ThrowIfNull(invoice);
         ArgumentNullException.ThrowIfNull(digitalSignature);
 
+        if (!string.Equals(digitalSignature.CertificateSerial,
+                ResolveValue(options.CertificateSerial, "PHARMA_CERT_SERIAL"), StringComparison.Ordinal))
+            throw new SignatureConfigurationException("The configured key identifier does not match this invoice. The original verification key is required.");
+
         var hash = ComputeHash(invoice);
         var expectedHash = Convert.ToHexString(hash).ToLowerInvariant();
         if (!CryptographicOperations.FixedTimeEquals(
@@ -60,13 +64,27 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
         }
         catch (FormatException exception)
         {
-            throw new InvalidOperationException("The signing private key must be PKCS#8 Base64.", exception);
+            throw new SignatureConfigurationException("The signing private key must be PKCS#8 Base64.", exception);
+        }
+    }
+
+    private RsaPrivateCrtKeyParameters LoadRsaPrivateKey()
+    {
+        try
+        {
+            return PrivateKeyFactory.CreateKey(LoadPrivateKey()) as RsaPrivateCrtKeyParameters
+                ?? throw new SignatureConfigurationException("An RSA PKCS#8 signing key is required.");
+        }
+        catch (SignatureConfigurationException) { throw; }
+        catch (Exception exception) when (exception is ArgumentException or System.IO.IOException)
+        {
+            throw new SignatureConfigurationException("The configured signing key cannot be read.", exception);
         }
     }
 
     private string SignHash(byte[] hash)
     {
-        var privateKey = PrivateKeyFactory.CreateKey(LoadPrivateKey());
+        var privateKey = LoadRsaPrivateKey();
         var signer = new RsaDigestSigner(new Sha256Digest());
         signer.Init(true, privateKey);
         signer.BlockUpdate(hash, 0, hash.Length);
@@ -77,9 +95,8 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
     {
         try
         {
-            var privateKey = PrivateKeyFactory.CreateKey(LoadPrivateKey());
-            if (privateKey is not RsaPrivateCrtKeyParameters rsaPrivateKey)
-                return false;
+            var privateKey = LoadRsaPrivateKey();
+            var rsaPrivateKey = privateKey;
 
             var publicKey = new RsaKeyParameters(false, rsaPrivateKey.Modulus, rsaPrivateKey.PublicExponent);
             var signer = new RsaDigestSigner(new Sha256Digest());
@@ -97,12 +114,6 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
         }
     }
 
-    private static readonly Lazy<string> DevFallbackPrivateKey = new(() =>
-    {
-        using var rsa = RSA.Create(2048);
-        return Convert.ToBase64String(rsa.ExportPkcs8PrivateKey());
-    });
-
     private static string ResolveValue(string value, string environmentVariable)
     {
         var environmentValue = Environment.GetEnvironmentVariable(environmentVariable);
@@ -113,18 +124,7 @@ public sealed class DigitalSignatureService : IDigitalSignatureService
         if (!string.IsNullOrWhiteSpace(value) && !value.Equals($"${{{environmentVariable}}}", StringComparison.Ordinal))
             return value;
 
-        // Development fallback when not configured in environment
-        if (string.Equals(environmentVariable, "PHARMA_SIGNING_PRIVATE_KEY", StringComparison.Ordinal))
-        {
-            return DevFallbackPrivateKey.Value;
-        }
-
-        if (string.Equals(environmentVariable, "PHARMA_CERT_SERIAL", StringComparison.Ordinal))
-        {
-            return "VN-LONGCHAU-CA-2026-DEV";
-        }
-
-        throw new InvalidOperationException(
+        throw new SignatureConfigurationException(
             $"Configure '{environmentVariable}' through application settings or the environment.");
     }
 }

@@ -12,6 +12,7 @@ export interface ModalProps {
   footer?: React.ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl';
   closeOnOverlayClick?: boolean;
+  printable?: boolean;
 }
 
 const maxWidthMap: Record<string, string> = {
@@ -35,6 +36,7 @@ export const Modal: React.FC<ModalProps> = ({
   footer,
   maxWidth = 'lg',
   closeOnOverlayClick = true,
+  printable = false,
 }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -45,14 +47,16 @@ export const Modal: React.FC<ModalProps> = ({
     if (!isOpen) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const focusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+    const getFocusableControls = () => Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? []
+    ).filter(control => control.getClientRects().length > 0);
     const focusFirstControl = () => {
-      const controls = dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector);
-      (controls?.[0] ?? dialogRef.current)?.focus();
+      (getFocusableControls()[0] ?? dialogRef.current)?.focus();
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
       if (e.key === 'Tab') {
-        const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? []);
+        const controls = getFocusableControls();
         if (!controls.length) {
           e.preventDefault();
           dialogRef.current?.focus();
@@ -72,8 +76,9 @@ export const Modal: React.FC<ModalProps> = ({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeyDown);
-    window.requestAnimationFrame(focusFirstControl);
+    const focusFrame = window.requestAnimationFrame(focusFirstControl);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus();
@@ -84,6 +89,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   return createPortal(
     <div
+      data-print-modal={printable || undefined}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs animate-in fade-in duration-200"
       onClick={closeOnOverlayClick ? onClose : undefined}
       role="presentation"
@@ -106,8 +112,8 @@ export const Modal: React.FC<ModalProps> = ({
               </div>
             )}
             <div className="min-w-0">
-              <h2 id={titleId} className="font-display text-base font-bold text-ink truncate">{title}</h2>
-              {subtitle && <p className="mt-0.5 text-xs text-slate-500 truncate">{subtitle}</p>}
+              <h2 id={titleId} className="font-display text-base font-bold text-ink break-words">{title}</h2>
+              {subtitle && <p className="mt-0.5 text-xs text-slate-500 break-words">{subtitle}</p>}
             </div>
           </div>
           <button
@@ -121,7 +127,7 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           {children}
         </div>
 

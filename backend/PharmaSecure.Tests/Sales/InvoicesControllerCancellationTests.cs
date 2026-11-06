@@ -192,4 +192,18 @@ public class InvoicesControllerCancellationTests
         checkoutServiceMock.Verify(service => service.CheckoutAsync(
             It.IsAny<CheckoutRequest>(), It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task VerifySignature_WhenKeyUnavailable_Returns503InsteadOfInvalidResult()
+    {
+        var controller = CreateController();
+        invoiceQueryServiceMock.Setup(service => service.VerifyInvoiceSignatureAsync(
+            TestBranchId, TestInvoiceId, TestOwnerId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new SignatureConfigurationException("Configuration unavailable"));
+        var response = await controller.VerifySignatureAsync(TestInvoiceId);
+        var result = Assert.IsType<ObjectResult>(response.Result);
+        Assert.Equal(503, result.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(result.Value);
+        Assert.DoesNotContain("Configuration unavailable", problem.Detail ?? "");
+    }
 }

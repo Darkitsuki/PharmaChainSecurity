@@ -1,11 +1,16 @@
 using Microsoft.Extensions.Options;
 using PharmaSecure.Domain.Common;
+using PharmaSecure.Application.Interfaces;
 using PharmaSecure.Domain.Entities;
 using PharmaSecure.Infrastructure.Cryptography;
 using Xunit;
 
 namespace PharmaSecure.Tests.Security;
 
+[CollectionDefinition("Invoice signing configuration", DisableParallelization = true)]
+public class InvoiceSigningConfigurationCollection { }
+
+[Collection("Invoice signing configuration")]
 public class InvoiceSignatureTests
 {
     private static DigitalSignatureService CreateSignatureService()
@@ -228,5 +233,57 @@ public class InvoiceSignatureTests
 
         Assert.Equal(DateTimeKind.Unspecified, sig.SignedAt.Kind);
         Assert.Equal(new DateTime(2026, 11, 3, 12, 0, 0, DateTimeKind.Unspecified), sig.SignedAt);
+    }
+
+    [Fact]
+    public void VerifyIntegrity_AfterServiceRecreationWithSameKey_RemainsValid()
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var options = Options.Create(new DigitalSignatureOptions
+        {
+            PrivateKeyPkcs8Base64 = Convert.ToBase64String(rsa.ExportPkcs8PrivateKey()),
+            CertificateSerial = "STABLE-TEST-KEY"
+        });
+        var invoice = new Invoice("HD-RESTART", "br-test", "u-test");
+        invoice.AddItem(new InvoiceItem(invoice.Id, "drug", "batch", 3, 12.35m));
+        var signed = new DigitalSignatureService(options).SignInvoice(invoice);
+        var stored = new DigitalSignature(invoice.Id, signed.HashValueSha256, signed.SignatureData, signed.CertificateSerial, signed.SignedAt);
+        Assert.True(new DigitalSignatureService(options).VerifyIntegrity(invoice, stored));
+    }
+
+    [Fact]
+    public void VerifyIntegrity_WithDifferentKey_DoesNotValidateHistoricalSignature()
+    {
+        var invoice = new Invoice("HD-KEY", "br-test", "u-test");
+        var signed = CreateSignatureService().SignInvoice(invoice);
+        var stored = new DigitalSignature(invoice.Id, signed.HashValueSha256, signed.SignatureData, signed.CertificateSerial, signed.SignedAt);
+        Assert.False(CreateSignatureService().VerifyIntegrity(invoice, stored));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-base64-key")]
+    [InlineData("AAAA")]
+    public void SignInvoice_WithoutUsableConfiguredKey_FailsInsteadOfGeneratingKey(string key)
+    {
+        var previous = Environment.GetEnvironmentVariable("PHARMA_SIGNING_PRIVATE_KEY");
+        try
+        {
+            Environment.SetEnvironmentVariable("PHARMA_SIGNING_PRIVATE_KEY", null);
+            var service = new DigitalSignatureService(Options.Create(new DigitalSignatureOptions
+            { PrivateKeyPkcs8Base64 = key, CertificateSerial = "TEST" }));
+            Assert.Throws<SignatureConfigurationException>(() => service.SignInvoice(new Invoice("HD-MISSING", "br", "u")));
+        }
+        finally { Environment.SetEnvironmentVariable("PHARMA_SIGNING_PRIVATE_KEY", previous); }
+    }
+
+    [Fact]
+    public void VerifyIntegrity_WithMissingHistoricalKeyIdentifier_IsUnavailable()
+    {
+        var service = CreateSignatureService();
+        var invoice = new Invoice("HD-HISTORY", "br", "u");
+        var signed = service.SignInvoice(invoice);
+        var stored = new DigitalSignature(invoice.Id, signed.HashValueSha256, signed.SignatureData, "OTHER-HISTORICAL-KEY", signed.SignedAt);
+        Assert.Throws<SignatureConfigurationException>(() => service.VerifyIntegrity(invoice, stored));
     }
 }
