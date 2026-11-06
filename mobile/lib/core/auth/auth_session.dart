@@ -35,7 +35,9 @@ class AuthUser {
 
 /// Memory-only session. No password/token is written to disk or logs.
 class AuthSession extends ChangeNotifier {
-  AuthSession(this.api);
+  AuthSession(this.api) {
+    api.onUnauthorized = handleUnauthorized;
+  }
   final ApiClient api;
   AuthUser? user;
   bool busy = false;
@@ -56,6 +58,16 @@ class AuthSession extends ChangeNotifier {
     user = null;
     _expiresAt = null;
     _expiryTimer?.cancel();
+  }
+
+  void handleUnauthorized({String? reason}) {
+    if (_token == null || _disposed) return;
+    ++_generation;
+    _clear();
+    busy = false;
+    error = reason ??
+        'Phiên làm việc đã kết thúc do tài khoản được đăng nhập trên thiết bị khác.';
+    _emit();
   }
 
   Future<void> signIn(String username, String password) async {
@@ -170,6 +182,7 @@ class AuthSession extends ChangeNotifier {
     _disposed = true;
     ++_generation;
     _clear();
+    api.onUnauthorized = null;
     api.dispose();
     super.dispose();
   }

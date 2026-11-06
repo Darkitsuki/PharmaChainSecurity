@@ -139,6 +139,31 @@ void main() {
     expect(auth.error, isNotNull);
   });
 
+  test('Concurrent session invalidation: 401 on authenticated request invalidates session',
+      () async {
+    var reads = 0;
+    final auth = sessionFor((request) async {
+      if (request.method == 'POST') return loginResponse();
+      return ++reads == 1
+          ? http.Response(jsonEncode(profile()), 200)
+          : http.Response(
+              '{"title":"Session expired or superseded by another login."}',
+              401);
+    });
+    await auth.signIn('test-user', 'test-password');
+    expect(auth.user, isNotNull);
+    expect(auth.token, isNotNull);
+
+    await expectLater(
+      auth.api.get('/catalog/drugs', token: auth.token),
+      throwsA(isA<ApiException>()),
+    );
+    expect(auth.user, isNull);
+    expect(auth.token, isNull);
+    expect(auth.error,
+        contains('kết thúc do tài khoản được đăng nhập trên thiết bị khác'));
+  });
+
   test('Offline logout clears memory before request times out', () async {
     final pending = Completer<http.Response>();
     final auth = sessionFor((request) async {

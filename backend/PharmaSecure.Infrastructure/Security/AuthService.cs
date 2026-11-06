@@ -17,19 +17,22 @@ public sealed class AuthService : IAuthService
     private readonly IPasswordHasher passwordHasher;
     private readonly JwtOptions jwtOptions;
     private readonly ILogger<AuthService> logger;
+    private readonly IActiveSessionTracker sessionTracker;
 
     public AuthService(
         IOracleConnectionFactory connectionFactory,
         IJwtTokenService jwtTokenService,
         IPasswordHasher passwordHasher,
         IOptions<JwtOptions> jwtOptions,
-        ILogger<AuthService> logger)
+        ILogger<AuthService> logger,
+        IActiveSessionTracker sessionTracker)
     {
         this.connectionFactory = connectionFactory;
         this.jwtTokenService = jwtTokenService;
         this.passwordHasher = passwordHasher;
         this.jwtOptions = jwtOptions.Value;
         this.logger = logger;
+        this.sessionTracker = sessionTracker;
     }
 
     public async Task<Result<LoginResponse>> LoginAsync(
@@ -89,7 +92,8 @@ public sealed class AuthService : IAuthService
         }
 
         var role = MapToUserRole(roleName, roleId);
-        var token = jwtTokenService.GenerateToken(userId, username, role, branchId, passwordHash);
+        var (token, jti) = jwtTokenService.GenerateTokenWithJti(userId, username, role, branchId, passwordHash);
+        sessionTracker.SetActiveSession(userId, jti);
         var profile = new UserProfileResponse(userId, username, fullName, role.ToString(), branchId, branchName);
 
         logger.LogInformation("User '{Username}' (Role: {Role}, Branch: {BranchName}) logged in successfully. IP: {IpAddress}.", username, role, branchName, ipAddress ?? "Unknown");
@@ -139,6 +143,8 @@ public sealed class AuthService : IAuthService
     {
         if (string.IsNullOrWhiteSpace(userId))
             return Result.Failure("User ID is required.");
+
+        sessionTracker.InvalidateSession(userId);
 
         string username = "Unknown";
         string? branchId = null;
