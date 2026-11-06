@@ -1,3 +1,6 @@
+import { dateTime } from '../utils/formatters';
+import { money as moneyFormatter } from '../utils/formatters';
+import { PageHeader } from '../components/common/PageHeader';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -25,11 +28,7 @@ import {
   type Column,
 } from '../components/common';
 
-const moneyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-});
+
 
 export function ReturnsPage() {
   const [searchParams] = useSearchParams();
@@ -270,6 +269,7 @@ export function ReturnsPage() {
   }, [filteredReturns, currentPage]);
 
   const totalPages = Math.ceil(filteredReturns.length / pageSize) || 1;
+  useEffect(() => setCurrentPage(value => Math.min(value, totalPages)), [totalPages]);
 
   // Thống kê KPIs
   const stats = useMemo(() => {
@@ -284,14 +284,8 @@ export function ReturnsPage() {
       cell: r => (
         <div>
           <div className="font-mono font-bold text-xs text-forest">{r.returnNo}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">
-            {new Date(r.createdDate).toLocaleString('vi-VN', {
-              day: '2-digit',
-              month: '2-digit',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+          <div className="text-xs text-slate-400 mt-0.5">
+            {dateTime.format(new Date(r.createdDate))}
           </div>
         </div>
       ),
@@ -311,7 +305,7 @@ export function ReturnsPage() {
           <div className="font-medium text-ink">
             {r.customerName ? r.customerName : <span className="text-slate-400 italic">Khách lẻ vãng lai</span>}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Thu ngân: {r.cashierName}</div>
+          <div className="text-xs text-slate-400 mt-0.5">Thu ngân: {r.cashierName}</div>
         </div>
       ),
     },
@@ -344,39 +338,27 @@ export function ReturnsPage() {
       cell: r => (
         <button
           onClick={() => handleOpenDetail(r)}
-          className="p-1.5 text-slate-400 hover:text-forest hover:bg-mint/40 rounded-md transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-mint hover:text-forest cursor-pointer"
           title="Xem chi tiết phiếu trả"
         >
-          <Eye size={15} />
+          <Eye size={15} /> Chi tiết
         </button>
       ),
     },
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="ui-page">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold font-display text-ink">Đổi trả hàng & Hoàn tiền</h1>
-            <span className="text-xs bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-full">
-              {returns.length} phiếu
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Xử lý tiếp nhận thuốc trả lại, nhập lại kho khả dụng hoặc xuất hủy, tự động hoàn tiền
-          </p>
-        </div>
-
-        <button
+      <PageHeader title="Đổi trả & Hoàn tiền" actions={<>
+<button
           onClick={handleOpenCreateModal}
-          className="inline-flex items-center justify-center gap-2 bg-forest hover:bg-forest-dark text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 bg-forest hover:bg-forest/90 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors cursor-pointer"
         >
           <Plus size={16} />
           <span>Tạo phiếu đổi trả</span>
         </button>
-      </div>
+</>} />
 
       {/* Thông báo */}
       {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
@@ -385,6 +367,7 @@ export function ReturnsPage() {
       {/* Thống kê KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={RotateCcw}
           title="Tổng lượt đổi trả"
           value={stats.totalCount}
@@ -392,6 +375,7 @@ export function ReturnsPage() {
           colorTheme="blue"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={Undo2}
           title="Tổng tiền đã hoàn trả"
           value={moneyFormatter.format(stats.totalAmount)}
@@ -401,7 +385,6 @@ export function ReturnsPage() {
       </div>
 
       {/* Bộ lọc và Tìm kiếm */}
-      <div className="bg-white p-4 rounded-xl border border-line shadow-sm space-y-3">
         <SearchToolbar
           searchValue={searchTerm}
           onSearchChange={t => {
@@ -412,7 +395,6 @@ export function ReturnsPage() {
           onRefresh={loadReturns}
           loading={loading}
         />
-      </div>
 
       {/* Bảng danh sách phiếu trả hàng */}
       <DataTable<ReturnOrder>
@@ -446,7 +428,7 @@ export function ReturnsPage() {
               <div>
                 <span className="text-slate-400 block">Ngày thực hiện:</span>
                 <span className="text-ink">
-                  {new Date(selectedReturn.createdDate).toLocaleString('vi-VN')}
+                  {dateTime.format(new Date(selectedReturn.createdDate))}
                 </span>
               </div>
               <div>
@@ -474,7 +456,7 @@ export function ReturnsPage() {
                 <div className="py-6 text-center text-xs text-slate-400">Đang tải chi tiết...</div>
               ) : selectedReturn.items && selectedReturn.items.length > 0 ? (
                 <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100 text-xs">
-                  <div className="grid grid-cols-[1fr_80px_70px_80px_90px] bg-slate-50 px-3 py-2 font-bold text-slate-500 text-[11px]">
+                  <div className="grid grid-cols-[1fr_80px_70px_80px_90px] bg-slate-50 px-3 py-2 font-bold text-slate-500 text-xs">
                     <span>Tên thuốc & Lô</span>
                     <span className="text-center">Số lượng</span>
                     <span className="text-right">Đơn giá</span>
@@ -488,7 +470,7 @@ export function ReturnsPage() {
                     >
                       <div>
                         <div className="font-semibold text-ink">{item.drugName}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">Lô: {item.batchNo}</div>
+                        <div className="text-xs text-slate-400 font-mono">Lô: {item.batchNo}</div>
                       </div>
                       <div className="text-center font-bold text-ink">{item.quantity}</div>
                       <div className="text-right font-mono text-slate-600">
@@ -499,7 +481,7 @@ export function ReturnsPage() {
                       </div>
                       <div className="text-center">
                         <span
-                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          className={`inline-block px-1.5 py-0.5 rounded text-xs font-semibold ${
                             item.actionType === 'RESTOCK'
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-rose-100 text-rose-800'
@@ -570,7 +552,7 @@ export function ReturnsPage() {
               </button>
             </div>
             {lookupError && (
-              <p className="text-[11px] text-rose-600 flex items-center gap-1 mt-1">
+              <p className="text-xs text-rose-600 flex items-center gap-1 mt-1">
                 <AlertCircle size={13} /> {lookupError}
               </p>
             )}
@@ -581,11 +563,11 @@ export function ReturnsPage() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-mint/30 p-3 rounded-lg border border-forest/20 text-xs">
                 <div>
-                  <span className="text-slate-500 block text-[11px]">Số HĐ:</span>
+                  <span className="text-slate-500 block text-xs">Số HĐ:</span>
                   <span className="font-mono font-bold text-ink">{lookupInvoice.invoiceNumber}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[11px]">Khách hàng:</span>
+                  <span className="text-slate-500 block text-xs">Khách hàng:</span>
                   <span className="font-semibold text-ink">
                     {lookupInvoice.customerName
                       ? `${lookupInvoice.customerName} (${lookupInvoice.customerPhone || ''})`
@@ -593,7 +575,7 @@ export function ReturnsPage() {
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[11px]">Tổng tiền đơn:</span>
+                  <span className="text-slate-500 block text-xs">Tổng tiền đơn:</span>
                   <span className="font-mono font-bold text-forest">
                     {moneyFormatter.format(lookupInvoice.totalAmount)}
                   </span>
@@ -606,13 +588,13 @@ export function ReturnsPage() {
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">
                     Chọn mặt hàng trả lại
                   </label>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-xs text-slate-400">
                     Chỉ những mặt hàng có số lượng khả dụng mới được trả
                   </span>
                 </div>
 
                 <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
-                  <div className="grid grid-cols-[minmax(0,1.5fr)_70px_70px_80px_100px] bg-slate-100/70 px-3 py-2 font-bold text-slate-500 text-[11px]">
+                  <div className="grid grid-cols-[minmax(0,1.5fr)_70px_70px_80px_100px] bg-slate-100/70 px-3 py-2 font-bold text-slate-500 text-xs">
                     <span>Tên thuốc & Lô</span>
                     <span className="text-center">Đã mua</span>
                     <span className="text-center">Có thể trả</span>
@@ -633,7 +615,7 @@ export function ReturnsPage() {
                       >
                         <div>
                           <div className="font-semibold text-ink leading-tight">{item.drugName}</div>
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          <div className="text-xs text-slate-400 font-mono mt-0.5">
                             Lô: {item.batchNo} · {moneyFormatter.format(item.unitPrice)}/đv
                           </div>
                         </div>
@@ -644,7 +626,7 @@ export function ReturnsPage() {
                           {item.availableToReturnQuantity > 0 ? (
                             item.availableToReturnQuantity
                           ) : (
-                            <span className="text-rose-500 text-[10px]">Đã hết</span>
+                            <span className="text-rose-500 text-xs">Đã hết</span>
                           )}
                         </div>
 
@@ -673,7 +655,7 @@ export function ReturnsPage() {
                               handleItemActionChange(key, e.target.value as 'RESTOCK' | 'DISCARD')
                             }
                             disabled={entry.quantity <= 0}
-                            className="w-full text-[11px] px-1.5 py-1 border border-slate-200 rounded bg-white focus:outline-none focus:border-forest disabled:bg-slate-100 disabled:text-slate-400"
+                            className="w-full text-xs px-1.5 py-1 border border-slate-200 rounded bg-white focus:outline-none focus:border-forest disabled:bg-slate-100 disabled:text-slate-400"
                           >
                             <option value="RESTOCK">Nhập kho</option>
                             <option value="DISCARD">Xuất hủy</option>
@@ -704,7 +686,7 @@ export function ReturnsPage() {
               <div className="flex justify-between items-center bg-rose-50 p-3.5 rounded-xl border border-rose-200">
                 <div>
                   <span className="text-xs font-bold text-rose-900 block">Tổng tiền hoàn trả khách:</span>
-                  <span className="text-[11px] text-rose-600">
+                  <span className="text-xs text-rose-600">
                     Số tiền sẽ được trích xuất hoàn lại cho khách hàng
                   </span>
                 </div>
@@ -727,7 +709,7 @@ export function ReturnsPage() {
             <button
               type="submit"
               disabled={submitting || !lookupInvoice || calculatedRefundTotal <= 0}
-              className="px-5 py-2 text-xs font-medium bg-forest hover:bg-forest-dark text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-xs"
+              className="px-5 py-2 text-xs font-medium bg-forest hover:bg-forest/90 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               {submitting ? 'Đang xử lý...' : 'Xác nhận Đổi trả & Hoàn tiền'}
             </button>

@@ -1,12 +1,9 @@
+import { money } from '../../utils/formatters';
 import React from 'react';
 import { AlertTriangle, ClipboardCheck, FileText, Wallet } from 'lucide-react';
 import { StatCard } from '../common/StatCard';
 
-const money = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-});
+
 
 export interface DashboardKpiCardsProps {
   totalRevenue: number;
@@ -51,7 +48,7 @@ export const DashboardKpiCards: React.FC<DashboardKpiCardsProps> = ({
           text: expiringBatchesCount > 0 ? 'Cần xử lý FEFO' : 'An toàn',
           variant: expiringBatchesCount > 0 ? 'warning' : 'success',
         }}
-        subValue="Ưu tiên bán trước hạn"
+        subValue="Cảnh báo trong 90 ngày, độc lập kỳ doanh thu"
       />
 
       {/* 4. Quỹ tiền mặt & Duyệt chi */}

@@ -1,3 +1,5 @@
+import { dateTime } from '../utils/formatters';
+import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Clock3, Eye, KeyRound, LoaderCircle, LockKeyhole, LogIn, Mail, ShieldCheck, ShieldX } from 'lucide-react';
 import { AlertBanner, DataTable, Modal, SearchToolbar, StatCard, type Column } from '../components/common';
@@ -6,7 +8,7 @@ import { apiClient, ApiError } from '../services/apiClient';
 import { auditLabels, securityButton, securityField, type AuditChallenge, type AuditEntry, type AuditGrant, type AuditStatistics } from '../services/accountSecurity';
 import type { PageResult } from '../types';
 
-const timestamp = (value: string) => new Date(value).toLocaleString('vi-VN');
+const timestamp = (value: string) => dateTime.format(new Date(value));
 function localDate(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
 function daysAgo(days: number) { const date = new Date(); date.setDate(date.getDate() - days); return localDate(date); }
 const outcomes: Record<string, { label: string; tone: string }> = {
@@ -15,7 +17,7 @@ const outcomes: Record<string, { label: string; tone: string }> = {
   DENIED: { label: 'Bị từ chối', tone: 'bg-amber-50 text-amber-700' },
   RECORDED: { label: 'Đã ghi nhận', tone: 'bg-slate-100 text-slate-600' },
 };
-function Outcome({ value }: { value: string }) { const info = outcomes[value] || outcomes.RECORDED; return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${info.tone}`}>{info.label}</span>; }
+function Outcome({ value }: { value: string }) { const info = outcomes[value] || outcomes.RECORDED; return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${info.tone}`}>{info.label}</span>; }
 
 export function AuditLogsPage() {
   const { currentUser } = useAuth();
@@ -87,14 +89,14 @@ export function AuditLogsPage() {
     finally { setGrant(null); setResult(null); setStatistics(null); setDetail(null); setBusy(false); }
   }
   const columns: Column<AuditEntry>[] = [
-    { header: 'Thời gian', cell: row => <span className="whitespace-nowrap text-[11px]">{timestamp(row.createdDate)}</span> },
+    { header: 'Thời gian', cell: row => <span className="whitespace-nowrap text-xs">{timestamp(row.createdDate)}</span> },
     { header: 'Tài khoản', cell: row => <span className="break-all font-semibold text-ink">{row.username}</span> },
     { header: 'Hoạt động', cell: row => <span>{auditLabels[row.eventType] || row.eventType}</span> },
     { header: 'Kết quả', cell: row => <Outcome value={row.outcome} /> },
     { header: 'Chi tiết', align: 'right', cell: row => <button className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50" aria-label={`Xem sự kiện ${row.id}`} disabled={busy} onClick={() => void inspect(row.id)}><Eye size={14} />Xem</button> },
   ];
   return <div className="space-y-5">
-    <header className="flex flex-wrap items-start justify-between gap-3"><div className="flex min-w-0 items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-forest text-white"><ShieldCheck size={21} /></span><div><h1 className="font-display text-2xl font-bold tracking-tight text-ink">Bảo mật & Nhật ký</h1><p className="mt-1 text-sm text-slate-500">Theo dõi sự kiện bảo mật và hoạt động quan trọng tại chi nhánh.</p><p className="mt-1 text-xs text-slate-400">{currentUser?.branchName}</p></div></div>{grant && <button className={securityButton} disabled={busy} onClick={() => void lock()}><LockKeyhole size={15} />Khóa nhật ký</button>}</header>
+    <PageHeader title="Bảo mật & Nhật ký" actions={grant ? <button className={securityButton} disabled={busy} onClick={() => void lock()}><LockKeyhole size={15} />Khóa nhật ký</button> : undefined} />
     <AlertBanner message={error} onClose={() => setError('')} />
     {!grant ? <section className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
       <div className="mb-5 flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-full bg-mint text-forest"><LockKeyhole size={21} /></span><div><h2 className="font-display text-base font-bold text-ink">Xác minh để xem nhật ký</h2><p className="mt-1 text-xs text-slate-500">Cần mật khẩu và OTP email. Quyền chỉ có hiệu lực tối đa 5 phút trong phiên này.</p></div></div>
@@ -113,11 +115,11 @@ export function AuditLogsPage() {
         <label className="text-xs font-semibold text-slate-600">Thời gian<select aria-label="Khoảng thời gian" className={securityField} value={preset} onChange={e => { const value = e.target.value; setPreset(value); setPage(1); if (value !== 'custom') { setFrom(daysAgo(Number(value) - 1)); setTo(daysAgo(0)); } }}><option value="1">Hôm nay</option><option value="7">7 ngày</option><option value="30">30 ngày</option><option value="custom">Tùy chọn</option></select></label>
         {preset === 'custom' && <><label className="text-xs font-semibold text-slate-600">Từ ngày<input aria-label="Từ ngày" type="date" className={securityField} value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label><label className="text-xs font-semibold text-slate-600">Đến ngày<input aria-label="Đến ngày" type="date" className={securityField} value={to} onChange={e => { setTo(e.target.value); setPage(1); }} /></label></>}
         <label className="min-w-0 flex-1 text-xs font-semibold text-slate-600">Tài khoản<input aria-label="Lọc tài khoản" className={securityField} value={username} maxLength={100} onChange={e => { setUsername(e.target.value); setPage(1); }} placeholder="Nhập username" /></label>
-        <label className="min-w-0 text-xs font-semibold text-slate-600">Loại sự kiện<select aria-label="Loại sự kiện" className={`${securityField} max-w-[260px]`} value={eventType} onChange={e => { setEventType(e.target.value); setPage(1); }}><option value="">Tất cả loại sự kiện</option>{Object.entries(auditLabels).map(([key, label]) => <option key={key} value={key}>{label} ({key})</option>)}</select></label>
+        <details className="w-full rounded-lg border border-line bg-slate-50 p-3"><summary className="cursor-pointer text-sm font-semibold text-slate-600">Bộ lọc nâng cao</summary><div className="mt-3 flex flex-wrap gap-3"><label className="min-w-0 text-xs font-semibold text-slate-600">Loại sự kiện<select aria-label="Loại sự kiện" className={`${securityField} max-w-[260px]`} value={eventType} onChange={e => { setEventType(e.target.value); setPage(1); }}><option value="">Tất cả loại sự kiện</option>{Object.entries(auditLabels).map(([key, label]) => <option key={key} value={key}>{label} ({key})</option>)}</select></label>
         <label className="text-xs font-semibold text-slate-600">Kết quả<select aria-label="Kết quả" className={securityField} value={outcome} onChange={e => { setOutcome(e.target.value); setPage(1); }}><option value="">Tất cả</option>{Object.entries(outcomes).map(([value, info]) => <option key={value} value={value}>{info.label}</option>)}</select></label>
-      </div><SearchToolbar searchValue={search} searchLabel="Tìm nhật ký" onSearchChange={value => { setSearch(value); setPage(1); }} searchPlaceholder="Tìm tài khoản hoặc mã loại sự kiện…" onRefresh={() => setRevision(v => v + 1)} loading={loading} /></section>
+      </div></details></div><SearchToolbar searchValue={search} searchLabel="Tìm nhật ký" onSearchChange={value => { setSearch(value); setPage(1); }} searchPlaceholder="Tìm tài khoản hoặc mã loại sự kiện…" onRefresh={() => setRevision(v => v + 1)} loading={loading} /></section>
       <DataTable columns={columns} data={result?.items || []} keyExtractor={row => row.id} loading={loading} emptyMessage={error ? 'Không tải được nhật ký. Kiểm tra bộ lọc hoặc tải lại.' : 'Không có sự kiện phù hợp trong khoảng thời gian đã chọn.'} pagination={{ page, totalPages: result?.totalPages || 1, totalCount: result?.totalCount || 0, onPageChange: setPage, itemLabel: 'sự kiện' }} />
-      <p className="text-[11px] leading-relaxed text-slate-400">Chỉ hiển thị thông tin thực sự được lưu. Nhật ký không cung cấp lịch sử đầy đủ giá trị trước/sau thay đổi. Không thể sửa hoặc xóa bản ghi tại đây.</p>
+      <p className="text-xs leading-relaxed text-slate-400">Chỉ hiển thị thông tin thực sự được lưu. Nhật ký không cung cấp lịch sử đầy đủ giá trị trước/sau thay đổi. Không thể sửa hoặc xóa bản ghi tại đây.</p>
     </>}
     <Modal isOpen={!!detail} onClose={() => setDetail(null)} title="Chi tiết sự kiện" icon={ShieldCheck} maxWidth="2xl">{detail && <dl className="grid gap-4 text-xs sm:grid-cols-2">{[
       ['Mã sự kiện', detail.id], ['Thời gian', timestamp(detail.createdDate)], ['Tài khoản', detail.username], ['Chi nhánh', currentUser?.branchName || detail.branchId],

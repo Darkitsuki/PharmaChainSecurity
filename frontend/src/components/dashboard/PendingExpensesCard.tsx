@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiClient } from '../../services/apiClient';
+import { money } from '../../utils/formatters';
 import type { PageResult } from '../../types';
 import { orderLabel } from '../purchase-orders/PurchaseOrderUi';
 import type { PurchaseOrder } from '../../services/purchaseOrders';
@@ -19,7 +20,7 @@ export function PendingExpensesCard() {
     {error ? <p role="alert" className="text-sm text-rose-700">{error}</p> : !result ? <p>Đang tải…</p> : <>
       <p className="mb-2 text-sm text-slate-500">{result.totalCount} đơn chờ trong chi nhánh của bạn</p>
       {!result.items.length && <p className="text-sm">Không có đơn chờ duyệt.</p>}
-      {result.items.map(order => <div className="flex justify-between gap-3 border-t border-line py-3 text-sm" key={order.id}><span><strong>{orderLabel(order.orderNo)}</strong><span className="block text-slate-500">{order.supplierName} · {order.creatorName}</span></span><span>{order.totalEstimatedAmount.toLocaleString('vi-VN')} đ</span></div>)}
+      {result.items.map(order => <div className="flex justify-between gap-3 border-t border-line py-3 text-sm" key={order.id}><span><strong>{orderLabel(order.orderNo)}</strong><span className="block text-slate-500">{order.supplierName} · {order.creatorName}</span></span><span className="ui-money">{money.format(order.totalEstimatedAmount)}</span></div>)}
     </>}
   </section>;
 }

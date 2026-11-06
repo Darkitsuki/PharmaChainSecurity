@@ -1,18 +1,13 @@
+import { InvoicePaymentBadge } from '../common/InvoicePaymentBadge';
+import { money, dateTime } from '../../utils/formatters';
 import React from 'react';
 import { FileText, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Invoice } from '../../types';
 
-const money = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-});
 
-const dateTime = new Intl.DateTimeFormat('vi-VN', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
+
+
 
 export interface RecentInvoicesCardProps {
   invoices: Invoice[];
@@ -55,12 +50,12 @@ export const RecentInvoicesCard: React.FC<RecentInvoicesCardProps> = ({
           <div className="py-8 text-center text-xs text-slate-400">Đang tải hóa đơn gần đây...</div>
         ) : displayInvoices.length === 0 ? (
           <div className="py-8 text-center text-xs text-slate-400">
-            Chưa có hóa đơn nào được phát hành trong chi nhánh hôm nay.
+            Chưa có hóa đơn nào trong danh sách gần đây.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <table className="ui-data-table w-full text-left text-xs">
+              <thead className="border-b border-slate-100 text-xs font-bold uppercase tracking-wider text-slate-400">
                 <tr>
                   <th className="pb-2.5">Số Hóa Đơn</th>
                   <th className="pb-2.5">Thời gian</th>
@@ -81,7 +76,7 @@ export const RecentInvoicesCard: React.FC<RecentInvoicesCardProps> = ({
                         {money.format(inv.totalAmount)}
                       </td>
                       <td className="py-3 text-right">
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">{inv.status || 'Chưa xác định'}</span>
+                        <InvoicePaymentBadge status={inv.status} paymentStatus={inv.paymentStatus} />
                       </td>
                     </tr>
                 ))}

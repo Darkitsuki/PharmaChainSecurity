@@ -12,7 +12,7 @@ export interface BranchScopeBadgeProps {
 export const BranchScopeBadge: React.FC<BranchScopeBadgeProps> = ({
   branchName = 'Chi nhánh 01',
   branchId = 'CN01',
-  showVpdStatus = true,
+  showVpdStatus = false,
   size = 'md',
   className = '',
 }) => {

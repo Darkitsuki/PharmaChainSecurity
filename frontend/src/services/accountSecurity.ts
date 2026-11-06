@@ -23,5 +23,5 @@ export const auditLabels: Record<string, string> = {
   AUDIT_OTP_DELIVERY_FAILED: 'Gửi OTP thất bại',
   AUDIT_OTP_FAILED: 'Xác minh OTP thất bại', AUDIT_ACCESS_GRANTED: 'Cấp quyền đọc nhật ký tạm thời',
 };
-export const securityField = 'mt-1.5 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs text-ink focus:border-forest focus:ring-2 focus:ring-forest/15 disabled:bg-slate-50';
-export const securityButton = 'inline-flex items-center justify-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-xs font-semibold text-white hover:bg-forest/90 disabled:cursor-not-allowed disabled:opacity-50';
+export const securityField = 'mt-1.5 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-ink focus:border-forest focus:ring-2 focus:ring-forest/15 disabled:bg-slate-50';
+export const securityButton = 'inline-flex items-center justify-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white hover:bg-forest/90 disabled:cursor-not-allowed disabled:opacity-50';

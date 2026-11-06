@@ -1,3 +1,4 @@
+import { money } from '../utils/formatters';
 import { useEffect, useState } from 'react';
 import { CircleAlert, LoaderCircle, X, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -14,11 +15,7 @@ import { RecentInvoicesCard } from '../components/dashboard/RecentInvoicesCard';
 import { PendingExpensesCard } from '../components/dashboard/PendingExpensesCard';
 import { SecurityAuditBanner } from '../components/dashboard/SecurityAuditBanner';
 
-const money = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-});
+
 
 export function ReportsPage() {
   const { currentUser } = useAuth();
@@ -158,14 +155,14 @@ export function ReportsPage() {
                     {report.topSellingDrugs.slice(0, 5).map((drug, idx) => (
                       <div key={drug.drugId} className="flex items-center justify-between gap-3 text-xs">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
+                          <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs font-bold ${
                             idx === 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
                           }`}>
                             {idx + 1}
                           </span>
                           <div className="min-w-0">
                             <p className="font-bold text-slate-900 truncate">{drug.drugName}</p>
-                            <p className="text-[11px] text-slate-400">
+                            <p className="text-xs text-slate-400">
                               Đã bán: <strong className="text-slate-700">{drug.totalQuantitySold}</strong> đơn vị
                             </p>
                           </div>

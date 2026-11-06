@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Building,
@@ -166,6 +167,7 @@ export function BranchesPage() {
   }, [filteredBranches, currentPage]);
 
   const totalPages = Math.ceil(filteredBranches.length / pageSize) || 1;
+  useEffect(() => setCurrentPage(value => Math.min(value, totalPages)), [totalPages]);
 
   // Thống kê
   const stats = useMemo(() => {
@@ -182,13 +184,11 @@ export function BranchesPage() {
       cell: b => (
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-              {b.id}
-            </span>
+
             <span className="font-semibold text-ink">{b.branchName}</span>
           </div>
           {b.address && (
-            <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-1">
+            <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
               <MapPin size={12} className="shrink-0 text-slate-400" />
               <span className="truncate max-w-[320px]">{b.address}</span>
             </div>
@@ -202,7 +202,7 @@ export function BranchesPage() {
         <div className="flex items-center gap-1.5 text-xs text-slate-700">
           <Users size={14} className="text-slate-400" />
           <span className="font-semibold">{b.activeUsersCount}</span>
-          <span className="text-slate-400 text-[11px]">nhân sự</span>
+          <span className="text-slate-400 text-xs">nhân sự</span>
         </div>
       ),
     },
@@ -212,7 +212,7 @@ export function BranchesPage() {
         <div className="flex items-center gap-1.5 text-xs text-slate-700">
           <FileText size={14} className="text-slate-400" />
           <span className="font-semibold">{b.totalInvoicesCount}</span>
-          <span className="text-slate-400 text-[11px]">hóa đơn</span>
+          <span className="text-slate-400 text-xs">hóa đơn</span>
         </div>
       ),
     },
@@ -229,39 +229,27 @@ export function BranchesPage() {
       cell: b => (
         <button
           onClick={() => handleOpenEditModal(b)}
-          className="p-1.5 text-slate-400 hover:text-forest hover:bg-mint/40 rounded-md transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-mint hover:text-forest cursor-pointer"
           title="Chỉnh sửa thông tin chi nhánh"
         >
-          <Edit2 size={15} />
+          <Edit2 size={15} /> Chỉnh sửa
         </button>
       ),
     },
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="ui-page">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold font-display text-ink">Quản lý Chi nhánh</h1>
-            <span className="text-xs bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-full">
-              {branches.length} cơ sở
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Quản trị mạng lưới các cơ sở, điểm bán và ranh giới cô lập dữ liệu (Rule 06)
-          </p>
-        </div>
-
-        <button
+      <PageHeader title="Chi nhánh" actions={<>
+<button
           onClick={handleOpenCreateModal}
-          className="inline-flex items-center justify-center gap-2 bg-forest hover:bg-forest-dark text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 bg-forest hover:bg-forest/90 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors cursor-pointer"
         >
           <Plus size={16} />
           <span>Thêm chi nhánh mới</span>
         </button>
-      </div>
+</>} />
 
       {/* Thông báo */}
       {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
@@ -270,12 +258,14 @@ export function BranchesPage() {
       {/* Thống kê KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={Building}
           title="Tổng số chi nhánh"
           value={stats.total}
           subValue="Mạng lưới cơ sở nhà thuốc đang vận hành"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={Users}
           title="Tổng nhân sự chuỗi"
           value={stats.totalStaff}
@@ -283,16 +273,16 @@ export function BranchesPage() {
           colorTheme="emerald"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={ShieldCheck}
-          title="Cô lập dữ liệu (VPD)"
-          value="Kích hoạt"
-          subValue="Bảo mật cấp độ CSDL Oracle Virtual Private DB"
+          title="Hóa đơn đã ghi nhận"
+          value={stats.totalInvoices.toLocaleString('vi-VN')}
+          subValue="Theo dữ liệu chi nhánh được trả về"
           colorTheme="amber"
         />
       </div>
 
       {/* Bộ lọc và Tìm kiếm */}
-      <div className="bg-white p-4 rounded-xl border border-line shadow-sm space-y-3">
         <SearchToolbar
           searchValue={searchTerm}
           onSearchChange={t => {
@@ -303,7 +293,6 @@ export function BranchesPage() {
           onRefresh={loadBranches}
           loading={loading}
         />
-      </div>
 
       {/* Bảng danh sách Chi nhánh */}
       <DataTable<Branch>
@@ -344,7 +333,7 @@ export function BranchesPage() {
               required
             />
             {!editingBranch && (
-              <p className="text-[11px] text-slate-400 mt-1">
+              <p className="text-xs text-slate-400 mt-1">
                 Mã định danh duy nhất dùng cho Oracle Virtual Private Database (VPD Context).
               </p>
             )}
@@ -388,7 +377,7 @@ export function BranchesPage() {
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 text-xs font-medium bg-forest hover:bg-forest-dark text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 text-xs font-medium bg-forest hover:bg-forest/90 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
               {saving ? 'Đang lưu...' : editingBranch ? 'Lưu thay đổi' : 'Thêm mới'}
             </button>

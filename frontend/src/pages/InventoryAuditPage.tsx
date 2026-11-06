@@ -1,3 +1,6 @@
+import { dateTime, calendarDate } from '../utils/formatters';
+import { money as moneyFormatter } from '../utils/formatters';
+import { PageHeader } from '../components/common/PageHeader';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
@@ -28,11 +31,7 @@ import {
   type Column,
 } from '../components/common';
 
-const moneyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-});
+
 
 const auditItemKey = (drugId: string, batchId: string) => `${drugId}:${batchId}`;
 
@@ -250,7 +249,10 @@ export function InventoryAuditPage() {
     });
   }, [audits, searchTerm, statusFilter]);
 
+  useEffect(() => setCurrentPage(1), [searchTerm, statusFilter]);
+
   const totalPages = Math.ceil(filteredAudits.length / pageSize) || 1;
+  useEffect(() => setCurrentPage(value => Math.min(value, totalPages)), [totalPages]);
   const paginatedAudits = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredAudits.slice(start, start + pageSize);
@@ -310,7 +312,7 @@ export function InventoryAuditPage() {
       header: 'Ngày tạo',
       cell: audit => (
         <span className="text-xs text-slate-600">
-          {new Date(audit.auditDate).toLocaleString('vi-VN')}
+          {dateTime.format(new Date(audit.auditDate))}
         </span>
       ),
     },
@@ -332,7 +334,7 @@ export function InventoryAuditPage() {
         if (audit.status === 'IN_PROGRESS') {
           return (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-              <RefreshCw size={13} className="animate-spin text-amber-600" />
+              <RefreshCw size={13} className="text-amber-600" />
               Đang kiểm kê
             </span>
           );
@@ -358,7 +360,7 @@ export function InventoryAuditPage() {
             audit.discrepancyCount > 0 ? 'text-rose-600' : 'text-emerald-600'
           }`}
         >
-          {audit.discrepancyCount > 0 ? `${audit.discrepancyCount} mục lệch` : 'Khớp 100%'}
+          {audit.discrepancyCount > 0 ? `${audit.discrepancyCount} mục lệch` : audit.status === 'COMPLETED' ? 'Không chênh lệch' : 'Chưa chốt'}
         </span>
       ),
     },
@@ -369,7 +371,7 @@ export function InventoryAuditPage() {
           {audit.approverName ? (
             <>
               <div className="font-medium text-slate-700">{audit.approverName}</div>
-              {audit.approvedDate && <div>{new Date(audit.approvedDate).toLocaleDateString('vi-VN')}</div>}
+              {audit.approvedDate && <div>{calendarDate.format(new Date(audit.approvedDate))}</div>}
             </>
           ) : (
             '—'
@@ -393,26 +395,17 @@ export function InventoryAuditPage() {
   ];
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="ui-page">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-ink">
-            Kiểm kê & Cân đối kho
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Khởi tạo đợt kiểm kê, ghi nhận số lượng kiểm đếm thực tế và cân đối số dư kho chi nhánh
-          </p>
-        </div>
-
-        <button
+      <PageHeader title="Kiểm kê kho" actions={<>
+<button
           onClick={() => setShowCreateModal(true)}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest/90"
         >
           <Plus size={16} strokeWidth={2.5} />
           Tạo đợt kiểm kê mới
         </button>
-      </div>
+</>} />
 
       {/* Global Alerts */}
       {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
@@ -421,6 +414,7 @@ export function InventoryAuditPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Tổng đợt kiểm kê"
           value={Array.isArray(audits) ? audits.length : 0}
           subValue="Tất cả các đợt"
@@ -428,6 +422,7 @@ export function InventoryAuditPage() {
           colorTheme="blue"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Đang kiểm kê"
           value={Array.isArray(audits) ? audits.filter(a => a.status === 'IN_PROGRESS').length : 0}
           subValue="Chờ kiểm đếm / cân đối"
@@ -435,6 +430,7 @@ export function InventoryAuditPage() {
           colorTheme="amber"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Đã cân bằng"
           value={Array.isArray(audits) ? audits.filter(a => a.status === 'COMPLETED').length : 0}
           subValue="Đã chốt tồn kho hợp lệ"
@@ -442,6 +438,7 @@ export function InventoryAuditPage() {
           colorTheme="emerald"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Đợt có chênh lệch"
           value={Array.isArray(audits) ? audits.filter(a => a.discrepancyCount > 0).length : 0}
           subValue="Có sản phẩm thừa / thiếu"
@@ -477,7 +474,7 @@ export function InventoryAuditPage() {
       </div>
 
       {/* Audit List Table */}
-      <div className="rounded-xl border border-line bg-white shadow-xs">
+      <div className="min-w-0">
         <DataTable
           columns={auditColumns}
           data={paginatedAudits}
@@ -573,7 +570,7 @@ export function InventoryAuditPage() {
               <div>
                 <span className="text-slate-500">Thời gian tạo:</span>
                 <div className="mt-0.5 font-bold text-slate-800">
-                  {new Date(selectedAudit.auditDate).toLocaleString('vi-VN')}
+                  {dateTime.format(new Date(selectedAudit.auditDate))}
                 </div>
               </div>
               <div>
@@ -587,24 +584,24 @@ export function InventoryAuditPage() {
             {/* Quick Metrics Bar */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-lg border border-line bg-white p-3">
-                <span className="text-[11px] font-medium text-slate-500">Tổng mặt hàng</span>
+                <span className="text-xs font-medium text-slate-500">Tổng mặt hàng</span>
                 <div className="text-lg font-bold text-ink">{auditSummary.totalItems}</div>
               </div>
               <div className="rounded-lg border border-line bg-white p-3">
-                <span className="text-[11px] font-medium text-slate-500">Mặt hàng lệch</span>
+                <span className="text-xs font-medium text-slate-500">Mặt hàng lệch</span>
                 <div className={`text-lg font-bold ${auditSummary.discrepantCount > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                   {auditSummary.discrepantCount}
                 </div>
               </div>
               <div className="rounded-lg border border-line bg-white p-3">
-                <span className="text-[11px] font-medium text-slate-500">Thừa / Thiếu</span>
+                <span className="text-xs font-medium text-slate-500">Thừa / Thiếu</span>
                 <div className="text-sm font-bold text-slate-700">
                   <span className="text-emerald-600">+{auditSummary.surplusCount}</span> /{' '}
                   <span className="text-rose-600">-{auditSummary.deficitCount}</span>
                 </div>
               </div>
               <div className="rounded-lg border border-line bg-white p-3">
-                <span className="text-[11px] font-medium text-slate-500">Giá trị lệch</span>
+                <span className="text-xs font-medium text-slate-500">Giá trị lệch</span>
                 <div className={`text-base font-bold ${auditSummary.totalDiffValue < 0 ? 'text-rose-600' : auditSummary.totalDiffValue > 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
                   {moneyFormatter.format(auditSummary.totalDiffValue)}
                 </div>
@@ -630,7 +627,7 @@ export function InventoryAuditPage() {
 
             {/* Items Table with Live Editing */}
             <div className="max-h-[380px] overflow-auto rounded-xl border border-line">
-              <table className="min-w-full divide-y divide-line text-left text-xs">
+              <table className="ui-data-table min-w-full divide-y divide-line text-left text-xs">
                 <thead className="sticky top-0 bg-slate-50 font-semibold text-slate-600">
                   <tr>
                     <th className="px-3 py-2.5">Tên thuốc & Mã</th>
@@ -661,14 +658,14 @@ export function InventoryAuditPage() {
                         <tr key={key} className="hover:bg-slate-50/80 transition-colors">
                           <td className="px-3 py-2">
                             <div className="font-semibold text-ink">{item.drugName}</div>
-                            <div className="font-mono text-[10px] text-slate-400">
+                            <div className="font-mono text-xs text-slate-400">
                               {item.drugCode} • {item.unit}
                             </div>
                           </td>
                           <td className="px-3 py-2">
                             <div className="font-mono font-medium text-slate-800">{item.batchNumber}</div>
-                            <div className="text-[10px] text-slate-400">
-                              HSD: {new Date(item.expiryDate).toLocaleDateString('vi-VN')}
+                            <div className="text-xs text-slate-400">
+                              HSD: {calendarDate.format(new Date(item.expiryDate))}
                             </div>
                           </td>
                           <td className="px-3 py-2 text-center font-bold text-slate-800">
@@ -724,7 +721,7 @@ export function InventoryAuditPage() {
                                     [key]: val,
                                   }));
                                 }}
-                                className="w-full rounded border border-line px-2 py-1 text-[11px] focus:border-forest focus:outline-none"
+                                className="w-full rounded border border-line px-2 py-1 text-xs focus:border-forest focus:outline-none"
                               />
                             ) : (
                               <span className="text-xs text-slate-600">{item.reason || '—'}</span>
@@ -744,7 +741,7 @@ export function InventoryAuditPage() {
                 <p className="font-semibold">Đợt kiểm kê đã được duyệt cân đối:</p>
                 <p className="mt-1">
                   Người duyệt: <strong>{selectedAudit.approverName}</strong> vào ngày{' '}
-                  <strong>{selectedAudit.approvedDate && new Date(selectedAudit.approvedDate).toLocaleString('vi-VN')}</strong>.
+                  <strong>{selectedAudit.approvedDate && dateTime.format(new Date(selectedAudit.approvedDate))}</strong>.
                   Tồn kho chi nhánh và thẻ kho đã được điều chỉnh tự động.
                 </p>
               </div>
@@ -794,7 +791,7 @@ export function InventoryAuditPage() {
                         Duyệt cân đối tồn kho
                       </button>
                     ) : (
-                      <span className="text-[11px] text-slate-400 italic">
+                      <span className="text-xs text-slate-400 italic">
                         (Chỉ Chủ nhà thuốc mới có quyền Duyệt cân đối kho)
                       </span>
                     )}

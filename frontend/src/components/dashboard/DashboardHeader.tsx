@@ -1,6 +1,6 @@
 import React from 'react';
 import { RefreshCw, FileSpreadsheet } from 'lucide-react';
-import { BranchScopeBadge } from '../common/BranchScopeBadge';
+import { PageHeader } from '../common/PageHeader';
 
 export interface DashboardHeaderProps {
   branchName?: string;
@@ -13,8 +13,6 @@ export interface DashboardHeaderProps {
 }
 
 export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
-  branchName,
-  branchId,
   days,
   onDaysChange,
   onRefresh,
@@ -22,19 +20,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
   loading = false,
 }) => {
   return (
-    <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Tổng quan chi nhánh
-          </h1>
-          <BranchScopeBadge branchName={branchName} branchId={branchId} />
-        </div>
-        <p className="mt-1 text-sm text-slate-500">
-          Theo dõi doanh thu, tồn kho và hoạt động vận hành của chi nhánh
-        </p>
-      </div>
-
+    <PageHeader title="Tổng quan chi nhánh" actions={
       <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
         {/* Time period selector */}
         <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-2xs">
@@ -47,6 +33,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
               key={period.value}
               type="button"
               onClick={() => onDaysChange(period.value)}
+              aria-pressed={days === period.value}
               className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
                 days === period.value
                   ? 'bg-forest text-white shadow-2xs'
@@ -79,6 +66,6 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
           <span>Xuất CSV</span>
         </button>
       </div>
-    </div>
+    } />
   );
 };

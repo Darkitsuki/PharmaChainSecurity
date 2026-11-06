@@ -1,3 +1,7 @@
+import { DateRangeFilter, withinDateRange } from '../components/common/DateRangeFilter';
+import { loadAllPages } from '../utils/loadAllPages';
+import { money, dateTime } from '../utils/formatters';
+import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { PurchaseOrder } from '../services/purchaseOrders';
@@ -29,8 +33,8 @@ import {
   type Column,
 } from '../components/common';
 
-const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
-const dateTime = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
+
+
 
 export function GoodsReceiptPage() {
   const [params] = useSearchParams();
@@ -41,6 +45,7 @@ export function GoodsReceiptPage() {
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [search, setSearch] = useState('');
 
   // View Detail Modal
@@ -109,17 +114,11 @@ export function GoodsReceiptPage() {
       const [receiptData, supplierData, drugData] = await Promise.all([
         apiClient<GoodsReceipt[]>('/goods-receipts'),
         apiClient<Supplier[]>('/suppliers'),
-        apiClient<PageResult<Drug>>('/drugs?page=1&pageSize=100').catch(() => ({
-          items: [],
-          page: 1,
-          pageSize: 100,
-          totalCount: 0,
-          totalPages: 0,
-        })),
+        loadAllPages<Drug>('/drugs'),
       ]);
       setReceipts(receiptData || []);
       setSuppliers(supplierData || []);
-      setDrugs(drugData?.items || []);
+      setDrugs(drugData);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail || err.message : 'Không thể tải dữ liệu nhập kho.');
     } finally {
@@ -276,6 +275,7 @@ export function GoodsReceiptPage() {
 
   const filteredReceipts = receipts.filter((r) => {
     const q = search.trim().toLowerCase();
+    if (!withinDateRange(r.createdDate, dateRange)) return false;
     if (!q) return true;
     return (
       r.receiptNo.toLowerCase().includes(q) ||
@@ -312,7 +312,7 @@ export function GoodsReceiptPage() {
       header: 'Trạng Thái',
       align: 'center',
       cell: (r) => (
-        <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+        <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
           {r.status === 'COMPLETED' ? 'Đã nhập kho' : r.status}
         </span>
       ),
@@ -335,19 +335,10 @@ export function GoodsReceiptPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <div className="ui-page">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-            Nhập Kho Thuốc
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Tiếp nhận lô hàng từ nhà cung cấp, kiểm tra hạn dùng FEFO và tự động cộng dồn tồn kho chi nhánh.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
+      <PageHeader title="Nhập kho thuốc" actions={<>
+<div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => {
@@ -371,23 +362,26 @@ export function GoodsReceiptPage() {
             <span>Tạo Phiếu Nhập Kho</span>
           </button>
         </div>
-      </div>
+</>} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Tổng phiếu nhập"
           value={receipts.length}
           icon={ReceiptText}
           badge={{ text: 'Toàn kỳ', variant: 'info' }}
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Tổng giá trị nhập"
           value={money.format(totalReceiptAmount)}
           icon={Truck}
           badge={{ text: 'Vốn lưu kho', variant: 'info' }}
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Nhà cung cấp"
           value={`${suppliers.length} đối tác`}
           icon={Building2}
@@ -405,6 +399,7 @@ export function GoodsReceiptPage() {
         searchPlaceholder="Tìm theo số phiếu, tên nhà cung cấp..."
         onRefresh={loadData}
         loading={loading}
+        filterSlot={<DateRangeFilter value={dateRange} onChange={setDateRange} />}
       />
 
       {/* Receipts DataTable */}
@@ -449,19 +444,19 @@ export function GoodsReceiptPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs sm:grid-cols-4">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Nhà cung cấp</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Nhà cung cấp</span>
                 <p className="mt-1 font-semibold text-ink">{selectedReceipt.supplierName}</p>
               </div>
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Thời gian tạo</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Thời gian tạo</span>
                 <p className="mt-1 text-slate-700">{dateTime.format(new Date(selectedReceipt.createdDate))}</p>
               </div>
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Người lập phiếu</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Người lập phiếu</span>
                 <p className="mt-1 text-slate-700">{selectedReceipt.warehouseStaffName || 'Thủ kho'}</p>
               </div>
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Trạng thái</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Trạng thái</span>
                 <p className="mt-1 font-semibold text-emerald-700">Đã cập nhật kho</p>
               </div>
             </div>
@@ -473,8 +468,8 @@ export function GoodsReceiptPage() {
             )}
 
             <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px]">
+              <table className="ui-data-table w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
                   <tr>
                     <th className="p-3">Mã / Tên Thuốc</th>
                     <th className="p-3">Số Lô</th>
@@ -489,7 +484,7 @@ export function GoodsReceiptPage() {
                     <tr key={item.id} className="hover:bg-slate-50/50">
                       <td className="p-3 font-semibold text-ink">
                         {item.drugName}
-                        <span className="block font-mono text-[10px] text-slate-400">{item.drugCode}</span>
+                        <span className="block font-mono text-xs text-slate-400">{item.drugCode}</span>
                       </td>
                       <td className="p-3 font-mono text-slate-600">{item.batchNo}</td>
                       <td className="p-3 text-slate-600">{dateTime.format(new Date(item.expiryDate))}</td>
@@ -578,7 +573,7 @@ export function GoodsReceiptPage() {
               {receiptItems.map((item, idx) => (
                 <div key={idx} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:flex-row sm:items-center">
                   <div className="flex-1 min-w-[160px]">
-                    <label className="block text-[10px] font-semibold text-slate-500 uppercase">Thuốc</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Thuốc</label>
                     <select
                       required
                       value={item.drugId}
@@ -595,7 +590,7 @@ export function GoodsReceiptPage() {
                   </div>
 
                   <div className="w-full sm:w-28">
-                    <label className="block text-[10px] font-semibold text-slate-500 uppercase">Số Lô</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Số Lô</label>
                     <input
                       type="text"
                       required
@@ -607,7 +602,7 @@ export function GoodsReceiptPage() {
                   </div>
 
                   <div className="w-full sm:w-32">
-                    <label className="block text-[10px] font-semibold text-slate-500 uppercase">Hạn Dùng (FEFO)</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Hạn Dùng (FEFO)</label>
                     <input
                       type="date"
                       required
@@ -618,7 +613,7 @@ export function GoodsReceiptPage() {
                   </div>
 
                   <div className="w-full sm:w-24">
-                    <label className="block text-[10px] font-semibold text-slate-500 uppercase">Số Lượng</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Số Lượng</label>
                     <input
                       type="number"
                       min="1"
@@ -630,7 +625,7 @@ export function GoodsReceiptPage() {
                   </div>
 
                   <div className="w-full sm:w-28">
-                    <label className="block text-[10px] font-semibold text-slate-500 uppercase">Giá Nhập (VNĐ)</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Giá Nhập (VNĐ)</label>
                     <input
                       type="number"
                       min="0"

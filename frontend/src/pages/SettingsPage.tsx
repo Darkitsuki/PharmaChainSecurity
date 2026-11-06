@@ -1,6 +1,7 @@
+import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { KeyRound, LoaderCircle, Save, Settings, ShieldCheck, Users } from 'lucide-react';
+import { KeyRound, LoaderCircle, Save, ShieldCheck, Users } from 'lucide-react';
 import { AlertBanner } from '../components/common';
 import { useAuth } from '../context/AuthContext';
 import { apiClient, ApiError } from '../services/apiClient';
@@ -50,7 +51,7 @@ export function SettingsPage() {
     finally { inFlight.current = false; setBusy(false); }
   }
   return <div className="space-y-5">
-    <header className="flex items-start gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-forest text-white"><Settings size={21} /></span><div><h1 className="font-display text-2xl font-bold tracking-tight text-ink">Tài khoản & Cài đặt</h1><p className="mt-1 text-sm text-slate-500">Quản lý hồ sơ cá nhân và bảo vệ tài khoản của bạn.</p></div></header>
+    <PageHeader title="Tài khoản & Cài đặt" />
     <AlertBanner message={error} onClose={() => setError('')} /><AlertBanner type="success" message={success} onClose={() => setSuccess('')} />
     {loading ? <p role="status" className="flex items-center gap-2 p-8 text-sm text-slate-500"><LoaderCircle className="animate-spin" size={18} />Đang tải hồ sơ…</p> : !profile ? <p className="text-sm text-slate-500">Không tải được hồ sơ. Vui lòng tải lại trang.</p> : <div className="grid items-start gap-5 xl:grid-cols-2">
       <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="font-display text-base font-bold text-ink">Hồ sơ cá nhân</h2><p className="mt-1 text-xs text-slate-500">Chỉ họ tên và số điện thoại được phép cập nhật.</p>

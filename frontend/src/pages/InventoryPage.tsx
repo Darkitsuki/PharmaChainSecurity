@@ -1,3 +1,6 @@
+import { loadAllPages } from '../utils/loadAllPages';
+import { quantity, calendarDate } from '../utils/formatters';
+import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   AlertTriangle,
@@ -9,7 +12,7 @@ import {
 } from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
 import { useAuth } from '../context/AuthContext';
-import type { Drug, DrugBatch, InventoryAlert, InventoryRow, PageResult } from '../types';
+import type { Drug, DrugBatch, InventoryAlert, InventoryRow } from '../types';
 import {
   Modal,
   DataTable,
@@ -28,6 +31,8 @@ export function InventoryPage() {
   const [rows, setRows] = useState<InventoryRow[]>([]);
   const [alertRows, setAlertRows] = useState<InventoryAlert[]>([]);
   const [drugNames, setDrugNames] = useState<Record<string, string>>({});
+  const [drugCodes, setDrugCodes] = useState<Record<string, string>>({});
+  const [batchDetails, setBatchDetails] = useState<Record<string, DrugBatch>>({});
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -80,12 +85,17 @@ export function InventoryPage() {
 
     if (activeTab === 'all') {
       Promise.all([
-        apiClient<PageResult<InventoryRow>>('/inventory?page=1&pageSize=100'),
-        apiClient<PageResult<Drug>>('/drugs?page=1&pageSize=100'),
+        loadAllPages<InventoryRow>('/inventory'),
+        loadAllPages<Drug>('/drugs'),
       ])
         .then(([inventory, drugs]) => {
-          setRows(inventory.items);
-          setDrugNames(Object.fromEntries(drugs.items.map((drug) => [drug.drugId, drug.name])));
+          setRows(inventory);
+          setDrugNames(Object.fromEntries(drugs.map((drug) => [drug.drugId, drug.name])));
+          setDrugCodes(Object.fromEntries(drugs.map(drug => [drug.drugId, drug.drugCode])));
+          return Promise.all(Array.from(new Set(inventory.map(row => row.drugId))).map(async drugId => {
+            const batches = await apiClient<DrugBatch[]>(`/drugs/${encodeURIComponent(drugId)}/batches`);
+            return batches;
+          })).then(groups => setBatchDetails(Object.fromEntries(groups.flat().map(batch => [batch.batchId, batch]))));
         })
         .catch((requestError) => {
           setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải tồn kho chi nhánh.');
@@ -167,7 +177,7 @@ export function InventoryPage() {
 
   const filteredAllRows = rows.filter((row) => {
     const name = drugNames[row.drugId]?.toLowerCase() ?? '';
-    return name.includes(normalizedSearch) || row.drugId.toLowerCase().includes(normalizedSearch) || row.batchId.toLowerCase().includes(normalizedSearch);
+    return name.includes(normalizedSearch) || (drugCodes[row.drugId] ?? '').toLowerCase().includes(normalizedSearch) || (batchDetails[row.batchId]?.batchNo ?? '').toLowerCase().includes(normalizedSearch);
   });
 
   const filteredAlertRows = alertRows.filter((alert) => {
@@ -184,14 +194,22 @@ export function InventoryPage() {
     },
     {
       header: 'Mã Thuốc',
-      cell: (row) => <span className="font-mono text-[11px] text-slate-500">{row.drugId}</span>,
+      cell: (row) => <span className="font-mono text-xs text-slate-500">{drugCodes[row.drugId] || 'Chưa có mã'}</span>,
     },
     {
       header: 'Mã Lô',
-      cell: (row) => <span className="font-mono text-[11px] text-slate-500">{row.batchId}</span>,
+      cell: (row) => <span className="font-mono text-xs text-slate-500">{batchDetails[row.batchId]?.batchNo || 'Chưa tải được số lô'}</span>,
     },
     {
-      header: 'Tồn Khả Dụng',
+      header: 'Hạn sử dụng',
+      cell: row => batchDetails[row.batchId]?.expiryDate ? <FefoExpiryBadge expiryDate={batchDetails[row.batchId].expiryDate} /> : 'Chưa có dữ liệu',
+    },
+    {
+      header: 'Ngày sản xuất',
+      cell: row => batchDetails[row.batchId]?.mfgDate ? calendarDate.format(new Date(batchDetails[row.batchId].mfgDate!)) : '—',
+    },
+    {
+      header: 'Tồn khả dụng',
       align: 'right',
       cell: (row) => (
         <span
@@ -199,7 +217,7 @@ export function InventoryPage() {
             row.quantity <= 10 ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/20' : 'bg-mint text-forest'
           }`}
         >
-          {row.quantity}
+          {quantity.format(row.quantity)}
         </span>
       ),
     },
@@ -231,11 +249,11 @@ export function InventoryPage() {
     },
     {
       header: 'Mã Thuốc',
-      cell: (alert) => <span className="font-mono text-[11px] text-slate-500">{alert.drugCode}</span>,
+      cell: (alert) => <span className="font-mono text-xs text-slate-500">{alert.drugCode}</span>,
     },
     {
       header: 'Số Lô',
-      cell: (alert) => <span className="font-mono text-[11px] text-slate-700 font-semibold">{alert.batchNo}</span>,
+      cell: (alert) => <span className="font-mono text-xs text-slate-700 font-semibold">{alert.batchNo}</span>,
     },
     {
       header: 'Ngày Sản Xuất',
@@ -263,7 +281,15 @@ export function InventoryPage() {
       cell: (alert) => <FefoExpiryBadge expiryDate={alert.expiryDate} size="sm" />,
     },
     {
-      header: 'Tồn Khả Dụng',
+      header: 'Hạn sử dụng',
+      cell: row => batchDetails[row.batchId]?.expiryDate ? <FefoExpiryBadge expiryDate={batchDetails[row.batchId].expiryDate} /> : 'Chưa có dữ liệu',
+    },
+    {
+      header: 'Ngày sản xuất',
+      cell: row => batchDetails[row.batchId]?.mfgDate ? calendarDate.format(new Date(batchDetails[row.batchId].mfgDate!)) : '—',
+    },
+    {
+      header: 'Tồn khả dụng',
       align: 'right',
       cell: (alert) => (
         <span
@@ -296,20 +322,10 @@ export function InventoryPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <div className="ui-page">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.13em] text-forest">Quản lý kho chi nhánh</p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-            Tồn Kho &amp; Lô Thuốc
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Kiểm soát số lượng khả dụng, cảnh báo cận hạn FEFO và điều chỉnh kiểm kê.
-          </p>
-        </div>
-
-        {isAuthorizedToAdjust && (
+      <PageHeader title="Tồn kho chi nhánh" actions={<>
+{isAuthorizedToAdjust && (
           <button
             type="button"
             onClick={() => handleOpenAdjust()}
@@ -319,21 +335,23 @@ export function InventoryPage() {
             <span>Điều chỉnh tồn kho</span>
           </button>
         )}
-      </div>
+</>} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Tổng đơn vị tồn kho"
           value={totalUnits.toLocaleString('vi-VN')}
           icon={Boxes}
-          badge={{ text: 'Thực tế tại quầy', variant: 'info' }}
+          subValue="Tồn hiện tại trong chi nhánh"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Lô sắp hết hàng"
           value={`${lowStockCount} lô`}
           icon={AlertTriangle}
-          badge={{ text: 'Dưới 10 đơn vị', variant: lowStockCount > 0 ? 'warning' : 'success' }}
+          subValue="Số lượng còn từ 0 đến 10 đơn vị"
         />
       </div>
 
@@ -342,11 +360,11 @@ export function InventoryPage() {
       <AlertBanner type="error" message={error} onClose={() => setError('')} />
 
       {/* Tab Switcher & Search Toolbar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200 pb-3">
+      <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setActiveTab('all')}
+            onClick={() => setActiveTab('all')} aria-pressed={activeTab === 'all'}
             className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
               activeTab === 'all' ? 'bg-forest text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
             }`}
@@ -357,7 +375,7 @@ export function InventoryPage() {
 
           <button
             type="button"
-            onClick={() => setActiveTab('expiring')}
+            onClick={() => setActiveTab('expiring')} aria-pressed={activeTab === 'expiring'}
             className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
               activeTab === 'expiring' ? 'bg-amber-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
             }`}
@@ -368,7 +386,7 @@ export function InventoryPage() {
 
           <button
             type="button"
-            onClick={() => setActiveTab('low')}
+            onClick={() => setActiveTab('low')} aria-pressed={activeTab === 'low'}
             className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
               activeTab === 'low' ? 'bg-rose-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
             }`}

@@ -1,3 +1,5 @@
+import { PageHeader } from '../components/common/PageHeader';
+import { money } from '../utils/formatters';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Award,
@@ -196,6 +198,7 @@ export function CustomersPage() {
   }, [customers]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  useEffect(() => setCurrentPage(value => Math.min(value, totalPages)), [totalPages]);
   const pagedCustomers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredCustomers.slice(start, start + pageSize);
@@ -216,7 +219,7 @@ export function CustomersPage() {
       cell: (row) => (
         <div>
           <p className="font-semibold text-ink">{row.fullName}</p>
-          <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
+          <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
             <Phone size={12} />
             <span>{row.phoneNumber}</span>
           </div>
@@ -235,7 +238,7 @@ export function CustomersPage() {
           ) : (
             <span className="text-slate-400 italic">Chưa cập nhật</span>
           )}
-          {row.email && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{row.email}</p>}
+          {row.email && <p className="text-xs text-slate-400 mt-0.5 truncate">{row.email}</p>}
         </div>
       ),
     },
@@ -254,7 +257,7 @@ export function CustomersPage() {
       header: 'Tổng chi tiêu',
       cell: (row) => (
         <span className="font-mono text-xs font-semibold text-ink">
-          {row.totalSpent.toLocaleString('vi-VN')} ₫
+          {money.format(row.totalSpent)}
         </span>
       ),
     },
@@ -262,11 +265,11 @@ export function CustomersPage() {
       header: 'Trạng thái',
       cell: (row) =>
         row.isActive ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
             <CheckCircle2 size={12} /> Hoạt động
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500 border border-slate-200">
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-500 border border-slate-200">
             <PowerOff size={12} /> Tạm ngưng
           </span>
         ),
@@ -289,16 +292,8 @@ export function CustomersPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-            Quản lý Khách hàng & Tích điểm
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Hồ sơ khách hàng thân thiết, điểm thưởng tích lũy và doanh số mua sắm tại chi nhánh.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+      <PageHeader title="Khách hàng & Tích điểm" actions={<>
+<div className="flex items-center gap-3">
           <button
             onClick={handleOpenCreateModal}
             className="inline-flex items-center gap-2 rounded-xl bg-forest px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-forest/90 focus:outline-hidden focus:ring-2 focus:ring-forest/20"
@@ -306,7 +301,7 @@ export function CustomersPage() {
             <UserPlus size={16} /> Thêm khách hàng
           </button>
         </div>
-      </div>
+</>} />
 
       {/* Alerts */}
       {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
@@ -315,6 +310,7 @@ export function CustomersPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={Users}
           title="Tổng khách hàng"
           value={stats.total.toLocaleString('vi-VN')}
@@ -322,6 +318,7 @@ export function CustomersPage() {
           colorTheme="slate"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={UserCheck}
           title="Đang hoạt động"
           value={stats.active.toLocaleString('vi-VN')}
@@ -329,25 +326,27 @@ export function CustomersPage() {
           colorTheme="emerald"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={Coins}
           title="Tổng điểm tích lũy"
           value={stats.totalPoints.toLocaleString('vi-VN')}
-          subValue="Điểm khả dụng toàn hệ thống"
+          subValue="Theo hồ sơ được cấp quyền"
           colorTheme="amber"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={HeartHandshake}
           title="Tổng doanh thu thành viên"
-          value={`${stats.totalSpent.toLocaleString('vi-VN')} ₫`}
+          value={money.format(stats.totalSpent)}
           subValue="Chi tiêu tích lũy"
           colorTheme="blue"
         />
       </div>
 
       {/* Main Table Card */}
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+      <div className="space-y-4">
         {/* Toolbar */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/50">
+        <div className="min-w-0">
           <SearchToolbar
             searchValue={searchTerm}
             onSearchChange={(val) => {
@@ -375,7 +374,7 @@ export function CustomersPage() {
         </div>
 
         {/* Data Table */}
-        <div className="p-4 sm:p-5">
+        <div className="min-w-0">
           <DataTable<Customer>
             data={pagedCustomers}
             columns={columns}
@@ -486,7 +485,7 @@ export function CustomersPage() {
                   Tài khoản khách hàng đang hoạt động
                 </span>
               </label>
-              <p className="mt-1 text-[11px] text-slate-500 pl-6">
+              <p className="mt-1 text-xs text-slate-500 pl-6">
                 Khi bỏ chọn, khách hàng sẽ tạm ngưng tích điểm tại quầy bán thuốc.
               </p>
             </div>

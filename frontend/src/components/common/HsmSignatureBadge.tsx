@@ -12,7 +12,7 @@ export interface HsmSignatureBadgeProps {
 }
 
 export const HsmSignatureBadge: React.FC<HsmSignatureBadgeProps> = ({
-  status = 'valid',
+  status = 'unknown',
   hashSha256,
   signerName,
   showHashPreview = false,
@@ -25,14 +25,14 @@ export const HsmSignatureBadge: React.FC<HsmSignatureBadgeProps> = ({
       case 'valid':
         return {
           icon: ShieldCheck,
-          text: 'Ký số HSM PKCS#11',
+          text: 'Chữ ký hợp lệ',
           containerClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/60',
           dotClass: 'bg-emerald-500',
         };
       case 'pending':
         return {
           icon: Clock,
-          text: 'Đang ký HSM',
+          text: 'Đang ký số',
           containerClass: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100/60',
           dotClass: 'bg-amber-500',
         };
