@@ -45,10 +45,12 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                        NVL(i.PaymentMethod, 'CASH'), NVL(i.PaymentStatus, 'PAID'), NVL(i.PaidAmount, 0), i.PaidAt,
                        i.CancelledBy, u.FullName AS CancelledByName,
                        i.CancelledDate, i.CancelReason,
-                       i.LastVerifiedAt, i.VerifiedBy, uv.FullName AS VerifiedByName
+                       i.LastVerifiedAt, i.VerifiedBy, uv.FullName AS VerifiedByName, COALESCE(TRIM(cashier.FullName), cashier.Username) AS CashierName,
+                       (SELECT NVL(ds.Status, 'VALID') FROM DIGITAL_SIGNATURES ds WHERE ds.InvoiceId = i.id) AS SignatureStatus
                 FROM INVOICES i
                 LEFT JOIN USERS u ON i.CancelledBy = u.id
                 LEFT JOIN USERS uv ON i.VerifiedBy = uv.id
+                LEFT JOIN USERS cashier ON i.CashierId = cashier.id
                 WHERE i.BranchId = :branchId
                 ORDER BY i.CreatedDate DESC, i.id DESC
                 OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY
@@ -77,7 +79,9 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                     reader.IsDBNull(14) ? null : reader.GetString(14),
                     reader.IsDBNull(15) ? null : (DateTime?)reader.GetDateTime(15),
                     reader.IsDBNull(16) ? null : reader.GetString(16),
-                    reader.IsDBNull(17) ? null : reader.GetString(17)
+                    reader.IsDBNull(17) ? null : reader.GetString(17),
+                    reader.IsDBNull(18) ? null : reader.GetString(18),
+                    reader.IsDBNull(19) ? "MISSING" : reader.GetString(19)
                 ));
             }
 
@@ -127,11 +131,12 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                    NVL(i.PaymentMethod, 'CASH'), NVL(i.PaymentStatus, 'PAID'), NVL(i.PaidAmount, 0), i.PaidAt,
                    i.CancelledBy, uc.FullName AS CancelledByName,
                    i.CancelledDate, i.CancelReason,
-                   i.LastVerifiedAt, i.VerifiedBy, uv.FullName AS VerifiedByName
+                   i.LastVerifiedAt, i.VerifiedBy, uv.FullName AS VerifiedByName, COALESCE(TRIM(cashier.FullName), cashier.Username) AS CashierName
             FROM INVOICES i
             LEFT JOIN CUSTOMERS c ON i.CustomerId = c.id
             LEFT JOIN USERS uc ON i.CancelledBy = uc.id
             LEFT JOIN USERS uv ON i.VerifiedBy = uv.id
+            LEFT JOIN USERS cashier ON i.CashierId = cashier.id
             WHERE i.id = :id AND i.BranchId = :branchId
             """);
         headerCommand.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id;
@@ -164,6 +169,7 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
         var lastVerifiedAt = headerReader.IsDBNull(18) ? null : (DateTime?)headerReader.GetDateTime(18);
         var verifiedById = headerReader.IsDBNull(19) ? null : headerReader.GetString(19);
         var verifiedByName = headerReader.IsDBNull(20) ? null : headerReader.GetString(20);
+        var cashierName = headerReader.IsDBNull(21) ? null : headerReader.GetString(21);
         await headerReader.CloseAsync();
 
         var items = await QueryItemsInternalAsync(invoiceId, cancellationToken);
@@ -192,7 +198,8 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             cancelReason,
             lastVerifiedAt,
             verifiedById,
-            verifiedByName);
+            verifiedByName,
+            cashierName);
     }
 
     public async Task<IReadOnlyCollection<InvoiceItemResponse>> GetItemsAsync(
@@ -273,18 +280,20 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
             var invoice = new Invoice(invNo, bId, cashierId, createdDate, invId);
 
             await using var itemsCommand = CreateCommand("""
-                SELECT DrugId, BatchId, Quantity, UnitPrice
+                SELECT DrugId, BatchId, Quantity, UnitPrice, SubTotal
                 FROM INVOICE_ITEMS
                 WHERE InvoiceId = :invoiceId
                 """);
             itemsCommand.Parameters.Add("invoiceId", OracleDbType.Varchar2, 50).Value = invoiceId;
             await using var itemsReader = await itemsCommand.ExecuteReaderAsync(cancellationToken);
+            var lineTotalsMatch = true;
             while (await itemsReader.ReadAsync(cancellationToken))
             {
                 var drugId = itemsReader.GetString(0);
                 var batchId = itemsReader.GetString(1);
                 var quantity = itemsReader.GetInt32(2);
                 var unitPrice = itemsReader.GetDecimal(3);
+                lineTotalsMatch &= itemsReader.GetDecimal(4) == quantity * unitPrice;
                 invoice.AddItem(new InvoiceItem(invId, drugId, batchId, quantity, unitPrice));
             }
             await itemsReader.CloseAsync();
@@ -310,7 +319,7 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                     string.Empty,
                     string.Empty,
                     DateTime.MinValue,
-                    "No digital signature record found for this invoice.");
+                    "No digital signature record found for this invoice.", VerificationStatus: "MISSING");
             }
 
             var storedHash = sigReader.GetString(0);
@@ -334,18 +343,17 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                     storedHash,
                     certSerial,
                     signedAt,
-                    $"CẢNH BÁO: Hóa đơn đã bị HỦY và Chữ ký số đã bị THU HỒI vào {revokedAt:dd/MM/yyyy HH:mm}. Lý do: {revokedReason ?? "Không có"}");
+                    $"CẢNH BÁO: Hóa đơn đã bị HỦY và Chữ ký số đã bị THU HỒI vào {revokedAt:dd/MM/yyyy HH:mm}. Lý do: {revokedReason ?? "Không có"}", VerificationStatus: "REVOKED");
             }
 
             var digitalSignature = new DigitalSignature(invId, storedHash, signatureData, certSerial, signedAt);
-            var isValid = invoice.TotalAmount == storedTotalAmount &&
+            var isValid = lineTotalsMatch && invoice.TotalAmount == storedTotalAmount &&
                 digitalSignatureService.VerifyIntegrity(invoice, digitalSignature);
 
             DateTime? lastVerifiedAt = null;
             string? verifiedByName = null;
             if (isValid && !string.IsNullOrWhiteSpace(verifiedById))
             {
-                lastVerifiedAt = DateTime.UtcNow;
                 await using var updateVerifiedCmd = CreateCommand("""
                     UPDATE INVOICES
                     SET LastVerifiedAt = CURRENT_TIMESTAMP,
@@ -358,13 +366,17 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                 await updateVerifiedCmd.ExecuteNonQueryAsync(cancellationToken);
 
                 await using var userCmd = CreateCommand("""
-                    SELECT FullName FROM USERS WHERE id = :userId
+                    SELECT i.LastVerifiedAt, u.FullName FROM INVOICES i
+                    LEFT JOIN USERS u ON i.VerifiedBy = u.id
+                    WHERE i.id = :id AND i.BranchId = :branchId
                     """);
-                userCmd.Parameters.Add("userId", OracleDbType.Varchar2, 50).Value = verifiedById;
+                userCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = invoiceId;
+                userCmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
                 await using var userReader = await userCmd.ExecuteReaderAsync(cancellationToken);
-                if (await userReader.ReadAsync(cancellationToken) && !userReader.IsDBNull(0))
+                if (await userReader.ReadAsync(cancellationToken))
                 {
-                    verifiedByName = userReader.GetString(0);
+                    lastVerifiedAt = userReader.IsDBNull(0) ? null : userReader.GetDateTime(0);
+                    verifiedByName = userReader.IsDBNull(1) ? null : userReader.GetString(1);
                 }
             }
 
@@ -373,13 +385,15 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                 invId,
                 invNo,
                 isValid,
-                isValid ? storedHash : "Hash mismatch detected upon verification",
+                Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(invoice.GetCanonicalPayload()))).ToLowerInvariant(),
                 storedHash,
                 certSerial,
                 signedAt,
-                isValid ? "Digital signature is valid and untampered." : "Invoice data has been tampered with or signature is invalid.",
+                isValid ? "Digital signature is valid and untampered." : "The invoice data or signature does not match the configured verification key. This result alone cannot identify which has changed.",
                 lastVerifiedAt,
-                verifiedByName);
+                verifiedByName,
+                isValid ? "VALID" : "INVALID");
         }
         catch
         {
@@ -537,9 +551,10 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
     {
         var items = new List<InvoiceItemResponse>();
         await using var command = CreateCommand("""
-            SELECT ii.DrugId, d.DrugCode, d.Name, ii.BatchId, ii.Quantity, ii.UnitPrice, ii.SubTotal
+            SELECT ii.DrugId, d.DrugCode, d.Name, ii.BatchId, ii.Quantity, ii.UnitPrice, ii.SubTotal, b.BatchNo
             FROM INVOICE_ITEMS ii
             INNER JOIN DRUGS d ON ii.DrugId = d.id
+            LEFT JOIN DRUG_BATCHES b ON ii.BatchId = b.id
             WHERE ii.InvoiceId = :invoiceId
             ORDER BY d.DrugCode
             """);
@@ -555,7 +570,8 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
                 reader.GetString(3),
                 reader.GetInt32(4),
                 reader.GetDecimal(5),
-                reader.GetDecimal(6)));
+                reader.GetDecimal(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7)));
         }
 
         return items;

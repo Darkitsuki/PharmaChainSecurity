@@ -8,6 +8,7 @@ import {
   Search,
   Undo2,
 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { ApiError, apiClient } from '../services/apiClient';
 import type {
   ReturnOrder,
@@ -31,6 +32,8 @@ const moneyFormatter = new Intl.NumberFormat('vi-VN', {
 });
 
 export function ReturnsPage() {
+  const [searchParams] = useSearchParams();
+  const linkedReturnId = searchParams.get('returnId');
   const [returns, setReturns] = useState<ReturnOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,6 +64,17 @@ export function ReturnsPage() {
   useEffect(() => {
     loadReturns();
   }, []);
+
+  useEffect(() => {
+    if (!linkedReturnId) return;
+    let active = true;
+    setLoadingDetail(true);
+    apiClient<ReturnOrder>(`/returns/${encodeURIComponent(linkedReturnId)}`)
+      .then(data => { if (active) setSelectedReturn(data); })
+      .catch(() => { if (active) setError('Không thể tải phiếu đổi trả được liên kết.'); })
+      .finally(() => { if (active) setLoadingDetail(false); });
+    return () => { active = false; };
+  }, [linkedReturnId]);
 
   async function loadReturns() {
     setLoading(true);

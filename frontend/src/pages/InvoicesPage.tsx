@@ -1,780 +1,279 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  AlertTriangle,
-  BadgeCheck,
-  CheckCircle2,
-  Ban,
-  Eye,
-  FileText,
-  LoaderCircle,
-  Printer,
-  ShieldCheck,
-  XCircle,
-} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Printer, LoaderCircle, ShieldCheck } from 'lucide-react';
+import { InvoicePaymentBadge } from '../components/common/InvoicePaymentBadge';
+import { loadAllPages } from '../utils/loadAllPages';
+import { SearchToolbar } from '../components/common/SearchToolbar';
+import { DateRangeFilter } from '../components/common/DateRangeFilter';
+import { money, dateTime } from '../utils/formatters';
+import { PageHeader } from '../components/common/PageHeader';
 import { ApiError, apiClient } from '../services/apiClient';
-import type { Invoice, InvoiceDetail, InvoiceVerificationResult, PageResult } from '../types';
+import type { Invoice, InvoiceDetail, InvoiceVerificationResult, PageResult, ReturnOrder } from '../types';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ReceiptPrintModal, type ReceiptData } from '../components/invoices/ReceiptPrintModal';
-import {
-  Modal,
-  DataTable,
-  AlertBanner,
-  HsmSignatureBadge,
-  type Column,
-} from '../components/common';
+import { InvoiceSignatureState, type VerificationAttempt } from '../components/invoices/InvoiceSignatureState';
+import { Modal, DataTable, AlertBanner, type Column } from '../components/common';
 
-const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
-const dateTime = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' });
+const secondary = 'inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed';
+const primary = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-forest px-3 py-2 text-xs font-semibold text-white hover:bg-forest-dark disabled:opacity-50 disabled:cursor-not-allowed';
+const failure = (error: unknown, fallback: string) => error instanceof ApiError ? error.detail || error.message : fallback;
+const formattedDate = (date?: string | null) => date ? dateTime.format(new Date(date)) : '—';
 
 export function InvoicesPage() {
   const { currentUser } = useAuth();
-  const [page, setPage] = useState(1);
   const [result, setResult] = useState<PageResult<Invoice> | null>(null);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [sortOrder, setSortOrder] = useState('NEWEST');
+  const filteredInvoices = (result?.items ?? []).filter(invoice => {
+    const day = new Date(invoice.createdDate).toLocaleDateString('sv-SE');
+    return invoice.invoiceNumber.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi'))
+      && (statusFilter === 'ALL' || (statusFilter === 'CANCELLED' ? invoice.status === 'CANCELLED'
+        : invoice.status !== 'CANCELLED' && invoice.paymentStatus === statusFilter))
+      && (!fromDate || day >= fromDate) && (!toDate || day <= toDate);
+  }).sort((a, b) => sortOrder === 'AMOUNT_DESC' ? b.totalAmount - a.totalAmount
+    : sortOrder === 'AMOUNT_ASC' ? a.totalAmount - b.totalAmount
+    : sortOrder === 'OLDEST' ? new Date(a.createdDate).getTime() - new Date(b.createdDate).getTime()
+    : new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime());
+  const filteredPages = Math.max(1, Math.ceil(filteredInvoices.length / 20));
+  useEffect(() => setPage(1), [search, statusFilter, fromDate, toDate, sortOrder]);
+  useEffect(() => setPage(value => Math.min(value, filteredPages)), [filteredPages]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<InvoiceVerificationResult | null>(null);
-  const [verifiedMap, setVerifiedMap] = useState<Record<string, InvoiceVerificationResult>>({});
-  const [payingId, setPayingId] = useState<string | null>(null);
-
-  async function handleConfirmPayment(invoiceId: string) {
-    if (!invoiceId) return;
-    setPayingId(invoiceId);
-    try {
-      await apiClient(`/invoices/${encodeURIComponent(invoiceId)}/confirm-payment`, {
-        method: 'POST',
-      });
-      // Refresh list and modal
-      fetchInvoices(page);
-      if (selectedInvoice && selectedInvoice.invoiceId === invoiceId) {
-        handleViewDetail(invoiceId);
-      }
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể xác nhận thanh toán.');
-    } finally {
-      setPayingId(null);
-    }
-  }
-
-  // Detail Modal State
+  const [success, setSuccess] = useState('');
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState('');
-
-  // Cancel Modal State
+  const detailRequest = useRef(0);
+  const detailInFlight = useRef(false);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [attempts, setAttempts] = useState<Record<string, VerificationAttempt>>({});
+  const verifyInFlight = useRef(false);
+  const mutationInFlight = useRef(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [printData, setPrintData] = useState<ReceiptData | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printingId, setPrintingId] = useState<string | null>(null);
+  const printInFlight = useRef(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const busy = Boolean(verifyingId || payingId || printingId || cancelling);
+  const isOwner = currentUser?.role === 'OWNER';
 
-  // Print Receipt State
-  const [printData, setPrintData] = useState<ReceiptData | null>(null);
-  const [showPrintModal, setShowPrintModal] = useState(false);
-
-  const fetchInvoices = useCallback((pageNum: number) => {
+  const listInFlight = useRef<Promise<void> | null>(null);
+  const fetchInvoices = useCallback(() => {
+    if (listInFlight.current) return listInFlight.current;
     setLoading(true);
     setError('');
-    apiClient<PageResult<Invoice>>(`/invoices?page=${pageNum}&pageSize=20`)
-      .then((data) => {
-        setResult(data);
-      })
-      .catch((requestError) => {
-        setError(
-          requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách hóa đơn.'
-        );
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const request = loadAllPages<Invoice>('/invoices')
+      .then(items => setResult({ items, page: 1, pageSize: 100, totalCount: items.length, totalPages: 1 }))
+      .catch(err => setError(failure(err, 'Không thể tải danh sách hóa đơn.')))
+      .finally(() => { listInFlight.current = null; setLoading(false); });
+    listInFlight.current = request;
+    return request;
   }, []);
+  useEffect(() => { void fetchInvoices(); }, [fetchInvoices]);
 
-  useEffect(() => {
-    fetchInvoices(page);
-  }, [page, fetchInvoices]);
-
+  function closeDetail() {
+    if (busy) return;
+    detailRequest.current++;
+    detailInFlight.current = false;
+    setSelectedInvoice(null); setLoadingDetail(false); setDetailError('');
+  }
   async function handleViewDetail(invoiceId: string) {
-    setLoadingDetail(true);
-    setDetailError('');
-    setSelectedInvoice(null);
+    if (busy || detailInFlight.current) return;
+    detailInFlight.current = true;
+    const request = ++detailRequest.current;
+    setLoadingDetail(true); setDetailError(''); setSelectedInvoice(null);
     try {
-      const data = await apiClient<InvoiceDetail>(`/invoices/${encodeURIComponent(invoiceId)}`);
-      setSelectedInvoice(data);
+      const data = await readInvoiceDetail(invoiceId);
+      if (request === detailRequest.current) setSelectedInvoice(data);
     } catch (err) {
-      setDetailError(err instanceof ApiError ? err.detail || err.message : 'Không thể tải chi tiết hóa đơn.');
-    } finally {
-      setLoadingDetail(false);
-    }
+      if (request === detailRequest.current) setDetailError(failure(err, 'Không thể tải chi tiết hóa đơn.'));
+    } finally { if (request === detailRequest.current) { setLoadingDetail(false); detailInFlight.current = false; } }
   }
-
-  async function verify(invoice: Invoice | InvoiceDetail) {
-    setVerifyingId(invoice.invoiceId);
-    setNotice(null);
+  async function readInvoiceDetail(invoiceId: string): Promise<InvoiceDetail> {
+    const detail = await apiClient<InvoiceDetail>(`/invoices/${encodeURIComponent(invoiceId)}`);
+    // Reuse the existing OWNER/SALES-protected API, preserving its branch scope.
     try {
-      const verification = await apiClient<InvoiceVerificationResult>(
-        `/invoices/${encodeURIComponent(invoice.invoiceId)}/verify-signature`,
-        { method: 'POST' }
-      );
-      setNotice(verification);
-      setVerifiedMap((prev) => ({
-        ...prev,
-        [invoice.invoiceId]: verification,
-      }));
-      if (verification.isValid) {
-        setResult((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            items: prev.items.map((item) => {
-              if (item.invoiceId === invoice.invoiceId) {
-                return {
-                  ...item,
-                  lastVerifiedAt: verification.lastVerifiedAt || new Date().toISOString(),
-                  verifiedByName: verification.verifiedByName || currentUser?.fullName || currentUser?.username,
-                };
-              }
-              return item;
-            }),
-          };
-        });
-        setSelectedInvoice((prev) => {
-          if (!prev || prev.invoiceId !== invoice.invoiceId) return prev;
-          return {
-            ...prev,
-            lastVerifiedAt: verification.lastVerifiedAt || new Date().toISOString(),
-            verifiedByName: verification.verifiedByName || currentUser?.fullName || currentUser?.username,
-          };
-        });
-      }
-    } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Xác thực chữ ký số thất bại.');
-    } finally {
-      setVerifyingId(null);
+      const returns = await apiClient<ReturnOrder[]>('/returns');
+      return { ...detail, returnHistory: returns.filter(item => item.invoiceId === detail.invoiceId && item.branchId === detail.branchId)
+        .map(item => ({ returnId: item.id, returnNo: item.returnNo, createdDate: item.createdDate,
+          recordedRefundAmount: item.totalRefundAmount, status: item.status })) };
+    } catch {
+      return { ...detail, returnHistoryError: 'Không tải được lịch sử đổi trả. Chưa thể kết luận hóa đơn chưa có đổi trả.' };
     }
   }
-
+  async function reloadDetail(invoiceId: string) {
+    const data = await readInvoiceDetail(invoiceId);
+    setSelectedInvoice(previous => previous?.invoiceId === invoiceId ? data : previous);
+  }
+  async function verify(invoice: InvoiceDetail) {
+    if (verifyInFlight.current) return;
+    verifyInFlight.current = true; setVerifyingId(invoice.invoiceId);
+    setAttempts(previous => ({ ...previous, [invoice.invoiceId]: {} }));
+    try {
+      const result = await apiClient<InvoiceVerificationResult>(`/invoices/${encodeURIComponent(invoice.invoiceId)}/verify-signature`, { method: 'POST' });
+      setAttempts(previous => ({ ...previous, [invoice.invoiceId]: { result } }));
+      // Re-read persisted history. Never manufacture a server timestamp or verifier.
+      await Promise.all([fetchInvoices(), reloadDetail(invoice.invoiceId)]);
+    } catch (err) {
+      setAttempts(previous => ({ ...previous, [invoice.invoiceId]: { error: failure(err, 'Không thể kiểm tra chữ ký. Vui lòng thử lại sau.') } }));
+    } finally { verifyInFlight.current = false; setVerifyingId(null); }
+  }
   async function handleOpenPrint(invoiceId: string) {
+    if (printInFlight.current) return;
+    printInFlight.current = true; setPrintingId(invoiceId);
     try {
       const detail = await apiClient<InvoiceDetail>(`/invoices/${encodeURIComponent(invoiceId)}`);
-      setPrintData({
-        invoiceNumber: detail.invoiceNumber,
-        invoiceId: detail.invoiceId,
-        createdDate: detail.createdDate,
-        branchName: currentUser?.branchName,
-        cashierName: detail.cashierId,
-        customerName: detail.customerName,
-        customerPhone: detail.customerPhone,
-        items: detail.items.map(it => ({
-          drugName: it.drugName,
-          drugCode: it.drugCode,
-          batchNo: it.batchId,
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          subTotal: it.subTotal,
-        })),
-        totalAmount: detail.totalAmount,
-        signatureHash: detail.signature?.hashValueSha256,
-        certSerial: detail.signature?.certificateSerial,
-      });
+      setPrintData({ invoiceNumber: detail.invoiceNumber, createdDate: detail.createdDate,
+        branchName: currentUser?.branchName, cashierName: detail.cashierName || undefined,
+        customerName: detail.customerName, customerPhone: detail.customerPhone,
+        items: detail.items.map(item => ({ drugName: item.drugName, drugCode: item.drugCode,
+          batchNo: item.batchNo || '', quantity: item.quantity, unitPrice: item.unitPrice, subTotal: item.subTotal })),
+        totalAmount: detail.totalAmount, status: detail.status, paymentStatus: detail.paymentStatus });
       setShowPrintModal(true);
-    } catch {
-      setError('Không thể lấy dữ liệu để in hóa đơn.');
-    }
+    } catch (err) { setError(failure(err, 'Không thể lấy dữ liệu để in hóa đơn.')); }
+    finally { printInFlight.current = false; setPrintingId(null); }
   }
-
-  async function handleCancelInvoice() {
-    if (!selectedInvoice) return;
-    if (cancelReason.trim().length < 5) {
-      setCancelError('Lý do hủy phải có ít nhất 5 ký tự.');
-      return;
-    }
-
-    setCancelling(true);
-    setCancelError('');
+  async function handleConfirmPayment(invoiceId: string) {
+    if (mutationInFlight.current) return;
+    mutationInFlight.current = true; setPayingId(invoiceId); setSuccess('');
     try {
-      const res = await apiClient<{ message: string; invoiceId: string }>(
-        `/invoices/${encodeURIComponent(selectedInvoice.invoiceId)}/cancel`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ reason: cancelReason.trim() }),
-        }
-      );
-
-      // Update local state of detail
-      setSelectedInvoice((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: 'CANCELLED',
-              cancelReason: cancelReason.trim(),
-              cancelledByName: currentUser?.fullName || currentUser?.username,
-              cancelledDate: new Date().toISOString(),
-              signature: prev.signature
-                ? {
-                    ...prev.signature,
-                    status: 'REVOKED',
-                    revokedAt: new Date().toISOString(),
-                    revokedReason: cancelReason.trim(),
-                  }
-                : null,
-            }
-          : null
-      );
-
-      setShowCancelModal(false);
-      setCancelReason('');
-      fetchInvoices(page);
-      setNotice({
-        isValid: false,
-        message: res.message || 'Hóa đơn đã được hủy bỏ thành công. Toàn bộ số lượng thuốc đã được hoàn tồn kho.',
-        invoiceId: selectedInvoice.invoiceId,
-        invoiceNumber: selectedInvoice.invoiceNumber,
-        signedAt: selectedInvoice.createdDate,
-        certificateSerial: selectedInvoice.signature?.certificateSerial || 'HSM-REVOKED',
-        storedHashSha256: selectedInvoice.signature?.hashValueSha256 || 'REVOKED',
-        calculatedHashSha256: selectedInvoice.signature?.hashValueSha256 || 'REVOKED',
+      await apiClient(`/invoices/${encodeURIComponent(invoiceId)}/confirm-payment`, { method: 'POST' });
+      setSuccess('Đã xác nhận thanh toán.');
+      await Promise.all([fetchInvoices(), selectedInvoice?.invoiceId === invoiceId ? reloadDetail(invoiceId) : Promise.resolve()]);
+    } catch (err) { setError(failure(err, 'Không thể xác nhận thanh toán.')); }
+    finally { mutationInFlight.current = false; setPayingId(null); }
+  }
+  async function handleCancelInvoice() {
+    if (!selectedInvoice || mutationInFlight.current || cancelReason.trim().length < 5) return;
+    const id = selectedInvoice.invoiceId;
+    mutationInFlight.current = true; setCancelling(true); setCancelError(''); setSuccess('');
+    try {
+      const detail = await apiClient<InvoiceDetail>(`/invoices/${encodeURIComponent(id)}/cancel`, {
+        method: 'POST', body: JSON.stringify({ reason: cancelReason.trim() }),
       });
-    } catch (err) {
-      setCancelError(err instanceof ApiError ? err.detail || err.message : 'Hủy hóa đơn thất bại.');
-    } finally {
-      setCancelling(false);
-    }
+      setSelectedInvoice(detail); setShowCancelModal(false); setCancelReason('');
+      setAttempts(previous => { const next = { ...previous }; delete next[id]; return next; });
+      setSuccess('Đã hủy hóa đơn theo kết quả Backend.');
+      await fetchInvoices();
+    } catch (err) { setCancelError(failure(err, 'Hủy hóa đơn thất bại.')); }
+    finally { mutationInFlight.current = false; setCancelling(false); }
   }
 
   const columns: Column<Invoice>[] = [
-    {
-      header: 'Số Hóa Đơn',
-      cell: (invoice) => (
-        <div>
-          <p className="font-mono text-xs font-bold text-ink">{invoice.invoiceNumber}</p>
-          <p className="mt-0.5 font-mono text-[9px] text-slate-400 truncate max-w-[150px]">{invoice.invoiceId}</p>
-        </div>
-      ),
-    },
-    {
-      header: 'Thời Gian',
-      cell: (invoice) => (
-        <span className="text-slate-600 font-medium">
-          {dateTime.format(new Date(invoice.createdDate))}
-        </span>
-      ),
-    },
-    {
-      header: 'Thu Ngân',
-      cell: (invoice) => <span className="font-mono text-slate-600">{invoice.cashierId}</span>,
-    },
-    {
-      header: 'Trạng Thái',
-      cell: (invoice) => {
-        const isCancelled = invoice.status === 'CANCELLED';
-        const isPending = invoice.paymentStatus === 'PENDING';
-        return (
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-              isCancelled
-                ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                : isPending
-                ? 'bg-amber-50 text-amber-800 border border-amber-300'
-                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-            }`}
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${isCancelled ? 'bg-rose-500' : isPending ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-            {isCancelled ? 'Đã hủy' : isPending ? 'Chờ thanh toán tại quầy' : 'Đã thanh toán'}
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Chứng Thực HSM',
-      cell: (invoice) => {
-        const verification = verifiedMap[invoice.invoiceId];
-        const isVerified = Boolean(invoice.lastVerifiedAt || verification?.isValid);
-        const verifiedName = invoice.verifiedByName || verification?.verifiedByName || 'Người dùng';
-        const verifiedTime = invoice.lastVerifiedAt || verification?.lastVerifiedAt;
-        return (
-          <div className="flex flex-col gap-1 items-start">
-            <HsmSignatureBadge status={invoice.status === 'CANCELLED' ? 'revoked' : 'valid'} />
-            {isVerified ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200"
-                title={`Đã thẩm định toàn vẹn bởi ${verifiedName}${verifiedTime ? ` lúc ${dateTime.format(new Date(verifiedTime))}` : ''}`}
-              >
-                <BadgeCheck size={11} className="text-emerald-600" />
-                <span>Đã thẩm định ✓</span>
-              </span>
-            ) : verification && !verification.isValid ? (
-              <span
-                className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 border border-rose-200"
-                title={verification.message || 'Chữ ký không khớp hoặc đã bị thu hồi'}
-              >
-                <AlertTriangle size={11} className="text-rose-600" />
-                <span>Sai lệch / Thu hồi</span>
-              </span>
-            ) : null}
-          </div>
-        );
-      },
-    },
-    {
-      header: 'Tổng Tiền',
-      align: 'right',
-      cell: (invoice) => (
-        <span className="font-display text-xs font-bold text-forest">
-          {money.format(invoice.totalAmount)}
-        </span>
-      ),
-    },
-    {
-      header: 'Thao Tác',
-      align: 'right',
-      cell: (invoice) => (
-        <div className="inline-flex items-center gap-2">
-          {invoice.status !== 'CANCELLED' && invoice.paymentStatus === 'PENDING' && (
-            <button
-              type="button"
-              onClick={() => handleConfirmPayment(invoice.invoiceId)}
-              disabled={payingId === invoice.invoiceId}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-400 bg-amber-50 px-2.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 cursor-pointer transition-colors shadow-2xs"
-              title="Khách thanh toán tiền mặt tại quầy - bấm để xác nhận thu tiền"
-            >
-              {payingId === invoice.invoiceId ? (
-                <LoaderCircle size={13} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={13} className="text-amber-600" />
-              )}
-              <span>Thu tiền</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => handleOpenPrint(invoice.invoiceId)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors"
-            title="In hóa đơn bán lẻ K80"
-          >
-            <Printer size={13} className="text-forest" />
-            <span>In K80</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleViewDetail(invoice.invoiceId)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors"
-          >
-            <Eye size={13} />
-            <span>Chi tiết</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => verify(invoice)}
-            disabled={verifyingId === invoice.invoiceId}
-            className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold disabled:opacity-50 cursor-pointer transition-colors ${
-              (invoice.lastVerifiedAt || verifiedMap[invoice.invoiceId]?.isValid)
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                : verifiedMap[invoice.invoiceId] && !verifiedMap[invoice.invoiceId]?.isValid
-                ? 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-            title={
-              invoice.lastVerifiedAt || verifiedMap[invoice.invoiceId]?.isValid
-                ? `Đã thẩm định bởi ${invoice.verifiedByName || verifiedMap[invoice.invoiceId]?.verifiedByName || 'Người dùng'}. Bấm để thẩm định lại`
-                : 'Kiểm tra tính toàn vẹn chữ ký số SHA-256 / RSA'
-            }
-          >
-            {verifyingId === invoice.invoiceId ? (
-              <LoaderCircle size={13} className="animate-spin" />
-            ) : (invoice.lastVerifiedAt || verifiedMap[invoice.invoiceId]?.isValid) ? (
-              <BadgeCheck size={13} className="text-emerald-600" />
-            ) : verifiedMap[invoice.invoiceId] && !verifiedMap[invoice.invoiceId]?.isValid ? (
-              <AlertTriangle size={13} className="text-rose-600" />
-            ) : (
-              <ShieldCheck size={13} />
-            )}
-            <span>
-              {(invoice.lastVerifiedAt || verifiedMap[invoice.invoiceId]?.isValid)
-                ? 'Đã thẩm định'
-                : verifiedMap[invoice.invoiceId] && !verifiedMap[invoice.invoiceId]?.isValid
-                ? 'Sai lệch'
-                : 'Xác thực'}
-            </span>
-          </button>
-        </div>
-      ),
-    },
+    { header: 'Số hóa đơn', cell: invoice => <span className="break-words font-mono text-xs font-semibold text-ink">{invoice.invoiceNumber}</span> },
+    { header: 'Ngày giờ', cell: invoice => <span className="text-slate-600">{formattedDate(invoice.createdDate)}</span> },
+    { header: 'Thu ngân', cell: invoice => invoice.cashierName || 'Chưa có thông tin thu ngân' },
+    { header: 'Thanh toán', cell: invoice => <InvoicePaymentBadge status={invoice.status} paymentStatus={invoice.paymentStatus} /> },
+    { header: 'Tổng tiền', align: 'right', cell: invoice => <span className="whitespace-nowrap font-semibold tabular-nums text-forest">{money.format(invoice.totalAmount)}</span> },
+    { header: 'Chữ ký số', cell: invoice => <InvoiceSignatureState invoice={invoice} attempt={attempts[invoice.invoiceId]} /> },
+
   ];
-
-  const isOwner = currentUser?.role === 'OWNER';
-
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.13em] text-forest">Hóa đơn &amp; Bán hàng</p>
-          <h1 className="mt-1 font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-            Hóa Đơn Điện Tử
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Tra cứu chứng từ bán hàng và xác thực toàn vẹn chữ ký số HSM/SHA256.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs">
-          <ShieldCheck size={16} className="text-forest" />
-          <span>Chữ ký số SHA-256 &amp; RSA PKCS#1 v1.5</span>
-        </div>
-      </div>
-
-      {/* Notice Banner */}
-      {notice && (
-        <AlertBanner
-          type={notice.isValid ? 'success' : 'error'}
-          message={
-            <div>
-              <p className="font-bold">{notice.isValid ? 'Chữ ký số hợp lệ — Chứng từ nguyên vẹn' : 'Cảnh báo: Kiểm tra chữ ký số / Trạng thái hóa đơn'}</p>
-              <p className="mt-0.5 opacity-90">{notice.message}</p>
-              <p className="mt-1 font-mono text-[10px] text-slate-500">Cert: {notice.certificateSerial} | Ký lúc: {dateTime.format(new Date(notice.signedAt))}</p>
-            </div>
-          }
-          onClose={() => setNotice(null)}
-        />
-      )}
-
-      {/* Error alert */}
-      <AlertBanner type="error" message={error} onClose={() => setError('')} />
-
+  const attempt = selectedInvoice ? attempts[selectedInvoice.invoiceId] : undefined;
+  return <div className="ui-page">
+    <PageHeader title="Hóa đơn bán hàng" />
+    <AlertBanner type="error" message={error} onClose={() => setError('')} />
+    <AlertBanner type="success" message={success} onClose={() => setSuccess('')} />
+      <SearchToolbar searchValue={search} onSearchChange={setSearch}
+        searchPlaceholder="Tìm theo số hóa đơn…" onRefresh={fetchInvoices} loading={loading}
+        filterSlot={<>
+          <select aria-label="Trạng thái hóa đơn" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="rounded-lg border border-line bg-white px-3 text-sm">
+            <option value="ALL">Tất cả trạng thái</option><option value="PAID">Đã thanh toán</option><option value="CANCELLED">Đã hủy</option>
+          </select>
+          <DateRangeFilter value={{ from: fromDate, to: toDate }} onChange={value => {
+            if (value.from && value.to && value.from > value.to) {
+              if (value.from !== fromDate) value.to = value.from; else value.from = value.to;
+            }
+            setFromDate(value.from); setToDate(value.to);
+          }} />
+          <select aria-label="Sắp xếp hóa đơn" value={sortOrder} onChange={e => setSortOrder(e.target.value)} className="rounded-lg border border-line bg-white px-3 text-sm">
+            <option value="NEWEST">Mới nhất</option><option value="OLDEST">Cũ nhất</option><option value="AMOUNT_DESC">Tổng tiền giảm dần</option><option value="AMOUNT_ASC">Tổng tiền tăng dần</option>
+          </select>
+          {(statusFilter !== 'ALL' || fromDate || toDate) && <button type="button" className="px-2 text-sm font-semibold text-forest" onClick={() => { setStatusFilter('ALL'); setFromDate(''); setToDate(''); }}>Xóa bộ lọc</button>}
+        </>} />
       {/* Invoices DataTable */}
       <DataTable
         columns={columns}
-        data={result?.items || []}
+        onRowClick={invoice => void handleViewDetail(invoice.invoiceId)}
+        rowLabel={invoice => `Xem hóa đơn ${invoice.invoiceNumber}`}
+        data={filteredInvoices.slice((page - 1) * 20, page * 20)}
         keyExtractor={(invoice) => invoice.invoiceId}
         loading={loading}
         loadingText="Đang tải danh sách hóa đơn chi nhánh..."
         emptyMessage="Chưa có hóa đơn nào được lưu trữ tại chi nhánh này."
         pagination={{
           page,
-          totalPages: result?.totalPages ?? 1,
-          totalCount: result?.totalCount,
+          totalPages: filteredPages,
+          totalCount: filteredInvoices.length,
           onPageChange: setPage,
           itemLabel: 'hóa đơn',
         }}
       />
 
-      {/* MODAL CHI TIẾT HÓA ĐƠN & CHỮ KÝ SỐ */}
-      <Modal
-        isOpen={Boolean(loadingDetail || selectedInvoice || detailError)}
-        onClose={() => {
-          setSelectedInvoice(null);
-          setDetailError('');
-        }}
-        title="Chi Tiết Hóa Đơn Bán Hàng"
-        subtitle={selectedInvoice ? `Mã chứng từ: ${selectedInvoice.invoiceNumber}` : undefined}
-        icon={FileText}
-        maxWidth="2xl"
-        footer={
-          selectedInvoice && (
-            <div className="flex flex-wrap items-center justify-between w-full gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleOpenPrint(selectedInvoice.invoiceId)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
-                >
-                  <Printer size={15} />
-                  <span>In Bản Sao (K80)</span>
-                </button>
-                {isOwner && selectedInvoice.status !== 'CANCELLED' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCancelReason('');
-                      setCancelError('');
-                      setShowCancelModal(true);
-                    }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 cursor-pointer transition-colors"
-                  >
-                    <XCircle size={15} />
-                    <span>Hủy Hóa Đơn &amp; Hoàn Kho</span>
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => verify(selectedInvoice)}
-                  disabled={verifyingId === selectedInvoice.invoiceId}
-                  className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors ${
-                    (selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.isValid)
-                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                      : verifiedMap[selectedInvoice.invoiceId] && !verifiedMap[selectedInvoice.invoiceId]?.isValid
-                      ? 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
-                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  {verifyingId === selectedInvoice.invoiceId ? (
-                    <LoaderCircle size={15} className="animate-spin" />
-                  ) : (selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.isValid) ? (
-                    <BadgeCheck size={15} className="text-emerald-600" />
-                  ) : verifiedMap[selectedInvoice.invoiceId] && !verifiedMap[selectedInvoice.invoiceId]?.isValid ? (
-                    <AlertTriangle size={15} className="text-rose-600" />
-                  ) : (
-                    <ShieldCheck size={15} />
-                  )}
-                  <span>
-                    {(selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.isValid)
-                      ? 'Chứng Từ Hợp Lệ & Nguyên Vẹn ✓'
-                      : verifiedMap[selectedInvoice.invoiceId] && !verifiedMap[selectedInvoice.invoiceId]?.isValid
-                      ? 'Chứng Từ Có Dấu Hiệu Sai Lệch ⚠'
-                      : 'Xác Thực Chữ Ký'}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedInvoice(null)}
-                  className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 cursor-pointer"
-                >
-                  Đóng
-                </button>
-              </div>
-            </div>
-          )
-        }
-      >
-        {loadingDetail && (
-          <div className="py-12 text-center text-xs font-medium text-slate-500">
-            <LoaderCircle size={24} className="mx-auto mb-2 animate-spin text-forest" />
-            Đang tải dữ liệu chi tiết hóa đơn...
-          </div>
-        )}
 
-        <AlertBanner type="error" message={detailError} onClose={() => setDetailError('')} />
-
-        {selectedInvoice && (
-          <div className="space-y-5">
-            {/* Banner Cảnh Báo Nếu Hóa Đơn Bị Hủy */}
-            {selectedInvoice.status === 'CANCELLED' && (
-              <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-4 text-xs">
-                <div className="flex items-center gap-2 font-bold text-rose-800">
-                  <XCircle size={16} className="text-rose-600" />
-                  <span>HÓA ĐƠN ĐÃ HỦY BỎ — TOÀN BỘ SỐ LƯỢNG THUỐC ĐÃ HOÀN TỒN KHO</span>
-                </div>
-                <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px] text-rose-700">
-                  <div>
-                    <span className="font-bold">Người thực hiện hủy: </span>
-                    <span>{selectedInvoice.cancelledByName || selectedInvoice.cancelledById || 'Chủ nhà thuốc'}</span>
-                  </div>
-                  <div>
-                    <span className="font-bold">Thời gian hủy: </span>
-                    <span>{selectedInvoice.cancelledDate ? dateTime.format(new Date(selectedInvoice.cancelledDate)) : '—'}</span>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="font-bold">Lý do hủy: </span>
-                    <span className="font-sans italic">{selectedInvoice.cancelReason || 'Không ghi rõ lý do'}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Metadata Summary */}
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs sm:grid-cols-4">
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Số hóa đơn</span>
-                <span className="font-mono font-bold text-ink">{selectedInvoice.invoiceNumber}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Khách hàng</span>
-                <span className="font-bold text-ink">{selectedInvoice.customerName || 'Khách lẻ vãng lai'}</span>
-                {selectedInvoice.customerPhone && (
-                  <span className="block font-mono text-[11px] text-slate-500">{selectedInvoice.customerPhone}</span>
-                )}
-              </div>
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Thời gian lập</span>
-                <span className="text-slate-700 font-medium">{dateTime.format(new Date(selectedInvoice.createdDate))}</span>
-              </div>
-              <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Thu ngân</span>
-                <span className="font-mono text-slate-700">@{selectedInvoice.cashierId}</span>
-              </div>
-            </div>
-
-            {/* Items Table */}
-            <div>
-              <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-600">Danh mục thuốc thanh toán</h4>
-              <div className="overflow-hidden rounded-xl border border-slate-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-[10px] uppercase font-bold text-slate-500">
-                    <tr>
-                      <th className="p-3">Tên Thuốc</th>
-                      <th className="p-3">Số Lô</th>
-                      <th className="p-3 text-center">Số Lượng</th>
-                      <th className="p-3 text-right">Đơn Giá</th>
-                      <th className="p-3 text-right">Thành Tiền</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {selectedInvoice.items?.map((item, idx) => (
-                      <tr key={`${item.drugId}-${item.batchId}-${idx}`} className="hover:bg-slate-50/50">
-                        <td className="p-3 font-semibold text-ink">
-                          {item.drugName}
-                          <span className="block font-mono text-[10px] text-slate-400">{item.drugCode}</span>
-                        </td>
-                        <td className="p-3 font-mono text-slate-600">{item.batchId}</td>
-                        <td className="p-3 text-center font-bold text-ink">{item.quantity}</td>
-                        <td className="p-3 text-right font-mono text-slate-700">{money.format(item.unitPrice)}</td>
-                        <td className="p-3 text-right font-mono font-bold text-forest">{money.format(item.subTotal)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="border-t border-slate-200 bg-slate-50/50 font-bold">
-                    <tr>
-                      <td colSpan={4} className="p-3 text-right text-slate-700">
-                        Tổng cộng thanh toán:
-                      </td>
-                      <td className="p-3 text-right font-display text-sm text-forest">
-                        {money.format(selectedInvoice.totalAmount)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-
-            {/* Digital Signature Card */}
-            {selectedInvoice.signature && (
-              <div
-                className={`rounded-xl border p-4 text-xs ${
-                  selectedInvoice.signature.status === 'REVOKED' || selectedInvoice.status === 'CANCELLED'
-                    ? 'border-rose-200 bg-rose-50/50'
-                    : 'border-emerald-200 bg-emerald-50/50'
-                }`}
-              >
-                <div
-                  className={`flex items-center gap-2 font-bold ${
-                    selectedInvoice.signature.status === 'REVOKED' || selectedInvoice.status === 'CANCELLED'
-                      ? 'text-rose-800'
-                      : 'text-emerald-800'
-                  }`}
-                >
-                  {selectedInvoice.signature.status === 'REVOKED' || selectedInvoice.status === 'CANCELLED' ? (
-                    <>
-                      <Ban size={16} className="text-rose-600" />
-                      <span>Chữ Ký Số Đã Bị Thu Hồi (Revoked HSM Signature)</span>
-                    </>
-                  ) : (
-                    <>
-                      <BadgeCheck size={16} className="text-emerald-600" />
-                      <span>Chứng Thư Số Điện Tử Gốc (SHA-256 HSM)</span>
-                    </>
-                  )}
-                </div>
-                <div className="mt-2.5 space-y-1.5 font-mono text-[11px] text-slate-600">
-                  <p>
-                    <span className="font-bold text-slate-700">Cert Serial:</span> {selectedInvoice.signature.certificateSerial}
-                  </p>
-                  <p className="truncate">
-                    <span className="font-bold text-slate-700">Mã Băm SHA256:</span> {selectedInvoice.signature.hashValueSha256}
-                  </p>
-                  <p>
-                    <span className="font-bold text-slate-700">Thời điểm ký:</span> {dateTime.format(new Date(selectedInvoice.signature.signedAt))}
-                  </p>
-                  {(selectedInvoice.signature.revokedAt || selectedInvoice.status === 'CANCELLED') && (
-                    <p className="text-rose-700 font-semibold">
-                      <span className="font-bold">Thời điểm thu hồi:</span>{' '}
-                      {selectedInvoice.signature.revokedAt
-                        ? dateTime.format(new Date(selectedInvoice.signature.revokedAt))
-                        : (selectedInvoice.cancelledDate ? dateTime.format(new Date(selectedInvoice.cancelledDate)) : '—')}
-                    </p>
-                  )}
-                  {(selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.isValid) && (
-                    <div className="mt-3 rounded-lg border border-emerald-200 bg-white/80 p-2.5 text-[11px] text-emerald-900 font-sans space-y-1">
-                      <p className="font-bold flex items-center gap-1.5 text-emerald-800">
-                        <BadgeCheck size={14} className="text-emerald-600" />
-                        <span>Chứng từ đã được thẩm định tính toàn vẹn:</span>
-                      </p>
-                      <p className="pl-5 text-slate-700">
-                        Người thẩm định: <strong className="text-emerald-800">{selectedInvoice.verifiedByName || verifiedMap[selectedInvoice.invoiceId]?.verifiedByName || 'Người quản lý'}</strong>
-                      </p>
-                      {(selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]?.lastVerifiedAt) && (
-                        <p className="pl-5 text-slate-600 font-mono text-[10px]">
-                          Thời điểm: {dateTime.format(new Date(selectedInvoice.lastVerifiedAt || verifiedMap[selectedInvoice.invoiceId]!.lastVerifiedAt!))}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
-
-      {/* MODAL XÁC NHẬN HỦY HÓA ĐƠN & HOÀN TỒN KHO */}
-      <Modal
-        isOpen={showCancelModal}
-        onClose={() => !cancelling && setShowCancelModal(false)}
-        title="Xác Nhận Hủy Hóa Đơn Bán Hàng"
-        subtitle={selectedInvoice ? `Chứng từ: ${selectedInvoice.invoiceNumber}` : undefined}
-        icon={AlertTriangle}
-        maxWidth="md"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <button
-              type="button"
-              disabled={cancelling}
-              onClick={() => setShowCancelModal(false)}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 cursor-pointer disabled:opacity-50"
-            >
-              Hủy Bỏ
-            </button>
-            <button
-              type="button"
-              disabled={cancelling || cancelReason.trim().length < 5}
-              onClick={handleCancelInvoice}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 cursor-pointer disabled:opacity-50"
-            >
-              {cancelling ? <LoaderCircle size={15} className="animate-spin" /> : <XCircle size={15} />}
-              <span>Xác Nhận Hủy &amp; Hoàn Tồn</span>
-            </button>
-          </div>
-        }
-      >
-        <div className="space-y-4 text-xs">
-          <AlertBanner type="error" message={cancelError} onClose={() => setCancelError('')} />
-
-          <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-amber-900 space-y-1.5">
-            <p className="font-bold flex items-center gap-1.5">
-              <AlertTriangle size={15} className="text-amber-600 shrink-0" />
-              Cảnh báo quan trọng về pháp lý &amp; số liệu kho:
-            </p>
-            <ul className="list-disc list-inside space-y-1 text-[11px] text-amber-800/90 pl-1">
-              <li>Hóa đơn sẽ chuyển sang trạng thái <strong>Đã hủy (CANCELLED)</strong> vĩnh viễn.</li>
-              <li>Chữ ký số HSM tương ứng sẽ bị <strong>Thu hồi (REVOKED)</strong>.</li>
-              <li>Toàn bộ số lượng thuốc trong hóa đơn sẽ được <strong>tự động hoàn trả về tồn kho</strong>.</li>
-              <li>Lịch sử thẻ kho sẽ ghi nhận giao dịch <code>HOAN_HUY</code> phục vụ thanh tra.</li>
-            </ul>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-ink mb-1.5">
-              Lý do hủy hóa đơn <span className="text-rose-500">*</span>
-            </label>
-            <textarea
-              rows={3}
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Nhập lý do chi tiết (ví dụ: Khách trả lại ngay sau khi xuất đơn, quét nhầm thuốc... tối thiểu 5 ký tự)"
-              className="w-full rounded-lg border border-slate-200 p-2.5 text-xs text-ink placeholder:text-slate-400 focus:border-rose-500 focus:ring-1 focus:ring-rose-500 focus:outline-none"
-            />
-            <p className="mt-1 text-[11px] text-slate-400">
-              Độ dài: {cancelReason.trim().length}/5 ký tự tối thiểu.
-            </p>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Modal In hóa đơn bán lẻ K80 */}
-      <ReceiptPrintModal
-        isOpen={showPrintModal}
-        onClose={() => setShowPrintModal(false)}
-        data={printData}
-      />
-    </div>
-  );
+    <Modal isOpen={Boolean(loadingDetail || selectedInvoice || detailError) && !showPrintModal && !showCancelModal} onClose={closeDetail}
+      title="Chi tiết hóa đơn" subtitle={selectedInvoice?.invoiceNumber} maxWidth="3xl"
+      footer={<><button type="button" className={secondary} disabled={busy} onClick={closeDetail}>Đóng</button>
+        {selectedInvoice && <button type="button" className={primary} disabled={busy} onClick={() => handleOpenPrint(selectedInvoice.invoiceId)}>{printingId ? <LoaderCircle size={15} className="animate-spin" /> : <Printer size={15} />}In hóa đơn</button>}</>}>
+      {loadingDetail && <p role="status" className="py-8 text-center text-sm text-slate-500">Đang tải chi tiết hóa đơn…</p>}
+      <AlertBanner type="error" message={detailError} />
+      {selectedInvoice && <div className="space-y-5 text-sm">
+        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div><dt className="text-xs text-slate-500">Ngày lập</dt><dd className="mt-1">{formattedDate(selectedInvoice.createdDate)}</dd></div>
+          <div><dt className="text-xs text-slate-500">Chi nhánh</dt><dd className="mt-1">{currentUser?.branchName || 'Chưa có tên chi nhánh'}</dd></div>
+          <div><dt className="text-xs text-slate-500">Thu ngân</dt><dd className="mt-1">{selectedInvoice.cashierName || 'Chưa có tên thu ngân'}</dd></div>
+          <div><dt className="text-xs text-slate-500">Khách hàng</dt><dd className="mt-1">{selectedInvoice.customerName || 'Khách lẻ'}{selectedInvoice.customerPhone && ` · ${selectedInvoice.customerPhone}`}</dd></div>
+          <div><dt className="mb-1 text-xs text-slate-500">Thanh toán</dt><dd><InvoicePaymentBadge status={selectedInvoice.status} paymentStatus={selectedInvoice.paymentStatus} /></dd></div>
+        </dl>
+        <section aria-label="Danh sách thuốc" className="divide-y divide-slate-100 rounded-xl border border-slate-200 px-3">
+          {selectedInvoice.items.map((item, index) => <article key={index} className="grid grid-cols-1 gap-2 py-3 sm:grid-cols-[1fr_auto]">
+            <div className="min-w-0"><p className="break-words font-semibold">{item.drugName}</p><p className="mt-1 break-words text-xs text-slate-500">{item.drugCode} · Lô: {item.batchNo || 'Chưa có số lô'}</p></div>
+            <div className="text-right tabular-nums"><p className="text-xs text-slate-500">{item.quantity} × {money.format(item.unitPrice)}</p><p className="mt-1 whitespace-nowrap font-semibold">{money.format(item.subTotal)}</p></div>
+          </article>)}
+        </section>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 font-semibold"><span>Tổng thanh toán</span><span className="whitespace-nowrap text-lg tabular-nums text-forest">{money.format(selectedInvoice.totalAmount)}</span></div>
+        <AlertBanner type="warning" message={selectedInvoice.returnHistoryError} />
+        {selectedInvoice.returnHistory && selectedInvoice.returnHistory.length > 0 && <section className="space-y-3 rounded-xl border border-slate-200 p-3" aria-label="Lịch sử đổi trả">
+          <h3 className="font-semibold">Lịch sử đổi trả</h3>
+          <p className="text-xs text-slate-600">Giá trị ghi nhận từ phiếu hoàn tất: <strong>{money.format(selectedInvoice.returnHistory.filter(item => item.status === 'COMPLETED').reduce((sum, item) => sum + item.recordedRefundAmount, 0))}</strong>. Không thay đổi tổng tiền hóa đơn gốc; đây không phải xác nhận chi trả qua ngân hàng.</p>
+          <ul className="divide-y divide-slate-100">{selectedInvoice.returnHistory.map(item => <li key={item.returnId} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
+            <div><Link className="font-semibold text-forest underline underline-offset-2" to={`/returns?returnId=${encodeURIComponent(item.returnId)}`}>Xem phiếu {item.returnNo}</Link><p className="mt-1 text-slate-500">{formattedDate(item.createdDate)} · {item.status === 'COMPLETED' ? 'Hoàn tất' : item.status === 'REJECTED' ? 'Từ chối' : item.status === 'CANCELLED' ? 'Đã hủy' : item.status}</p></div>
+            <span className="whitespace-nowrap tabular-nums">{money.format(item.recordedRefundAmount)}</span>
+          </li>)}</ul>
+        </section>}
+        <section className="space-y-3 rounded-xl border border-slate-200 p-3" aria-label="Chữ ký số">
+          <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold">Chữ ký số</h3><InvoiceSignatureState invoice={selectedInvoice} attempt={attempt} /></div>
+          {selectedInvoice.signature?.signedAt && <p className="text-xs text-slate-500">Ký lúc: {formattedDate(selectedInvoice.signature.signedAt)}</p>}
+          {attempt?.error && <AlertBanner type="warning" message={attempt.error} />}
+          {attempt?.result && <AlertBanner type={attempt.result.isValid ? 'success' : 'warning'} message={attempt.result.isValid ? 'Lần kiểm tra vừa thực hiện: hợp lệ.' : 'Lần kiểm tra vừa thực hiện không xác nhận được chữ ký hợp lệ. Xem thông tin kỹ thuật để truy vết.'} />}
+          {selectedInvoice.lastVerifiedAt && <p className="text-xs leading-relaxed text-slate-600">Lần kiểm tra thành công gần nhất: {formattedDate(selectedInvoice.lastVerifiedAt)}{selectedInvoice.verifiedByName && ` · ${selectedInvoice.verifiedByName}`}. Đây là kết quả lịch sử, không thay thế lần kiểm tra mới.</p>}
+          {selectedInvoice.signature && selectedInvoice.signature.status !== 'REVOKED' && selectedInvoice.status !== 'CANCELLED' && <button type="button" className={secondary} disabled={busy} onClick={() => verify(selectedInvoice)}>{verifyingId ? <LoaderCircle size={14} className="animate-spin" /> : <ShieldCheck size={14} />}{verifyingId ? 'Đang kiểm tra…' : selectedInvoice.lastVerifiedAt || attempt ? 'Kiểm tra lại' : 'Kiểm tra chữ ký'}</button>}
+          <details className="text-xs text-slate-600"><summary className="cursor-pointer rounded py-1 font-medium focus-visible:outline-forest">Thông tin kỹ thuật</summary>
+            <dl className="mt-3 space-y-2 break-all"><div><dt>Mã nội bộ</dt><dd className="font-mono">{selectedInvoice.invoiceId}</dd></div>
+              <div><dt>SHA-256 đã lưu</dt><dd className="font-mono">{selectedInvoice.signature?.hashValueSha256 || '—'}</dd></div>
+              <div><dt>Định danh chứng thư / khóa</dt><dd>{selectedInvoice.signature?.certificateSerial || '—'}</dd></div>
+              <div><dt>Thời gian ký</dt><dd>{formattedDate(selectedInvoice.signature?.signedAt)}</dd></div>
+              {attempt?.result && <div><dt>Kết quả Backend</dt><dd>{attempt.result.message}</dd><dt>SHA-256 tính lại</dt><dd className="font-mono">{attempt.result.calculatedHashSha256 || '—'}</dd></div>}
+            </dl>
+          </details>
+        </section>
+        {selectedInvoice.status === 'CANCELLED' && <AlertBanner type="warning" message={`Đã hủy: ${selectedInvoice.cancelReason || 'Chưa có lý do'} · ${formattedDate(selectedInvoice.cancelledDate)}`} />}
+        {selectedInvoice.status !== 'CANCELLED' && selectedInvoice.paymentStatus === 'PENDING' && <button type="button" className={secondary} disabled={busy} onClick={() => handleConfirmPayment(selectedInvoice.invoiceId)}>{payingId ? 'Đang thu tiền…' : 'Thu tiền mặt'}</button>}
+        {isOwner && selectedInvoice.status !== 'CANCELLED' && <details className="border-t border-slate-100 pt-3"><summary className="cursor-pointer rounded py-1 text-xs font-medium text-slate-600">Thao tác quản lý</summary><button type="button" className="mt-3 rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50" disabled={busy} onClick={() => { setCancelError(''); setShowCancelModal(true); }}>Hủy hóa đơn &amp; hoàn kho</button></details>}
+      </div>}
+    </Modal>
+    <Modal isOpen={showCancelModal} onClose={() => !cancelling && setShowCancelModal(false)} title="Xác nhận hủy hóa đơn" subtitle={selectedInvoice?.invoiceNumber} maxWidth="md"
+      footer={<><button type="button" className={secondary} disabled={cancelling} onClick={() => setShowCancelModal(false)}>Quay lại</button><button type="button" className="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50" disabled={cancelling || cancelReason.trim().length < 5} onClick={handleCancelInvoice}>{cancelling ? 'Đang xử lý…' : 'Xác nhận hủy & hoàn tồn'}</button></>}>
+      <div className="space-y-4"><AlertBanner type="error" message={cancelError} /><AlertBanner type="warning" message="Hóa đơn sẽ bị hủy, chữ ký bị thu hồi và thuốc được hoàn tồn theo xử lý Backend. Thao tác này không thể hoàn tác." />
+        <label className="block text-sm font-medium">Lý do hủy hóa đơn<textarea rows={3} value={cancelReason} disabled={cancelling} onChange={event => setCancelReason(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm" placeholder="Nhập lý do, tối thiểu 5 ký tự" /></label></div>
+    </Modal>
+    <ReceiptPrintModal isOpen={showPrintModal} onClose={() => setShowPrintModal(false)} data={printData} />
+  </div>;
 }

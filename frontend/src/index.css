@@ -17,7 +17,7 @@
 
 * { box-sizing: border-box; }
 body { min-width: 320px; min-height: 100vh; margin: 0; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
   outline: 3px solid rgba(213, 111, 79, 0.48);
   outline-offset: 2px;
@@ -56,3 +56,27 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Compact POS presentation shared by business pages and dialogs. */
+@layer components {
+  .ui-page { @apply space-y-6; }
+  .ui-page-header { @apply flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between; }
+  .ui-page-title { @apply font-display text-2xl font-extrabold tracking-tight text-ink sm:text-[28px]; }
+  .ui-page-actions { @apply flex flex-wrap items-center gap-2; }
+  .ui-page-actions button { @apply min-h-10 whitespace-nowrap rounded-lg px-4 text-sm font-semibold; }
+  .ui-toolbar { @apply flex w-full flex-col gap-3 rounded-xl border border-line bg-white p-3 sm:flex-row sm:items-center sm:justify-between; }
+  .ui-data-table { @apply w-full border-collapse text-left text-sm; }
+  .ui-data-table th { @apply whitespace-nowrap bg-slate-50 px-4 py-3 text-xs font-semibold normal-case tracking-normal text-slate-600; }
+  .ui-data-table td { @apply px-4 py-3 text-sm leading-5 text-slate-700; }
+  .ui-data-table td .font-mono, .ui-data-table td.font-mono { @apply whitespace-nowrap; }
+  .ui-data-table tbody tr { @apply border-b border-slate-100 transition-colors hover:bg-mint/30; }
+  .ui-data-table td button { @apply min-h-9 whitespace-nowrap rounded-lg text-xs font-semibold; }
+  .ui-toolbar input, .ui-toolbar select { @apply min-h-10 text-sm; }
+  .ui-toolbar button { @apply min-h-10 whitespace-nowrap; }
+}
+.ui-data-table .font-mono, .ui-money { font-variant-numeric: tabular-nums; }
+.ui-money { white-space: nowrap; }
+button, a, input, select, textarea { transition-property: color, background-color, border-color, box-shadow; transition-duration: 150ms; }
+button:disabled { cursor: not-allowed; }
+textarea:focus-visible { outline: 3px solid rgba(36,107,91,.3); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }

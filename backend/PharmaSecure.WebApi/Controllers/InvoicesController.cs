@@ -93,11 +93,20 @@ public sealed class InvoicesController : ControllerBase
         if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
             return Unauthorized();
 
-        var result = await invoiceQueryService.VerifyInvoiceSignatureAsync(currentUserContext.BranchId, id, currentUserContext.UserId, cancellationToken);
-        if (result is null)
-            return Problem(statusCode: StatusCodes.Status404NotFound, title: "Invoice was not found.");
-
-        return Ok(result);
+        try
+        {
+            var result = await invoiceQueryService.VerifyInvoiceSignatureAsync(currentUserContext.BranchId, id, currentUserContext.UserId, cancellationToken);
+            if (result is null)
+                return Problem(statusCode: StatusCodes.Status404NotFound, title: "Invoice was not found.");
+            return Ok(result);
+        }
+        catch (SignatureConfigurationException)
+        {
+            logger.LogWarning("Invoice verification unavailable: signing key configuration requires operator attention.");
+            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: "Signature verification is unavailable.",
+                detail: "The verification key is missing or invalid. No successful verification was recorded.");
+        }
     }
 
     [HttpPost]

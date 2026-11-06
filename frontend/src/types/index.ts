@@ -88,6 +88,8 @@ export interface Invoice {
   totalAmount: number;
   branchId: string;
   cashierId: string;
+  cashierName?: string | null;
+  signatureStatus?: string | null;
   status?: 'COMPLETED' | 'CANCELLED';
   paymentMethod?: 'CASH' | 'BANK_TRANSFER' | 'QR_CODE' | 'CREDIT_CARD';
   paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
@@ -115,6 +117,7 @@ export interface InvoiceVerificationResult {
   invoiceId: string;
   invoiceNumber: string;
   isValid: boolean;
+  verificationStatus?: "VALID" | "INVALID" | "MISSING" | "REVOKED" | "UNAVAILABLE";
   calculatedHashSha256: string;
   storedHashSha256: string;
   certificateSerial: string;
@@ -141,6 +144,7 @@ export interface InvoiceItem {
   drugCode: string;
   drugName: string;
   batchId: string;
+  batchNo?: string | null;
   quantity: number;
   unitPrice: number;
   subTotal: number;
@@ -156,13 +160,26 @@ export interface InvoiceSignature {
   revokedReason?: string | null;
 }
 
+export interface InvoiceReturn {
+  returnId: string;
+  returnNo: string;
+  createdDate: string;
+  recordedRefundAmount: number;
+  status: string;
+}
+
 export interface InvoiceDetail {
+  // UI enrichment from the existing branch-scoped GET /returns API.
+  returnHistory?: InvoiceReturn[] | null;
+  returnHistoryError?: string;
   invoiceId: string;
   invoiceNumber: string;
   createdDate: string;
   totalAmount: number;
   branchId: string;
   cashierId: string;
+  cashierName?: string | null;
+  signatureStatus?: string | null;
   items: InvoiceItem[];
   signature: InvoiceSignature | null;
   customerId?: string | null;

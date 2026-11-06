@@ -23,17 +23,17 @@ export const SearchToolbar: React.FC<SearchToolbarProps> = ({
   actionSlot,
 }) => {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="ui-toolbar">
       <div className="flex flex-1 flex-wrap items-center gap-2.5">
         {/* Search Input Box */}
-        <div className="relative flex-1 min-w-[220px] max-w-md">
+        <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px] sm:max-w-md">
           <Search
             size={16}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
           />
           <input
             type="text"
-            aria-label={searchLabel}
+            aria-label={searchLabel || searchPlaceholder}
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
@@ -60,7 +60,7 @@ export const SearchToolbar: React.FC<SearchToolbarProps> = ({
             type="button"
             onClick={onRefresh}
             disabled={loading}
-            className="grid h-8.5 w-8.5 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50 transition-colors"
+            className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-50 transition-colors"
             title="Tải lại danh sách"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />

@@ -14,3 +14,9 @@ public interface IDigitalSignatureService
 
     bool VerifyIntegrity(Invoice invoice, DigitalSignature digitalSignature);
 }
+// Configuration errors are technical unavailability, never proof of invoice tampering.
+public sealed class SignatureConfigurationException : InvalidOperationException
+{
+    public SignatureConfigurationException(string message, Exception? innerException = null)
+        : base(message, innerException) { }
+}
