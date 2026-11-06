@@ -71,7 +71,7 @@ export const FefoExpiryBadge: React.FC<FefoExpiryBadgeProps> = ({
   return (
     <span
       title={`Hạn dùng: ${expiryDate} | ${statusConfig.advice}`}
-      className={`inline-flex items-center gap-1.5 rounded-full border ${paddingClass} ${statusConfig.badgeStyle} ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border ${paddingClass} ${statusConfig.badgeStyle} ${className}`}
     >
       <Icon size={size === 'sm' ? 11 : 13} strokeWidth={2.2} />
       <span>{showDays ? statusConfig.label : (days <= 0 ? 'Hết hạn' : 'Cận hạn')}</span>

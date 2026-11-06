@@ -218,7 +218,7 @@ export function NotificationBell() {
 
       {/* Popover Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-[380px] max-w-[calc(100vw-32px)] rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-100 sm:w-[420px]">
+        <div role="region" aria-label="Trung tâm thông báo" className="fixed left-4 right-4 top-[4.5rem] z-40 rounded-2xl border border-slate-200 bg-white shadow-2xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-100 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[420px] sm:max-w-[calc(100vw-32px)]">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <div>
@@ -243,6 +243,7 @@ export function NotificationBell() {
               disabled={isLoading}
               className="grid h-7 w-7 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-ink disabled:opacity-50 cursor-pointer"
               title="Làm mới thông báo"
+              aria-label="Làm mới thông báo"
             >
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>

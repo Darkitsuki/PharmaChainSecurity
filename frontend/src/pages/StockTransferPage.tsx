@@ -1,3 +1,6 @@
+import { dateTime, calendarDate } from '../utils/formatters';
+import { PageHeader } from '../components/common/PageHeader';
+import { loadAllPages } from '../utils/loadAllPages';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeftRight,
@@ -19,7 +22,6 @@ import type {
   CreateStockTransferPayload,
   CreateStockTransferItemPayload,
   Branch,
-  PageResult,
   InventoryRow,
   Drug,
 } from '../types';
@@ -126,14 +128,14 @@ export function StockTransferPage() {
     setLoadingStock(true);
     try {
       const [branchList, invPage, drugPage] = await Promise.all([
-        apiClient<Branch[]>('/branches').catch(() => [] as Branch[]),
-        apiClient<PageResult<InventoryRow>>('/inventory?page=1&pageSize=200').catch(() => ({ items: [], page: 1, pageSize: 200, totalCount: 0, totalPages: 1 })),
-        apiClient<PageResult<Drug>>('/drugs?page=1&pageSize=200').catch(() => ({ items: [], page: 1, pageSize: 200, totalCount: 0, totalPages: 1 })),
+        apiClient<Branch[]>('/branches'),
+        loadAllPages<InventoryRow>('/inventory'),
+        loadAllPages<Drug>('/drugs'),
       ]);
 
       setBranches(branchList.filter(b => b.id !== currentBranchId));
-      setAvailableStock(invPage.items.filter(i => i.quantity > 0));
-      setDrugDict(Object.fromEntries(drugPage.items.map(d => [d.drugId, d])));
+      setAvailableStock(invPage.filter(i => i.quantity > 0));
+      setDrugDict(Object.fromEntries(drugPage.map(d => [d.drugId, d])));
     } catch (err) {
       setCreateError('Không thể tải danh sách chi nhánh hoặc tồn kho.');
     } finally {
@@ -315,7 +317,10 @@ export function StockTransferPage() {
     });
   }, [transfers, searchTerm, statusFilter]);
 
+  useEffect(() => setCurrentPage(1), [searchTerm, statusFilter, directionFilter]);
+
   const totalPages = Math.ceil(filteredTransfers.length / pageSize) || 1;
+  useEffect(() => setCurrentPage(value => Math.min(value, totalPages)), [totalPages]);
   const paginatedTransfers = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filteredTransfers.slice(start, start + pageSize);
@@ -387,7 +392,7 @@ export function StockTransferPage() {
       header: 'Thời gian tạo',
       cell: t => (
         <span className="text-xs text-slate-500">
-          {new Date(t.createdDate).toLocaleDateString('vi-VN')}
+          {calendarDate.format(new Date(t.createdDate))}
         </span>
       ),
     },
@@ -407,26 +412,17 @@ export function StockTransferPage() {
   ];
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="ui-page">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-ink">
-            Điều chuyển kho liên chi nhánh
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Luân chuyển hàng hóa giữa các chi nhánh trong chuỗi nhà thuốc với quy trình Xuất - Nhận bảo mật
-          </p>
-        </div>
-
-        <button
+      <PageHeader title="Điều chuyển kho" actions={<>
+<button
           onClick={handleOpenCreateModal}
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-forest/90"
         >
           <Plus size={16} strokeWidth={2.5} />
           Tạo phiếu điều chuyển
         </button>
-      </div>
+</>} />
 
       {/* Global Alerts */}
       {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
@@ -435,6 +431,7 @@ export function StockTransferPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Tổng phiếu chuyển"
           value={transfers.length}
           subValue="Tất cả các chiều"
@@ -442,6 +439,7 @@ export function StockTransferPage() {
           colorTheme="blue"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Chờ xuất kho"
           value={transfers.filter(t => t.status === 'PENDING').length}
           subValue="Chi nhánh gửi chưa xuất"
@@ -449,6 +447,7 @@ export function StockTransferPage() {
           colorTheme="amber"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Đang chuyển hàng"
           value={transfers.filter(t => t.status === 'IN_TRANSIT').length}
           subValue="Đang trên đường vận chuyển"
@@ -456,6 +455,7 @@ export function StockTransferPage() {
           colorTheme="purple"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Đã nhận hoàn tất"
           value={transfers.filter(t => t.status === 'COMPLETED').length}
           subValue="Đã cập nhật tồn kho đích"
@@ -653,7 +653,7 @@ export function StockTransferPage() {
             </div>
 
             <div className="max-h-48 overflow-auto rounded-lg border border-line bg-white">
-              <table className="min-w-full divide-y divide-line text-left text-xs">
+              <table className="ui-data-table min-w-full divide-y divide-line text-left text-xs">
                 <thead className="bg-slate-50 font-semibold text-slate-600">
                   <tr>
                     <th className="px-3 py-2">Tên thuốc</th>
@@ -674,7 +674,7 @@ export function StockTransferPage() {
                     stagedItems.map(item => (
                       <tr key={`${item.drugId}_${item.batchId}`}>
                         <td className="px-3 py-2 font-medium text-ink">{item.drugName}</td>
-                        <td className="px-3 py-2 font-mono text-[11px]">{item.batchNo}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{item.batchNo}</td>
                         <td className="px-3 py-2 text-center font-bold text-forest">{item.quantity}</td>
                         <td className="px-3 py-2 text-slate-500">{item.notes || '—'}</td>
                         <td className="px-3 py-2 text-right">
@@ -755,25 +755,25 @@ export function StockTransferPage() {
             <div className="rounded-lg border border-line p-3 text-xs grid grid-cols-1 gap-2 sm:grid-cols-3 bg-white">
               <div>
                 <span className="text-slate-500">Ngày tạo:</span>
-                <div className="font-medium text-slate-800">{new Date(selectedTransfer.createdDate).toLocaleString('vi-VN')}</div>
+                <div className="font-medium text-slate-800">{dateTime.format(new Date(selectedTransfer.createdDate))}</div>
               </div>
               <div>
                 <span className="text-slate-500">Ngày xuất hàng:</span>
                 <div className="font-medium text-slate-800">
-                  {selectedTransfer.shippedDate ? `${new Date(selectedTransfer.shippedDate).toLocaleString('vi-VN')} (${selectedTransfer.shippedByName || '—'})` : '—'}
+                  {selectedTransfer.shippedDate ? `${dateTime.format(new Date(selectedTransfer.shippedDate))} (${selectedTransfer.shippedByName || '—'})` : '—'}
                 </div>
               </div>
               <div>
                 <span className="text-slate-500">Ngày nhận hàng:</span>
                 <div className="font-medium text-slate-800">
-                  {selectedTransfer.receivedDate ? `${new Date(selectedTransfer.receivedDate).toLocaleString('vi-VN')} (${selectedTransfer.receivedByName || '—'})` : '—'}
+                  {selectedTransfer.receivedDate ? `${dateTime.format(new Date(selectedTransfer.receivedDate))} (${selectedTransfer.receivedByName || '—'})` : '—'}
                 </div>
               </div>
             </div>
 
             {/* Items Table */}
             <div className="max-h-64 overflow-auto rounded-xl border border-line">
-              <table className="min-w-full divide-y divide-line text-left text-xs">
+              <table className="ui-data-table min-w-full divide-y divide-line text-left text-xs">
                 <thead className="bg-slate-50 font-semibold text-slate-600 sticky top-0">
                   <tr>
                     <th className="px-3 py-2.5">Tên thuốc & Mã</th>
@@ -788,11 +788,11 @@ export function StockTransferPage() {
                     <tr key={`${item.drugId}_${item.batchId}`}>
                       <td className="px-3 py-2">
                         <div className="font-semibold text-ink">{item.drugName}</div>
-                        <div className="font-mono text-[10px] text-slate-400">{item.drugCode}</div>
+                        <div className="font-mono text-xs text-slate-400">{item.drugCode}</div>
                       </td>
                       <td className="px-3 py-2">
                         <div className="font-mono font-medium text-slate-800">{item.batchNumber}</div>
-                        <div className="text-[10px] text-slate-400">HSD: {new Date(item.expiryDate).toLocaleDateString('vi-VN')}</div>
+                        <div className="text-xs text-slate-400">HSD: {calendarDate.format(new Date(item.expiryDate))}</div>
                       </td>
                       <td className="px-3 py-2 text-center">{item.unit}</td>
                       <td className="px-3 py-2 text-center font-bold text-forest">{item.quantity}</td>

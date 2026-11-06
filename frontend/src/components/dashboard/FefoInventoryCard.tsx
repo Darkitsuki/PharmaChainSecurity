@@ -49,8 +49,8 @@ export const FefoInventoryCard: React.FC<FefoInventoryCardProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <table className="ui-data-table w-full text-left text-xs">
+              <thead className="border-b border-slate-100 text-xs font-bold uppercase tracking-wider text-slate-400">
                 <tr>
                   <th className="pb-2.5">Mã &amp; Tên thuốc</th>
                   <th className="pb-2.5">Số Lô</th>
@@ -63,12 +63,12 @@ export const FefoInventoryCard: React.FC<FefoInventoryCardProps> = ({
                   <tr key={`${item.drugId}-${item.batchId}`} className="group hover:bg-slate-50/80">
                     <td className="py-3">
                       <p className="font-bold text-slate-900">{item.drugName}</p>
-                      <p className="font-mono text-[10px] text-slate-400">{item.drugCode}</p>
+                      <p className="font-mono text-xs text-slate-400">{item.drugCode}</p>
                     </td>
                     <td className="py-3 font-mono text-slate-600 font-semibold">{item.batchNo}</td>
                     <td className="py-3">
                       <span className="font-bold text-slate-900">{item.quantity}</span>
-                      <span className="ml-1 text-[10px] text-slate-500">đơn vị</span>
+                      <span className="ml-1 text-xs text-slate-500">đơn vị</span>
                     </td>
                     <td className="py-3">
                       <FefoExpiryBadge expiryDate={item.expiryDate} size="sm" />

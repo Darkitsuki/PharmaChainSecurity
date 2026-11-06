@@ -1,3 +1,6 @@
+import { loadAllPages } from '../utils/loadAllPages';
+import { money } from '../utils/formatters';
+import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
@@ -19,7 +22,7 @@ import {
   type Column,
 } from '../components/common';
 
-const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
+
 
 export function DrugCatalogPage() {
   const { currentUser } = useAuth();
@@ -63,15 +66,16 @@ export function DrugCatalogPage() {
 
   useEffect(() => {
     loadDrugs();
-  }, [page, searchTerm]);
+  }, []);
+
+  useEffect(() => setPage(1), [searchTerm, statusFilter]);
 
   async function loadDrugs() {
     setLoading(true);
     setError('');
     try {
-      const searchParam = searchTerm.trim() ? `&search=${encodeURIComponent(searchTerm.trim())}` : '';
-      const data = await apiClient<PageResult<Drug>>(`/drugs?page=${page}&pageSize=${pageSize}${searchParam}`);
-      setResult(data);
+      const data = await loadAllPages<Drug>('/drugs');
+      setResult({ items: data, page: 1, pageSize: 100, totalCount: data.length, totalPages: 1 });
     } catch (err) {
       setError(err instanceof ApiError ? err.detail || err.message : 'Không thể tải danh mục thuốc.');
     } finally {
@@ -184,6 +188,8 @@ export function DrugCatalogPage() {
 
   const items = result?.items || [];
   const filteredItems = items.filter((d) => {
+    const term = searchTerm.trim().toLocaleLowerCase('vi');
+    if (![d.drugCode, d.name, d.activeIngredient ?? ''].some(value => value.toLocaleLowerCase('vi').includes(term))) return false;
     if (statusFilter === 'ACTIVE') return d.isActive ?? true;
     if (statusFilter === 'INACTIVE') return !(d.isActive ?? true);
     return true;
@@ -227,7 +233,7 @@ export function DrugCatalogPage() {
         const active = d.isActive ?? true;
         return (
           <span
-            className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${
               active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
             }`}
           >
@@ -279,19 +285,10 @@ export function DrugCatalogPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <div className="ui-page">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-            Danh Mục Thuốc
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Quản lý danh mục biệt dược, hoạt chất và bảng giá bán niêm yết cho toàn hệ thống chuỗi.
-          </p>
-        </div>
-
-        {isOwner && (
+      <PageHeader title="Danh mục thuốc" actions={<>
+{isOwner && (
           <button
             type="button"
             onClick={() => {
@@ -304,23 +301,26 @@ export function DrugCatalogPage() {
             <span>Thêm Thuốc Mới</span>
           </button>
         )}
-      </div>
+</>} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Tổng danh mục"
           value={`${totalCount} loại`}
           icon={Pill}
           badge={{ text: 'Toàn chuỗi', variant: 'info' }}
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Đang kinh doanh"
           value={activeCount}
           icon={CheckCircle2}
           badge={{ text: 'Khả dụng', variant: 'success' }}
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           title="Tạm ngưng"
           value={inactiveCount}
           icon={PowerOff}
@@ -365,15 +365,15 @@ export function DrugCatalogPage() {
       {/* Drugs DataTable */}
       <DataTable
         columns={columns}
-        data={filteredItems}
+        data={filteredItems.slice((page - 1) * pageSize, page * pageSize)}
         keyExtractor={(item) => item.drugId}
         loading={loading}
         loadingText="Đang tải danh mục thuốc..."
         emptyMessage="Không tìm thấy thuốc nào phù hợp với điều kiện tìm kiếm."
         pagination={{
           page,
-          totalPages: result?.totalPages ?? 1,
-          totalCount: result?.totalCount,
+          totalPages: Math.max(1, Math.ceil(filteredItems.length / pageSize)),
+          totalCount: filteredItems.length,
           onPageChange: setPage,
           itemLabel: 'loại thuốc',
         }}

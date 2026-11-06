@@ -1,3 +1,4 @@
+import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Building2,
@@ -191,6 +192,7 @@ export function SuppliersPage() {
   }, [filteredSuppliers, currentPage]);
 
   const totalPages = Math.ceil(filteredSuppliers.length / pageSize) || 1;
+  useEffect(() => setCurrentPage(value => Math.min(value, totalPages)), [totalPages]);
 
   // Thống kê
   const stats = useMemo(() => {
@@ -211,7 +213,7 @@ export function SuppliersPage() {
             <span className="font-semibold text-ink">{s.supplierName}</span>
           </div>
           {s.address && (
-            <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-0.5">
+            <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
               <MapPin size={12} className="shrink-0" />
               <span className="truncate max-w-[280px]">{s.address}</span>
             </div>
@@ -225,13 +227,13 @@ export function SuppliersPage() {
         <div>
           <div className="font-medium text-ink text-xs">{s.contactPerson || '—'}</div>
           {s.phoneNumber && (
-            <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-0.5">
+            <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
               <Phone size={11} className="shrink-0 text-slate-400" />
               <span>{s.phoneNumber}</span>
             </div>
           )}
           {s.email && (
-            <div className="flex items-center gap-1 text-[11px] text-slate-400">
+            <div className="flex items-center gap-1 text-xs text-slate-400">
               <Mail size={11} className="shrink-0" />
               <span>{s.email}</span>
             </div>
@@ -274,39 +276,27 @@ export function SuppliersPage() {
       cell: s => (
         <button
           onClick={() => handleOpenEditModal(s)}
-          className="p-1.5 text-slate-400 hover:text-forest hover:bg-mint/40 rounded-md transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-mint hover:text-forest"
           title="Xem / Chỉnh sửa"
         >
-          <Edit2 size={15} />
+          <Edit2 size={15} /> Chỉnh sửa
         </button>
       ),
     },
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="ui-page">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold font-display text-ink">Quản lý Nhà cung cấp</h1>
-            <span className="text-xs bg-slate-100 text-slate-600 font-medium px-2 py-0.5 rounded-full">
-              {suppliers.length} đối tác
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Quản lý mạng lưới đối tác phân phối dược phẩm và vật tư y tế toàn hệ thống
-          </p>
-        </div>
-
-        <button
+      <PageHeader title="Nhà cung cấp" actions={<>
+<button
           onClick={handleOpenCreateModal}
-          className="inline-flex items-center justify-center gap-2 bg-forest hover:bg-forest-dark text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 bg-forest hover:bg-forest/90 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors cursor-pointer"
         >
           <Plus size={16} />
           <span>Thêm nhà cung cấp</span>
         </button>
-      </div>
+</>} />
 
       {/* Thông báo */}
       {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
@@ -315,12 +305,14 @@ export function SuppliersPage() {
       {/* Thống kê KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={Building2}
           title="Tổng nhà cung cấp"
           value={stats.total}
           subValue="Đối tác đã đăng ký trong hệ thống"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={UserCheck}
           title="Đang giao dịch"
           value={stats.active}
@@ -328,6 +320,7 @@ export function SuppliersPage() {
           colorTheme="emerald"
         />
         <StatCard
+          loading={loading} unavailable={Boolean(error)}
           icon={FileText}
           title="Đầy đủ mã số thuế"
           value={stats.hasTaxCode}
@@ -337,7 +330,6 @@ export function SuppliersPage() {
       </div>
 
       {/* Bộ lọc và Tìm kiếm */}
-      <div className="bg-white p-4 rounded-xl border border-line shadow-sm space-y-3">
         <SearchToolbar
           searchValue={searchTerm}
           onSearchChange={t => {
@@ -347,9 +339,7 @@ export function SuppliersPage() {
           searchPlaceholder="Tìm theo tên, mã NCC, người liên hệ, SĐT, mã số thuế..."
           onRefresh={loadSuppliers}
           loading={loading}
-        />
-
-        <div className="flex items-center gap-2 pt-1 border-t border-slate-100 text-xs">
+          filterSlot={<div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400 font-medium">Trạng thái:</span>
           {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map(st => (
             <button
@@ -360,15 +350,16 @@ export function SuppliersPage() {
               }}
               className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
                 statusFilter === st
-                  ? 'bg-slate-800 text-white'
+                  ? 'bg-forest text-white'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
               {st === 'ALL' ? 'Tất cả' : st === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm ngừng'}
             </button>
           ))}
-        </div>
-      </div>
+        </div>}
+        />
+
 
       {/* Danh sách Nhà cung cấp */}
       <DataTable<Supplier>
@@ -504,7 +495,7 @@ export function SuppliersPage() {
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 text-xs font-medium bg-forest hover:bg-forest-dark text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 text-xs font-medium bg-forest hover:bg-forest/90 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
               {saving ? 'Đang lưu...' : editingSupplier ? 'Lưu thay đổi' : 'Thêm mới'}
             </button>

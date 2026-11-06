@@ -1,8 +1,9 @@
+import { ClipboardList } from 'lucide-react';
+import { PageHeader } from '../components/common/PageHeader';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ClipboardCheck,
-  ClipboardList,
   Clock3,
   Eye,
   LoaderCircle,
@@ -199,7 +200,7 @@ export function PurchaseOrdersPage() {
           >
             {orderLabel(o.orderNo)}
           </Link>
-          <p className="mt-1 truncate text-[11px] text-slate-500" title={o.supplierName}>
+          <p className="mt-1 truncate text-xs text-slate-500" title={o.supplierName}>
             {o.supplierName}
           </p>
         </div>
@@ -210,7 +211,7 @@ export function PurchaseOrdersPage() {
       cell: (o) => (
         <div>
           <p className="font-medium">{o.creatorName}</p>
-          <p className="mt-1 text-[11px] text-slate-400">{dateLabel(o.createdDate)}</p>
+          <p className="mt-1 text-xs text-slate-400">{dateLabel(o.createdDate)}</p>
         </div>
       ),
     },
@@ -234,7 +235,7 @@ export function PurchaseOrdersPage() {
             className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-forest hover:bg-mint/30 hover:text-forest transition-colors cursor-pointer"
           >
             <Printer size={13} />
-            <span className="hidden lg:inline text-[11px]">In phiếu</span>
+            <span className="hidden lg:inline text-xs">In phiếu</span>
           </button>
           <Link
             aria-label={`Xem đơn ${orderLabel(o.orderNo)}`}
@@ -293,23 +294,7 @@ export function PurchaseOrdersPage() {
         </>
       ) : (
         <>
-          <header className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-forest text-white">
-                <ClipboardList size={21} />
-              </div>
-              <div>
-                <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-                  {owner ? 'Duyệt đơn mua thuốc' : 'Đặt mua thuốc'}
-                </h1>
-                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500 sm:text-sm">
-                  {owner
-                    ? 'Xem xét yêu cầu mua thuốc, kiểm tra chi phí dự kiến và phê duyệt cho chi nhánh.'
-                    : 'Lập yêu cầu mua thuốc từ nhà cung cấp và theo dõi quá trình phê duyệt, giao nhận.'}
-                </p>
-              </div>
-            </div>
-            {warehouse && (
+          <PageHeader title={owner ? 'Duyệt đơn mua thuốc' : 'Đặt mua thuốc'} actions={<>{warehouse && (
               <button
                 className={primaryButton}
                 onClick={() => {
@@ -320,8 +305,7 @@ export function PurchaseOrdersPage() {
                 <Plus size={16} />
                 Tạo đơn mua
               </button>
-            )}
-          </header>
+            )}</>} />
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             {[
               {
@@ -350,6 +334,7 @@ export function PurchaseOrdersPage() {
               },
             ].map((card) => (
               <StatCard
+          loading={loading} unavailable={Boolean(error)}
                 key={card.status}
                 title={card.title}
                 value={loading || error ? '—' : count(card.status)}
@@ -362,7 +347,7 @@ export function PurchaseOrdersPage() {
                     : 'slate'
                 }
                 subValue={card.note}
-                className="!p-4 [&_span.uppercase]:!text-[10px]"
+                className="!p-4 [&_span.uppercase]:!text-xs"
               />
             ))}
           </div>
@@ -388,14 +373,14 @@ export function PurchaseOrdersPage() {
                   >
                     {tab.label}
                     {tab.value === 'PENDING' && !loading && !error && (
-                      <span className="ml-2 rounded-full bg-mint px-2 py-0.5 text-[10px] text-forest">
+                      <span className="ml-2 rounded-full bg-mint px-2 py-0.5 text-xs text-forest">
                         {count('PENDING')}
                       </span>
                     )}
                   </button>
                 ))}
               </div>
-              <span className="pb-3 text-[11px] text-slate-400">
+              <span className="pb-3 text-xs text-slate-400">
                 Phê duyệt chi phí · Không phải thanh toán
               </span>
             </div>
@@ -497,7 +482,7 @@ export function PurchaseOrdersPage() {
                         <OrderBadge status={order.status} />
                       </div>
                       <p className="text-xs font-medium text-ink">{order.supplierName}</p>
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                         <span className="text-slate-500">
                           {order.creatorName} · {dateLabel(order.createdDate)}
                         </span>

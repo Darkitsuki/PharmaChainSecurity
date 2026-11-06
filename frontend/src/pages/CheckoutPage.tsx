@@ -1,3 +1,5 @@
+import { calendarDate } from '../utils/formatters';
+import { money } from '../utils/formatters';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Banknote, CalendarDays, Check, LoaderCircle, PackageCheck, Plus, Printer, QrCode, Search, ShoppingBag, User, UserPlus, X } from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
@@ -13,7 +15,7 @@ interface CartLine {
   quantity: number;
 }
 
-const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 });
+
 
 export function CheckoutPage() {
   const { currentUser } = useAuth();
@@ -521,7 +523,7 @@ export function CheckoutPage() {
             >
               {isSubmitting ? (
                 <>
-                  <LoaderCircle size={16} className="animate-spin" /> Đang phát hành &amp; Ký số HSM...
+                  <LoaderCircle size={16} className="animate-spin" /> Đang phát hành và ký số hóa đơn...
                 </>
               ) : (
                 <>
@@ -556,7 +558,7 @@ export function CheckoutPage() {
                       <input type="radio" name="sale-batch" value={batch.batchId} checked={selectedBatchId === batch.batchId} onChange={(event) => setSelectedBatchId(event.target.value)} className="accent-forest" />
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-bold text-ink">Lô {batch.batchNo}</span>
-                        <span className="mt-1 flex items-center gap-1 text-xs text-slate-500"><CalendarDays size={13} /> HSD {new Date(batch.expiryDate).toLocaleDateString('vi-VN')}</span>
+                        <span className="mt-1 flex items-center gap-1 text-xs text-slate-500"><CalendarDays size={13} /> HSD {calendarDate.format(new Date(batch.expiryDate))}</span>
                       </span>
                     </span>
                     <span className="shrink-0 text-right text-xs font-semibold text-forest">Còn {batch.stockQuantity} {selectedDrug?.unit}</span>
@@ -721,7 +723,7 @@ export function CheckoutPage() {
                 </span>
                 <div>
                   <h2 id="receipt-title" className="font-display text-lg font-extrabold text-ink">Thanh toán hoàn tất</h2>
-                  <p className="mt-0.5 text-xs text-slate-500">Hóa đơn đã được phát hành và ký số điện tử HSM PKCS#11.</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Backend đã xác nhận phát hành và ký số hóa đơn thành công.</p>
                 </div>
               </div>
               <button

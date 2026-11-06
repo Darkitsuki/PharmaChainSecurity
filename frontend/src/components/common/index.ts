@@ -7,3 +7,5 @@ export * from './StatCard';
 export * from './BranchScopeBadge';
 export * from './FefoExpiryBadge';
 export * from './HsmSignatureBadge';
+
+export { PageHeader } from './PageHeader';

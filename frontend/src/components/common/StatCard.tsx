@@ -17,30 +17,9 @@ export interface StatCardProps {
   subValue?: string;
   colorTheme?: 'emerald' | 'blue' | 'amber' | 'purple' | 'slate';
   className?: string;
+  loading?: boolean;
+  unavailable?: boolean;
 }
-
-const themeStyles = {
-  emerald: {
-    iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-    accentBorder: 'border-l-emerald-500',
-  },
-  blue: {
-    iconBg: 'bg-blue-50 text-blue-600 border-blue-100',
-    accentBorder: 'border-l-blue-500',
-  },
-  amber: {
-    iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
-    accentBorder: 'border-l-amber-500',
-  },
-  purple: {
-    iconBg: 'bg-purple-50 text-purple-600 border-purple-100',
-    accentBorder: 'border-l-purple-500',
-  },
-  slate: {
-    iconBg: 'bg-slate-100 text-slate-600 border-slate-200',
-    accentBorder: 'border-l-slate-400',
-  },
-};
 
 const badgeStyles = {
   success: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -56,29 +35,30 @@ export const StatCard: React.FC<StatCardProps> = ({
   trend,
   badge,
   subValue,
-  colorTheme = 'slate',
   className = '',
+  loading = false,
+  unavailable = false,
 }) => {
-  const theme = themeStyles[colorTheme];
+
 
   return (
     <div
-      className={`rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md ${className}`}
+      className={`rounded-xl border border-line bg-white p-4 ${className}`}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <span className="text-sm font-medium text-slate-500">
           {title}
         </span>
-        <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg border ${theme.iconBg}`}>
-          <Icon size={20} strokeWidth={2.2} />
+        <div className={"grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-50 text-slate-400"}>
+          <Icon size={17} strokeWidth={2.2} />
         </div>
       </div>
 
-      <div className="mt-3 flex items-baseline gap-2">
-        <span className="font-display text-2xl font-bold tracking-tight text-slate-900">
-          {value}
+      <div className="mt-2 flex flex-wrap items-baseline gap-2">
+        <span className="font-display text-2xl font-bold tracking-tight text-ink tabular-nums">
+          {loading ? <span role="status" aria-label="Đang tải" className="inline-block h-7 w-20 animate-pulse rounded bg-slate-100" /> : unavailable ? '—' : value}
         </span>
-        {badge && (
+        {badge && !loading && !unavailable && (
           <span
             className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
               badgeStyles[badge.variant || 'info']
@@ -103,7 +83,7 @@ export const StatCard: React.FC<StatCardProps> = ({
               )}
             </span>
           )}
-          {subValue && <span className="text-slate-400 ml-auto">{subValue}</span>}
+          {subValue && <span className="text-slate-500">{subValue}</span>}
         </div>
       )}
     </div>
