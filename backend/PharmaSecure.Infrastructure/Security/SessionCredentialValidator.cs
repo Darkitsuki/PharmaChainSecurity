@@ -54,13 +54,27 @@ public sealed class SessionCredentialValidator
         await using var connection = await factory.CreateAuthConnectionAsync(ct);
         using var command = connection.CreateCommand();
         command.BindByName = true;
-        command.CommandText = "SELECT u.PasswordHash,u.RoleId,r.RoleName FROM USERS u JOIN ROLES r ON r.id=u.RoleId WHERE u.id=:actor AND u.BranchId=:branch AND u.IsActive=1";
+        command.CommandText = """
+            SELECT u.PasswordHash, u.RoleId, r.RoleName, u.BranchId
+            FROM USERS u
+            JOIN ROLES r ON r.id = u.RoleId
+            JOIN BRANCHES activeBranch ON activeBranch.id = :activeBranch
+            WHERE u.id = :actor AND u.IsActive = 1
+            """;
         command.Parameters.Add("actor", OracleDbType.Varchar2).Value = userId;
-        command.Parameters.Add("branch", OracleDbType.Varchar2).Value = user.FindFirst("BranchId")?.Value;
+        var activeBranchId = user.FindFirst("BranchId")?.Value;
+        var claimedHomeBranchId = user.FindFirst("HomeBranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(activeBranchId) || string.IsNullOrWhiteSpace(claimedHomeBranchId)) return false;
+        command.Parameters.Add("activeBranch", OracleDbType.Varchar2).Value = activeBranchId;
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return false;
         var expected = Stamp(reader.GetString(0), options.Value.SecretKey);
         var role = AuthService.MapToUserRole(reader.GetString(2), reader.GetString(1)).ToString();
-        return role == user.FindFirst(ClaimTypes.Role)?.Value && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(stamp));
+        var homeBranchId = reader.GetString(3);
+        var validBranchScope = string.Equals(homeBranchId, claimedHomeBranchId, StringComparison.Ordinal)
+            && (role == "OWNER" || string.Equals(homeBranchId, activeBranchId, StringComparison.Ordinal));
+        return validBranchScope
+            && role == user.FindFirst(ClaimTypes.Role)?.Value
+            && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(stamp));
     }
 }

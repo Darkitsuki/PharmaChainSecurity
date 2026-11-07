@@ -12,11 +12,11 @@ namespace PharmaSecure.Infrastructure.Persistence;
 public sealed class AuditLogService(IUnitOfWork unit, ICurrentUserContext user, IAuditAccessService access) : IAuditLogService
 {
     private const string OutcomeSql = """
-        CASE WHEN EventType IN ('AUTHORIZATION_DENIED','CROSS_BRANCH_DENIED') THEN 'DENIED'
+        CASE WHEN EventType IN ('AUTHORIZATION_DENIED','CROSS_BRANCH_DENIED','BRANCH_SWITCH_DENIED') THEN 'DENIED'
           WHEN EventType LIKE '%FAILED%' OR EventType LIKE '%FAILURE%' OR EventType LIKE '%UNAVAILABLE%' THEN 'FAILURE'
           WHEN EventType IN ('LOGIN_SUCCESS','AUTH_LOGIN_SUCCESS','LOGOUT','AUTH_LOGOUT','PROFILE_UPDATED','PASSWORD_CHANGED',
             'USER_CREATED','USER_ACTIVATED','USER_DEACTIVATED','AUDIT_ACCESS_GRANTED','PURCHASE_ORDER_CREATED',
-            'PURCHASE_ORDER_APPROVED','PURCHASE_ORDER_REJECTED','PURCHASE_ORDER_ORDERED') THEN 'SUCCESS'
+            'PURCHASE_ORDER_APPROVED','PURCHASE_ORDER_REJECTED','PURCHASE_ORDER_ORDERED','BRANCH_SWITCH_SUCCESS') THEN 'SUCCESS'
           ELSE 'RECORDED' END
         """;
     private const string Scope = "BranchId=:branch AND BranchId=SYS_CONTEXT('PHARMA_CTX','BRANCH_ID')";
@@ -107,9 +107,9 @@ public sealed class AuditLogService(IUnitOfWork unit, ICurrentUserContext user, 
             using var cmd = Command("""
                 SELECT COUNT(CASE WHEN EventType IN ('LOGIN_SUCCESS','AUTH_LOGIN_SUCCESS') THEN 1 END),
                   COUNT(CASE WHEN EventType IN ('LOGIN_FAILED','AUTH_LOGIN_FAILED','AUTH_LOGIN_FAILURE') THEN 1 END),
-                  COUNT(CASE WHEN EventType IN ('AUTHORIZATION_DENIED','CROSS_BRANCH_DENIED') THEN 1 END),
+                  COUNT(CASE WHEN EventType IN ('AUTHORIZATION_DENIED','CROSS_BRANCH_DENIED','BRANCH_SWITCH_DENIED') THEN 1 END),
                   COUNT(CASE WHEN EventType IN ('PROFILE_UPDATED','PASSWORD_CHANGED','USER_CREATED','USER_ACTIVATED','USER_DEACTIVATED')
-                    OR EventType LIKE 'PURCHASE_ORDER_%' THEN 1 END), COUNT(*)
+                    OR EventType LIKE 'PURCHASE_ORDER_%' OR EventType LIKE 'BRANCH_SWITCH_%' THEN 1 END), COUNT(*)
                 FROM AUDIT_LOGS WHERE
                 """ + " " + filter, values);
             await using var reader = await cmd.ExecuteReaderAsync(ct); await reader.ReadAsync(ct);

@@ -92,9 +92,9 @@ public sealed class AuthService : IAuthService
         }
 
         var role = MapToUserRole(roleName, roleId);
-        var (token, jti) = jwtTokenService.GenerateTokenWithJti(userId, username, role, branchId, passwordHash);
+        var (token, jti) = jwtTokenService.GenerateTokenWithJti(userId, username, role, branchId, passwordHash, branchId);
         sessionTracker.SetActiveSession(userId, jti);
-        var profile = new UserProfileResponse(userId, username, fullName, role.ToString(), branchId, branchName);
+        var profile = new UserProfileResponse(userId, username, fullName, role.ToString(), branchId, branchId, branchName);
 
         logger.LogInformation("User '{Username}' (Role: {Role}, Branch: {BranchName}) logged in successfully. IP: {IpAddress}.", username, role, branchName, ipAddress ?? "Unknown");
         await RecordAuditLogAsync(userId, username, branchId, "LOGIN_SUCCESS", ipAddress, userAgent, null, cancellationToken);
@@ -106,22 +106,23 @@ public sealed class AuthService : IAuthService
             profile));
     }
 
-    public async Task<Result<UserProfileResponse>> GetCurrentUserAsync(string userId, CancellationToken cancellationToken = default)
+    public async Task<Result<UserProfileResponse>> GetCurrentUserAsync(string userId, string activeBranchId, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(userId))
-            return Result<UserProfileResponse>.Failure("User ID is required.");
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(activeBranchId))
+            return Result<UserProfileResponse>.Failure("User ID and active branch are required.");
 
         await using var connection = await connectionFactory.CreateAuthConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.BindByName = true;
         command.CommandText = """
-            SELECT u.id, u.Username, u.FullName, u.BranchId, b.BranchName, r.RoleName, u.RoleId
+            SELECT u.id, u.Username, u.FullName, u.BranchId, activeBranch.BranchName, r.RoleName, u.RoleId, u.IsActive
             FROM USERS u
             INNER JOIN ROLES r ON u.RoleId = r.id
-            INNER JOIN BRANCHES b ON u.BranchId = b.id
+            INNER JOIN BRANCHES activeBranch ON activeBranch.id = :activeBranchId
             WHERE u.id = :userId
             """;
         command.Parameters.Add("userId", OracleDbType.Varchar2, 50).Value = userId;
+        command.Parameters.Add("activeBranchId", OracleDbType.Varchar2, 50).Value = activeBranchId;
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (!await reader.ReadAsync(cancellationToken))
@@ -135,8 +136,79 @@ public sealed class AuthService : IAuthService
         var roleName = reader.GetString(5);
         var roleId = reader.GetString(6);
         var role = MapToUserRole(roleName, roleId);
+        if (reader.GetInt32(7) == 0 || (role != UserRole.OWNER && !string.Equals(branchId, activeBranchId, StringComparison.Ordinal)))
+            return Result<UserProfileResponse>.Failure("User session is no longer valid.");
 
-        return Result<UserProfileResponse>.Success(new UserProfileResponse(id, username, fullName, role.ToString(), branchId, branchName));
+        return Result<UserProfileResponse>.Success(new UserProfileResponse(id, username, fullName, role.ToString(), branchId, activeBranchId, branchName));
+    }
+
+    public async Task<Result<LoginResponse>> SwitchBranchAsync(
+        string userId,
+        string sourceBranchId,
+        string targetBranchId,
+        string? ipAddress = null,
+        string? userAgent = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(sourceBranchId) || string.IsNullOrWhiteSpace(targetBranchId))
+            return Result<LoginResponse>.Failure("User and branch identifiers are required.");
+
+        await using var connection = await connectionFactory.CreateAuthConnectionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.BindByName = true;
+        command.CommandText = """
+            SELECT u.Username, u.PasswordHash, u.FullName, u.BranchId, r.RoleName, u.RoleId,
+                   targetBranch.BranchName, u.IsActive
+            FROM USERS u
+            INNER JOIN ROLES r ON r.id = u.RoleId
+            LEFT JOIN BRANCHES targetBranch ON targetBranch.id = :targetBranchId
+            WHERE u.id = :userId
+            """;
+        command.Parameters.Add("targetBranchId", OracleDbType.Varchar2, 50).Value = targetBranchId.Trim();
+        command.Parameters.Add("userId", OracleDbType.Varchar2, 50).Value = userId;
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return Result<LoginResponse>.Failure("Target branch or user was not found.");
+
+        var username = reader.GetString(0);
+        var passwordHash = reader.GetString(1);
+        var fullName = reader.IsDBNull(2) ? username : reader.GetString(2);
+        var homeBranchId = reader.GetString(3);
+        var role = MapToUserRole(reader.GetString(4), reader.GetString(5));
+        var branchName = reader.IsDBNull(6) ? null : reader.GetString(6);
+        if (reader.GetInt32(7) == 0 || role != UserRole.OWNER || branchName is null)
+        {
+            await RecordAuditLogAsync(
+                userId,
+                username,
+                sourceBranchId,
+                "BRANCH_SWITCH_DENIED",
+                ipAddress,
+                userAgent,
+                $"Target={SecurityAuditWriter.Bounded(targetBranchId, 50)};Result=DENIED",
+                cancellationToken);
+            return Result<LoginResponse>.Failure("The branch switch is not permitted or the target branch is unavailable.");
+        }
+
+        var activeBranchId = targetBranchId.Trim();
+        var (token, jti) = jwtTokenService.GenerateTokenWithJti(userId, username, role, activeBranchId, passwordHash, homeBranchId);
+
+        await RecordAuditLogAsync(
+            userId,
+            username,
+            activeBranchId,
+            "BRANCH_SWITCH_SUCCESS",
+            ipAddress,
+            userAgent,
+            $"Source={SecurityAuditWriter.Bounded(sourceBranchId, 50)};Target={SecurityAuditWriter.Bounded(activeBranchId, 50)};Result=SUCCESS",
+            cancellationToken);
+
+        sessionTracker.SetActiveSession(userId, jti);
+        var profile = new UserProfileResponse(userId, username, fullName, role.ToString(), homeBranchId, activeBranchId, branchName);
+        logger.LogInformation("OWNER '{Username}' switched active branch from {SourceBranchId} to {TargetBranchId}.", username, sourceBranchId, activeBranchId);
+
+        return Result<LoginResponse>.Success(new LoginResponse(token, "Bearer", jwtOptions.ExpiryMinutes * 60, profile));
     }
 
     public async Task<Result> LogoutAsync(string userId, string? ipAddress = null, string? userAgent = null, CancellationToken cancellationToken = default)

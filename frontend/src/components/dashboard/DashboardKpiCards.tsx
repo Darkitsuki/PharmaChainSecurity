@@ -22,11 +22,11 @@ export const DashboardKpiCards: React.FC<DashboardKpiCardsProps> = ({
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {/* 1. Doanh thu thực thu */}
       <StatCard
-        title="Doanh thu chi nhánh"
+        title="Doanh thu hóa đơn trong kỳ"
         value={money.format(totalRevenue)}
         icon={Wallet}
         colorTheme="emerald"
-        subValue={`${totalInvoices} hóa đơn hoàn tất`}
+        subValue={`${totalInvoices} hóa đơn đã thanh toán, trước điều chỉnh hoàn trả`}
       />
 
       {/* 2. Tuân thủ Ký số HSM PKCS#11 */}

@@ -105,6 +105,15 @@ public sealed class UsersController : ControllerBase
                 Detail = "Role is required (SALES or WAREHOUSE)."
             });
 
+        if (!string.Equals(request.Role, "SALES", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(request.Role, "WAREHOUSE", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Validation Error",
+                Detail = "Role must be SALES or WAREHOUSE."
+            });
+
         try
         {
             var branchId = currentUserContext.BranchId;

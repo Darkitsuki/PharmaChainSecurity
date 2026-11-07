@@ -30,20 +30,20 @@ export const HourlyRevenueChart: React.FC<HourlyRevenueChartProps> = ({
       </div>
 
       {/* Chart visualization */}
-      <div className="mt-6 overflow-x-auto">
+      <div className="mt-5 overflow-x-auto pb-1">
         {dailySales.length === 0 ? (
           <div className="flex h-48 items-center justify-center text-sm text-slate-400">
             Chưa có dữ liệu giao dịch trong kỳ được chọn.
           </div>
         ) : (
-          <div className="space-y-3">
-            <div className="grid gap-2 items-end h-44 pt-4 border-b border-slate-100" style={{ gridTemplateColumns: `repeat(${dailySales.length}, minmax(0, 1fr))` }}>
+          <div className="space-y-2" style={{ minWidth: dailySales.length > 14 ? 720 : undefined, maxWidth: dailySales.length === 1 ? 240 : undefined, marginInline: dailySales.length === 1 ? 'auto' : undefined }}>
+            <div className="grid h-52 items-end gap-2 border-b border-slate-100 pt-12" style={{ gridTemplateColumns: `repeat(${dailySales.length}, minmax(0, 1fr))` }}>
               {dailySales.map((item, idx) => {
                 const heightPercent = Math.max((item.revenue / maxRevenue) * 100, item.revenue > 0 ? 1 : 0);
                 return (
                   <div key={idx} className="group relative flex flex-col items-center h-full justify-end" tabIndex={0} role="img" aria-label={`${item.date}: ${money.format(item.revenue)}, ${item.invoiceCount} hóa đơn`}>
                     {/* Tooltip on hover */}
-                    <div className="absolute bottom-full mb-1 hidden rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-white group-hover:block group-focus:block transition-all shadow-md text-center z-10 whitespace-nowrap">
+                    <div className="pointer-events-none absolute top-0 z-10 hidden -translate-y-1 rounded-md bg-slate-900 px-2 py-1 text-center text-xs font-semibold whitespace-nowrap text-white shadow-md transition-all group-hover:block group-focus:block">
                       {money.format(item.revenue)}
                       <br />
                       <span className="text-slate-300 font-normal">{item.invoiceCount} hóa đơn</span>

@@ -68,6 +68,18 @@ public sealed class AccountAuditSecurityTests
         clock.Now = Now.AddMinutes(6); Assert.False(store.HasGrant("other", otherGrant.AccessToken));
     }
     [Fact]
+    public void OtpGrant_WhenUsedBeforeIdleExpiry_ExtendsIdleButNeverPastAbsoluteLimit()
+    {
+        var clock = new Clock(); using var store = new AuditAccessStore(clock);
+        var challenge = store.Create("binding", "owner@example.test", "314159");
+        var grant = store.Verify("binding", new(challenge.ChallengeId, "314159"), Now.AddHours(1), "owner@example.test");
+
+        Assert.Equal(Now.AddMinutes(10), grant.ExpiresAt);
+        clock.Now = Now.AddMinutes(4); Assert.True(store.HasGrant("binding", grant.AccessToken));
+        clock.Now = Now.AddMinutes(8); Assert.True(store.HasGrant("binding", grant.AccessToken));
+        clock.Now = Now.AddMinutes(10); Assert.False(store.HasGrant("binding", grant.AccessToken));
+    }
+    [Fact]
     public void OtpChallenge_WhenExpired_RejectsCode()
     {
         var clock = new Clock(); using var store = new AuditAccessStore(clock); var c = store.Create("binding", "owner@example.test", "314159");

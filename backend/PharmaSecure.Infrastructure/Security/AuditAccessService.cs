@@ -22,7 +22,7 @@ public sealed class AuditAccessStore(TimeProvider time) : IDisposable
     private readonly MemoryCache cache = new(new MemoryCacheOptions { SizeLimit = 10000 });
     private readonly object gate = new();
     private sealed record Challenge(string Binding, string RecipientHash, string CodeHash, DateTimeOffset Expires, int Attempts = 0);
-    private sealed record Grant(string Binding, DateTimeOffset Expires);
+    private sealed record Grant(string Binding, DateTimeOffset IdleExpires, DateTimeOffset AbsoluteExpires);
     private sealed record Attempts(int Count, DateTimeOffset Expires);
     private static string Digest(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     private static string MaskEmail(string email)
@@ -69,16 +69,26 @@ public sealed class AuditAccessStore(TimeProvider time) : IDisposable
             }
             cache.Remove(key);
             var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-            var expires = now.AddMinutes(5) < jwtExpires ? now.AddMinutes(5) : jwtExpires;
-            Set("grant:" + Digest(token), new Grant(binding, expires), expires);
-            return new(token, expires);
+            var absoluteExpires = now.AddMinutes(10) < jwtExpires ? now.AddMinutes(10) : jwtExpires;
+            var idleExpires = now.AddMinutes(5) < absoluteExpires ? now.AddMinutes(5) : absoluteExpires;
+            Set("grant:" + Digest(token), new Grant(binding, idleExpires, absoluteExpires), absoluteExpires);
+            return new(token, absoluteExpires);
         }
     }
     public void RemoveChallenge(string challengeId) => cache.Remove("challenge:" + challengeId);
     public bool HasGrant(string binding, string token)
     {
-        var entry = cache.Get<Grant>("grant:" + Digest(token));
-        return !IsRevoked(binding) && entry is not null && entry.Binding == binding && entry.Expires > time.GetUtcNow();
+        lock (gate)
+        {
+            var key = "grant:" + Digest(token);
+            var entry = cache.Get<Grant>(key);
+            var now = time.GetUtcNow();
+            if (IsRevoked(binding) || entry is null || entry.Binding != binding || entry.IdleExpires <= now || entry.AbsoluteExpires <= now)
+                return false;
+            var idleExpires = now.AddMinutes(5) < entry.AbsoluteExpires ? now.AddMinutes(5) : entry.AbsoluteExpires;
+            Set(key, entry with { IdleExpires = idleExpires }, entry.AbsoluteExpires);
+            return true;
+        }
     }
     public bool IsRevoked(string binding) => cache.Get<bool>("revoked:" + binding);
     public void RevokeBinding(string binding, DateTimeOffset expires)

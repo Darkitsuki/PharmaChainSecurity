@@ -29,7 +29,8 @@ public sealed class ReportService : IReportService
         var now = VietnamTimeHelper.Now;
         var todayStart = DateTime.SpecifyKind(now.Date, DateTimeKind.Unspecified);
         var monthStart = DateTime.SpecifyKind(new DateTime(now.Year, now.Month, 1), DateTimeKind.Unspecified);
-        var intervalStart = DateTime.SpecifyKind(now.Date.AddDays(-days), DateTimeKind.Unspecified);
+        var intervalStart = DateTime.SpecifyKind(now.Date.AddDays(-(days - 1)), DateTimeKind.Unspecified);
+        var intervalEnd = DateTime.SpecifyKind(now, DateTimeKind.Unspecified);
 
         await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
         try
@@ -46,8 +47,10 @@ public sealed class ReportService : IReportService
             {
                 cmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 cmd.BindByName = true;
-                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND Status = 'COMPLETED' AND PaymentStatus = 'PAID'";
+                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND CreatedDate >= :intervalStart AND CreatedDate <= :intervalEnd AND Status = 'COMPLETED' AND PaymentStatus = 'PAID'";
                 cmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+                cmd.Parameters.Add("intervalStart", OracleDbType.TimeStamp).Value = intervalStart;
+                cmd.Parameters.Add("intervalEnd", OracleDbType.TimeStamp).Value = intervalEnd;
 
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
                 if (await reader.ReadAsync(cancellationToken))
@@ -62,9 +65,10 @@ public sealed class ReportService : IReportService
             {
                 cmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 cmd.BindByName = true;
-                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND CreatedDate >= :todayStart AND Status = 'COMPLETED' AND PaymentStatus = 'PAID'";
+                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND CreatedDate >= :todayStart AND CreatedDate <= :intervalEnd AND Status = 'COMPLETED' AND PaymentStatus = 'PAID'";
                 cmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
                 cmd.Parameters.Add("todayStart", OracleDbType.TimeStamp).Value = todayStart;
+                cmd.Parameters.Add("intervalEnd", OracleDbType.TimeStamp).Value = intervalEnd;
 
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
                 if (await reader.ReadAsync(cancellationToken))
@@ -79,9 +83,10 @@ public sealed class ReportService : IReportService
             {
                 cmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 cmd.BindByName = true;
-                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND CreatedDate >= :monthStart AND Status = 'COMPLETED' AND PaymentStatus = 'PAID'";
+                cmd.CommandText = "SELECT NVL(SUM(TotalAmount), 0), COUNT(*) FROM INVOICES WHERE BranchId = :branchId AND CreatedDate >= :monthStart AND CreatedDate <= :intervalEnd AND Status = 'COMPLETED' AND PaymentStatus = 'PAID'";
                 cmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
                 cmd.Parameters.Add("monthStart", OracleDbType.TimeStamp).Value = monthStart;
+                cmd.Parameters.Add("intervalEnd", OracleDbType.TimeStamp).Value = intervalEnd;
 
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
                 if (await reader.ReadAsync(cancellationToken))
@@ -105,11 +110,15 @@ public sealed class ReportService : IReportService
                     WHERE inv.BranchId = :branchId
                       AND inv.Status = 'COMPLETED'
                       AND inv.PaymentStatus = 'PAID'
+                      AND inv.CreatedDate >= :intervalStart
+                      AND inv.CreatedDate <= :intervalEnd
                     GROUP BY item.DrugId, d.DrugCode, d.Name
                     ORDER BY SUM(item.Quantity) DESC
                     FETCH FIRST 5 ROWS ONLY
                     """;
                 cmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
+                cmd.Parameters.Add("intervalStart", OracleDbType.TimeStamp).Value = intervalStart;
+                cmd.Parameters.Add("intervalEnd", OracleDbType.TimeStamp).Value = intervalEnd;
 
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
                 while (await reader.ReadAsync(cancellationToken))
@@ -132,12 +141,13 @@ public sealed class ReportService : IReportService
                 cmd.CommandText = """
                     SELECT TO_CHAR(CreatedDate, 'YYYY-MM-DD'), NVL(SUM(TotalAmount), 0), COUNT(*)
                     FROM INVOICES
-                    WHERE BranchId = :branchId AND CreatedDate >= :intervalStart AND Status = 'COMPLETED' AND PaymentStatus = 'PAID'
+                    WHERE BranchId = :branchId AND CreatedDate >= :intervalStart AND CreatedDate <= :intervalEnd AND Status = 'COMPLETED' AND PaymentStatus = 'PAID'
                     GROUP BY TO_CHAR(CreatedDate, 'YYYY-MM-DD')
                     ORDER BY TO_CHAR(CreatedDate, 'YYYY-MM-DD') ASC
                     """;
                 cmd.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
                 cmd.Parameters.Add("intervalStart", OracleDbType.TimeStamp).Value = intervalStart;
+                cmd.Parameters.Add("intervalEnd", OracleDbType.TimeStamp).Value = intervalEnd;
 
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
                 while (await reader.ReadAsync(cancellationToken))
