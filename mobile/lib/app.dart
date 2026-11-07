@@ -307,7 +307,7 @@ class _PharmaShellState extends State<PharmaShell> {
         if (wide)
           SizedBox(
               width: 265,
-              child: ColoredBox(color: Colors.white, child: navigation(false))),
+              child: Material(color: Colors.white, child: navigation(false))),
         Expanded(
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

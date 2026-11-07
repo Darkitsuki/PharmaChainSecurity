@@ -1,6 +1,7 @@
 import { calendarDate } from '../utils/formatters';
 import { money } from '../utils/formatters';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Banknote, CalendarDays, Check, LoaderCircle, PackageCheck, Plus, Printer, QrCode, Search, ShoppingBag, User, UserPlus, X } from 'lucide-react';
 import { ApiError, apiClient } from '../services/apiClient';
 import type { AvailableInventory, CheckoutResponse, Drug, DrugBatch, PageResult, Customer, CreateCustomerPayload } from '../types';
@@ -19,6 +20,12 @@ interface CartLine {
 
 export function CheckoutPage() {
   const { currentUser } = useAuth();
+  const [searchParams] = useSearchParams();
+  const exchangeReturnId = searchParams.get('exchangeReturnId');
+  const returnNo = searchParams.get('returnNo');
+  const refundAmountParam = searchParams.get('refundAmount');
+  const exchangeRefundAmount = refundAmountParam ? parseFloat(refundAmountParam) : 0;
+
   const [search, setSearch] = useState('');
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [selectedDrug, setSelectedDrug] = useState<Drug | null>(null);
@@ -221,6 +228,18 @@ export function CheckoutPage() {
         signatureHash: response.hashValueSha256,
       });
 
+      // Nếu là đơn đổi thuốc, tự động liên kết hóa đơn vừa tạo với phiếu trả hàng
+      if (exchangeReturnId && response.invoiceId) {
+        try {
+          await apiClient(`/returns/${encodeURIComponent(exchangeReturnId)}/link-exchange`, {
+            method: 'POST',
+            body: JSON.stringify({ exchangeInvoiceId: response.invoiceId }),
+          });
+        } catch (linkError) {
+          console.warn('Không thể tự động liên kết hóa đơn đổi thuốc:', linkError);
+        }
+      }
+
       setReceipt(response);
       setShowPaymentModal(false);
       setCart([]);
@@ -268,6 +287,33 @@ export function CheckoutPage() {
         <div role="alert" className="mb-5 flex items-center justify-between gap-3 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           {error}
           <button onClick={() => setError('')} aria-label="Bỏ qua thông báo"><X size={16} /></button>
+        </div>
+      )}
+
+      {exchangeReturnId && (
+        <div className="mb-5 rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-xs text-emerald-900 shadow-sm">
+          <div className="flex items-center gap-2 font-bold text-sm text-emerald-800 mb-1">
+            <PackageCheck size={18} className="text-emerald-700" />
+            <span>Đang lập hóa đơn đổi thuốc liên kết phiếu trả: {returnNo || exchangeReturnId}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 pt-2 border-t border-emerald-200">
+            <div>
+              <span className="text-slate-600 block">Số tiền hoàn trả từ phiếu trả:</span>
+              <span className="font-mono font-bold text-rose-700">{money.format(exchangeRefundAmount)}</span>
+            </div>
+            <div>
+              <span className="text-slate-600 block">Tiền thuốc mới chọn:</span>
+              <span className="font-mono font-bold text-forest">{money.format(total)}</span>
+            </div>
+            <div>
+              <span className="text-slate-600 block">Chênh lệch thanh toán:</span>
+              <span className="font-mono font-bold text-ink">
+                {total >= exchangeRefundAmount
+                  ? `Khách bù thêm: ${money.format(total - exchangeRefundAmount)}`
+                  : `Hoàn lại tiền thừa: ${money.format(exchangeRefundAmount - total)}`}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -510,6 +556,20 @@ export function CheckoutPage() {
               <div className="mt-1 flex items-center justify-between text-xs text-emerald-700">
                 <span>Điểm thưởng tích lũy:</span>
                 <span className="font-semibold">+{(Math.floor(total / 10000))} điểm</span>
+              </div>
+            )}
+            {exchangeReturnId && (
+              <div className="mt-2 space-y-1 rounded bg-emerald-50 p-2.5 border border-emerald-200 text-xs">
+                <div className="flex items-center justify-between text-emerald-900">
+                  <span>Khấu trừ đổi trả ({returnNo || 'Phiếu trả'}):</span>
+                  <span className="font-mono font-semibold text-rose-600">- {money.format(exchangeRefundAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between font-bold text-emerald-950 pt-1 border-t border-emerald-200/60">
+                  <span>{total >= exchangeRefundAmount ? 'Khách cần thanh toán:' : 'Hoàn tiền thừa:'}</span>
+                  <span className="font-mono text-sm text-forest">
+                    {money.format(Math.abs(total - exchangeRefundAmount))}
+                  </span>
+                </div>
               </div>
             )}
             <div className="mt-3 flex items-end justify-between">

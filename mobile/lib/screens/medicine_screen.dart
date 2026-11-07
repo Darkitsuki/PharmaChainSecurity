@@ -23,7 +23,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.drugService != null && !widget.inventory) {
+    if (widget.drugService != null) {
       _loadDrugs();
     }
   }
@@ -31,7 +31,7 @@ class _MedicineScreenState extends State<MedicineScreen> {
   @override
   void didUpdateWidget(covariant MedicineScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.drugService != widget.drugService && !widget.inventory) {
+    if (oldWidget.drugService != widget.drugService) {
       _loadDrugs();
     }
   }
@@ -60,21 +60,30 @@ class _MedicineScreenState extends State<MedicineScreen> {
         : ['Tất cả', 'Đang kinh doanh', 'Tạm ngưng'];
 
     // If liveDrugs is loaded from backend, use it
-    final isLive = liveDrugs != null && !inventory;
+    final isLive = liveDrugs != null;
     final List<dynamic> items;
 
     if (isLive) {
       items = liveDrugs!.where((m) {
+        if (inventory && !m.isActive) return false;
         if (!'${m.drugCode} ${m.name} ${m.activeIngredient ?? ''}'
             .toLowerCase()
             .contains(query.toLowerCase().trim())) {
           return false;
         }
-        return switch (filter) {
-          1 => m.isActive,
-          2 => !m.isActive,
-          _ => true,
-        };
+        if (inventory) {
+          return switch (filter) {
+            1 => m.stock < 10,
+            2 => m.expiring,
+            _ => true,
+          };
+        } else {
+          return switch (filter) {
+            1 => m.isActive,
+            2 => !m.isActive,
+            _ => true,
+          };
+        }
       }).toList();
     } else {
       items = demoMedicines.where((m) {
@@ -123,14 +132,16 @@ class _MedicineScreenState extends State<MedicineScreen> {
                         ]))),
       StatsGrid(
           children: inventory
-              ? const [
-                  StatCard('Mặt hàng', '4', Icons.inventory_2_outlined),
-                  StatCard('Tồn thấp', '1', Icons.warning_amber_outlined),
+              ? [
+                  StatCard('Mặt hàng', '${isLive ? liveDrugs!.where((d) => d.isActive).length : 4}', Icons.inventory_2_outlined,
+                      caption: isLive ? 'CSDL Oracle' : 'Dữ liệu minh họa'),
+                  StatCard('Tồn thấp', '${isLive ? liveDrugs!.where((d) => d.isActive && d.stock < 10).length : 1}', Icons.warning_amber_outlined,
+                      caption: isLive ? 'CSDL Oracle' : 'Dữ liệu minh họa'),
                 ]
               : [
                   StatCard('Tổng mặt hàng', '$totalCount', Icons.medication_outlined,
                       caption: isLive ? 'CSDL Oracle' : 'Dữ liệu minh họa'),
-                  StatCard('Hoạt động', '$totalCount', Icons.check_circle_outline,
+                  StatCard('Hoạt động', '${isLive ? liveDrugs!.where((d) => d.isActive).length : totalCount}', Icons.check_circle_outline,
                       caption: isLive ? 'Đang kinh doanh' : 'Dữ liệu minh họa'),
                 ]),
       const SizedBox(height: 20),
@@ -180,10 +191,10 @@ class _MedicineScreenState extends State<MedicineScreen> {
     final int price = isLive ? (item as DrugModel).price.toInt() : (item as DemoMedicine).price;
     final String unit = isLive ? (item as DrugModel).unit : (item as DemoMedicine).unit;
     final bool active = isLive ? (item as DrugModel).isActive : (item as DemoMedicine).active;
-    final String batch = isLive ? 'Lô tiêu chuẩn' : (item as DemoMedicine).batch;
-    final String expiry = isLive ? 'Xem bao bì' : (item as DemoMedicine).expiry;
-    final int stock = isLive ? 100 : (item as DemoMedicine).stock;
-    final bool expiring = isLive ? false : (item as DemoMedicine).expiring;
+    final String batch = isLive ? (item as DrugModel).batch : (item as DemoMedicine).batch;
+    final String expiry = isLive ? (item as DrugModel).expiry : (item as DemoMedicine).expiry;
+    final int stock = isLive ? (item as DrugModel).stock : (item as DemoMedicine).stock;
+    final bool expiring = isLive ? (item as DrugModel).expiring : (item as DemoMedicine).expiring;
 
     return Padding(
         padding: const EdgeInsets.only(bottom: 12),

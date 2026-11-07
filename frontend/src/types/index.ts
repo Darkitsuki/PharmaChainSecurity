@@ -423,6 +423,8 @@ export interface ReturnOrder {
   status: 'COMPLETED' | 'REJECTED';
   createdDate: string;
   items: ReturnItem[];
+  exchangeInvoiceId?: string | null;
+  exchangeInvoiceNo?: string | null;
 }
 
 export interface CreateReturnItemPayload {
@@ -437,6 +439,7 @@ export interface CreateReturnPayload {
   invoiceId: string;
   reason: string;
   items: CreateReturnItemPayload[];
+  exchangeInvoiceId?: string | null;
 }
 
 export interface ReturnableInvoiceItem {

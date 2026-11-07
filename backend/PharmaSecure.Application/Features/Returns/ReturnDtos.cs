@@ -25,7 +25,9 @@ public sealed record ReturnResponse(
     string Reason,
     string Status,
     DateTime CreatedDate,
-    IReadOnlyList<ReturnItemResponse> Items);
+    IReadOnlyList<ReturnItemResponse> Items,
+    string? ExchangeInvoiceId = null,
+    string? ExchangeInvoiceNo = null);
 
 public sealed record CreateReturnItemRequest(
     string DrugId,
@@ -37,7 +39,10 @@ public sealed record CreateReturnItemRequest(
 public sealed record CreateReturnRequest(
     string InvoiceId,
     string Reason,
-    IReadOnlyList<CreateReturnItemRequest> Items);
+    IReadOnlyList<CreateReturnItemRequest> Items,
+    string? ExchangeInvoiceId = null);
+
+public sealed record LinkExchangeInvoiceRequest(string ExchangeInvoiceId);
 
 public sealed record ReturnableInvoiceItemResponse(
     string DrugId,

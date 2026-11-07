@@ -1,0 +1,63 @@
+# ==============================================================================
+# Alertmanager Configuration for PharmaChainSecurity
+# Complies with Rule 09 and Zero-Hardcoded-Secrets Invariant
+# Credentials and webhooks are provided via environment variables at runtime.
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: "${SMTP_SMARTHOST:smtp.pharmachainsecurity.internal:587}"
+  smtp_from: "${SMTP_FROM:alerts@pharmachainsecurity.internal}"
+  smtp_auth_username: "${SMTP_AUTH_USERNAME:}"
+  smtp_auth_password: "${SMTP_AUTH_PASSWORD:}"
+  smtp_require_tls: true
+
+route:
+  group_by: ["alertname", "cluster", "service", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+  receiver: "default-receiver"
+  routes:
+    # Route P1 Alerts (Critical Outage, Database Down) with immediate notification
+    - match:
+        severity: "P1"
+      receiver: "p1-incident-team"
+      group_wait: 10s
+      repeat_interval: 30m
+
+    # Route P2 Alerts (Spikes, High Error Rates)
+    - match:
+        severity: "P2"
+      receiver: "p2-operations-team"
+      group_wait: 1m
+      repeat_interval: 2h
+
+receivers:
+  - name: "default-receiver"
+    webhook_configs:
+      - url: "${OPS_WEBHOOK_URL:http://localhost:5001/api/alerts/webhook}"
+        send_resolved: true
+
+  - name: "p1-incident-team"
+    webhook_configs:
+      - url: "${P1_ALERT_WEBHOOK_URL:http://localhost:5001/api/alerts/p1}"
+        send_resolved: true
+    email_configs:
+      - to: "${P1_ALERT_EMAIL:oncall-lead@pharmachainsecurity.internal}"
+        send_resolved: true
+
+  - name: "p2-operations-team"
+    webhook_configs:
+      - url: "${P2_ALERT_WEBHOOK_URL:http://localhost:5001/api/alerts/p2}"
+        send_resolved: true
+
+inhibit_rules:
+  # Inhibit P2 alerts if P1 Database is already down
+  - source_match:
+      severity: "P1"
+      alertname: "DatabaseReadinessProbeFailed"
+    target_match:
+      severity: "P2"
+    equal: ["environment", "service"]
+

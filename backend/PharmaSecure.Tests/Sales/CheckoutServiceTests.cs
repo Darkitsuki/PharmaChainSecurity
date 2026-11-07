@@ -204,4 +204,51 @@ public class CheckoutServiceTests
         unitOfWork.Verify(work => work.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
         unitOfWork.Verify(work => work.RollbackAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task CheckoutAsync_WhenPendingPaymentTrue_SetsInvoiceStatusToPending()
+    {
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork.Setup(work => work.BeginTransactionAsync("branch-1", It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        unitOfWork.Setup(work => work.CommitAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var inventoryRepository = new Mock<IInventoryRepository>();
+        inventoryRepository.Setup(repository => repository.LockRowForUpdateAsync(
+                "branch-1", "drug-1", "batch-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new PharmaSecure.Domain.Entities.Inventory("branch-1", "drug-1", "batch-1", 5));
+
+        var invoicePersistence = new Mock<IInvoicePersistence>();
+        invoicePersistence.Setup(p => p.GetDrugPriceAsync("drug-1", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(50000m);
+
+        var digitalSignatureService = new Mock<IDigitalSignatureService>();
+        digitalSignatureService.Setup(s => s.SignInvoice(It.IsAny<Invoice>()))
+            .Returns(new InvoiceSignatureResult("hash123", "sig123", "cert-01", DateTime.UtcNow));
+
+        var service = new CheckoutService(
+            unitOfWork.Object,
+            inventoryRepository.Object,
+            invoicePersistence.Object,
+            digitalSignatureService.Object);
+
+        var request = new CheckoutRequest(
+            "branch-1",
+            "cashier-1",
+            [new CheckoutLineRequest("drug-1", "batch-1", 1)],
+            CustomerId: null,
+            PaymentMethod: "CASH",
+            IsPendingPayment: true);
+
+        var result = await service.CheckoutAsync(request);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(50000m, result.Value.TotalAmount);
+        invoicePersistence.Verify(p => p.SaveAsync(
+            It.Is<Invoice>(inv => inv.PaymentStatus == "PENDING"),
+            It.IsAny<DigitalSignature>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        unitOfWork.Verify(w => w.CommitAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

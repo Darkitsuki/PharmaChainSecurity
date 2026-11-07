@@ -102,4 +102,40 @@ public sealed class ReturnsController : ControllerBase
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
         }
     }
+
+    [HttpPost("{id}/link-exchange")]
+    [HttpPatch("{id}/exchange-invoice")]
+    public async Task<ActionResult<ReturnResponse>> LinkExchangeInvoiceAsync(
+        string id,
+        [FromBody] LinkExchangeInvoiceRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Mã phiếu đổi trả không được rỗng.");
+
+        if (request is null || string.IsNullOrWhiteSpace(request.ExchangeInvoiceId))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Mã hóa đơn đổi thuốc là bắt buộc.");
+
+        var branchId = User.FindFirst("BranchId")?.Value;
+        if (string.IsNullOrWhiteSpace(branchId))
+            return Forbid();
+
+        try
+        {
+            var updated = await returnService.LinkExchangeInvoiceAsync(id, request.ExchangeInvoiceId, branchId, cancellationToken);
+            return Ok(updated);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status404NotFound, title: ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
+        }
+    }
 }

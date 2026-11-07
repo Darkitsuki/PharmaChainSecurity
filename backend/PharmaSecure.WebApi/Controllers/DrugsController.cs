@@ -9,6 +9,7 @@ namespace PharmaSecure.WebApi.Controllers;
 [Route("api/v1/drugs")]
 public sealed class DrugsController : ControllerBase
 {
+    private const string DefaultBranchId = "br-00000000-0000-0000-0000-000000000001";
     private readonly IDrugQueryService drugQueryService;
 
     public DrugsController(IDrugQueryService drugQueryService)
@@ -31,7 +32,7 @@ public sealed class DrugsController : ControllerBase
         var resolvedBranchId = User.FindFirst("BranchId")?.Value;
         if (string.IsNullOrWhiteSpace(resolvedBranchId))
         {
-            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? "BR001" : branchId.Trim();
+            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? DefaultBranchId : branchId.Trim();
         }
 
         return Ok(await drugQueryService.GetPageAsync(resolvedBranchId, page, pageSize, search, cancellationToken));
@@ -50,7 +51,7 @@ public sealed class DrugsController : ControllerBase
         var resolvedBranchId = User.FindFirst("BranchId")?.Value;
         if (string.IsNullOrWhiteSpace(resolvedBranchId))
         {
-            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? "BR001" : branchId.Trim();
+            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? DefaultBranchId : branchId.Trim();
         }
 
         var drug = await drugQueryService.GetByIdAsync(resolvedBranchId, id, cancellationToken);
@@ -73,7 +74,7 @@ public sealed class DrugsController : ControllerBase
         var resolvedBranchId = User.FindFirst("BranchId")?.Value;
         if (string.IsNullOrWhiteSpace(resolvedBranchId))
         {
-            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? "BR001" : branchId.Trim();
+            resolvedBranchId = string.IsNullOrWhiteSpace(branchId) ? DefaultBranchId : branchId.Trim();
         }
 
         var batches = await drugQueryService.GetBatchesAsync(resolvedBranchId, id, cancellationToken);

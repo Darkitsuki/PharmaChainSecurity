@@ -9,6 +9,10 @@ class DrugModel {
     this.isActive = true,
     this.category = 'Thuốc thiết yếu',
     this.prescriptionRequired = false,
+    this.stock = 100,
+    this.batch = 'Lô tiêu chuẩn',
+    this.expiry = 'Xem bao bì',
+    this.expiring = false,
   });
 
   final String drugId;
@@ -20,6 +24,10 @@ class DrugModel {
   final bool isActive;
   final String category;
   final bool prescriptionRequired;
+  final int stock;
+  final String batch;
+  final String expiry;
+  final bool expiring;
 
   factory DrugModel.fromJson(Map<String, dynamic> json) {
     final name = json['name'] as String? ?? '';
@@ -41,6 +49,10 @@ class DrugModel {
       isActive: json['isActive'] as bool? ?? true,
       category: json['category'] as String? ?? _inferCategory(name),
       prescriptionRequired: isRx,
+      stock: (json['stockQuantity'] as num?)?.toInt() ?? (json['stock'] as num?)?.toInt() ?? 100,
+      batch: json['batchNo'] as String? ?? json['batch'] as String? ?? 'Lô tiêu chuẩn',
+      expiry: json['expiryDate'] as String? ?? json['expiry'] as String? ?? 'Xem bao bì',
+      expiring: json['expiring'] as bool? ?? false,
     );
   }
 

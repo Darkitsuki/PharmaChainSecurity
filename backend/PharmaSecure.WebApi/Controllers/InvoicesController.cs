@@ -35,6 +35,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult> GetPageAsync(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -53,6 +54,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult<InvoiceDetailResponse>> GetByIdAsync(
         string id,
         CancellationToken cancellationToken = default)
@@ -70,6 +72,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpGet("{id}/items")]
+    [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult<IReadOnlyCollection<InvoiceItemResponse>>> GetItemsAsync(
         string id,
         CancellationToken cancellationToken = default)
@@ -84,6 +87,7 @@ public sealed class InvoicesController : ControllerBase
     }
 
     [HttpPost("{id}/verify-signature")]
+    [Authorize(Roles = "OWNER,SALES")]
     public async Task<ActionResult<InvoiceVerificationResult>> VerifySignatureAsync(
         string id,
         CancellationToken cancellationToken = default)
@@ -305,6 +309,7 @@ public sealed class InvoicesController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyCollection<PatientOrderSummaryDto>>> GetPatientOrdersAsync(
         [FromQuery] string phoneNumber,
+        [FromQuery] string? branchId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber))
@@ -313,7 +318,7 @@ public sealed class InvoicesController : ControllerBase
         if (cleanPhone.Length < 9 || cleanPhone.Length > 15)
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Số điện thoại không hợp lệ.");
 
-        var orders = await invoiceQueryService.GetPatientOrdersAsync(cleanPhone, cancellationToken);
+        var orders = await invoiceQueryService.GetPatientOrdersAsync(cleanPhone, branchId, cancellationToken);
         return Ok(new { items = orders, totalCount = orders.Count });
     }
 

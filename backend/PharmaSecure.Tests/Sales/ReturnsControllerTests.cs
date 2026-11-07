@@ -188,6 +188,44 @@ public class ReturnsControllerTests
     }
 
     [Fact]
+    public async Task Create_WithExchangeInvoiceId_ReturnsCreatedAtActionWithExchangeInfo()
+    {
+        // Arrange
+        var request = new CreateReturnRequest(
+            "inv-1",
+            "Đổi sang thuốc khác",
+            new List<CreateReturnItemRequest>
+            {
+                new("drug-1", "batch-1", 1, 100000m, "RESTOCK")
+            },
+            "inv-exchange-001");
+
+        var created = new ReturnResponse(
+            "ret-1", "TH001", "inv-1", "HD001", TestBranchId, TestCashierId, "Dược sĩ",
+            null, null, 100000m, "Đổi sang thuốc khác", "COMPLETED", DateTime.UtcNow,
+            new List<ReturnItemResponse>
+            {
+                new("drug-1", "TH01", "Paracetamol", "batch-1", "LOT01", 1, 100000m, 100000m, "RESTOCK")
+            },
+            "inv-exchange-001", "HD002");
+
+        returnServiceMock.Setup(s => s.CreateReturnAsync(request, TestBranchId, TestCashierId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(created);
+
+        var controller = CreateController();
+
+        // Act
+        var result = await controller.CreateAsync(request);
+
+        // Assert
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var response = Assert.IsType<ReturnResponse>(createdResult.Value);
+        Assert.Equal("TH001", response.ReturnNo);
+        Assert.Equal("inv-exchange-001", response.ExchangeInvoiceId);
+        Assert.Equal("HD002", response.ExchangeInvoiceNo);
+    }
+
+    [Fact]
     public async Task Create_WhenServiceThrowsInvalidOperation_ReturnsBadRequest()
     {
         // Arrange
@@ -229,5 +267,86 @@ public class ReturnsControllerTests
             It.IsAny<string>(),
             It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LinkExchangeInvoice_WithValidRequest_ReturnsOkWithUpdatedReturn()
+    {
+        // Arrange
+        var request = new LinkExchangeInvoiceRequest("inv-new-001");
+        var updated = new ReturnResponse(
+            "ret-1", "TH001", "inv-1", "HD001", TestBranchId, TestCashierId, "Dược sĩ",
+            null, null, 100000m, "Đổi thuốc", "COMPLETED", DateTime.UtcNow,
+            Array.Empty<ReturnItemResponse>(),
+            "inv-new-001", "HD002");
+
+        returnServiceMock.Setup(s => s.LinkExchangeInvoiceAsync("ret-1", "inv-new-001", TestBranchId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(updated);
+
+        var controller = CreateController();
+
+        // Act
+        var result = await controller.LinkExchangeInvoiceAsync("ret-1", request);
+
+        // Assert
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<ReturnResponse>(okResult.Value);
+        Assert.Equal("inv-new-001", response.ExchangeInvoiceId);
+        Assert.Equal("HD002", response.ExchangeInvoiceNo);
+    }
+
+    [Fact]
+    public async Task LinkExchangeInvoice_WhenEmptyReturnId_ReturnsBadRequest()
+    {
+        var controller = CreateController();
+        var result = await controller.LinkExchangeInvoiceAsync("", new LinkExchangeInvoiceRequest("inv-new"));
+
+        var badRequest = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
+    }
+
+    [Fact]
+    public async Task LinkExchangeInvoice_WhenEmptyExchangeInvoiceId_ReturnsBadRequest()
+    {
+        var controller = CreateController();
+        var result = await controller.LinkExchangeInvoiceAsync("ret-1", new LinkExchangeInvoiceRequest(""));
+
+        var badRequest = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
+    }
+
+    [Fact]
+    public async Task LinkExchangeInvoice_WhenBranchIdMissing_ReturnsForbid()
+    {
+        var controller = CreateController(withUserClaims: false);
+        var result = await controller.LinkExchangeInvoiceAsync("ret-1", new LinkExchangeInvoiceRequest("inv-new"));
+
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task LinkExchangeInvoice_WhenReturnNotFound_ReturnsNotFound()
+    {
+        returnServiceMock.Setup(s => s.LinkExchangeInvoiceAsync("ret-999", "inv-new", TestBranchId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new KeyNotFoundException("Phiếu đổi trả không tồn tại tại chi nhánh."));
+
+        var controller = CreateController();
+        var result = await controller.LinkExchangeInvoiceAsync("ret-999", new LinkExchangeInvoiceRequest("inv-new"));
+
+        var notFound = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status404NotFound, notFound.StatusCode);
+    }
+
+    [Fact]
+    public async Task LinkExchangeInvoice_WhenSameAsOriginalInvoice_ReturnsBadRequest()
+    {
+        returnServiceMock.Setup(s => s.LinkExchangeInvoiceAsync("ret-1", "inv-1", TestBranchId, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Hóa đơn đổi thuốc không thể trùng với hóa đơn gốc của phiếu trả."));
+
+        var controller = CreateController();
+        var result = await controller.LinkExchangeInvoiceAsync("ret-1", new LinkExchangeInvoiceRequest("inv-1"));
+
+        var badRequest = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, badRequest.StatusCode);
     }
 }

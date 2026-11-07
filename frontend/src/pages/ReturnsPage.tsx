@@ -9,9 +9,10 @@ import {
   Plus,
   RotateCcw,
   Search,
+  ShoppingBag,
   Undo2,
 } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ApiError, apiClient } from '../services/apiClient';
 import type {
   ReturnOrder,
@@ -31,6 +32,7 @@ import {
 
 
 export function ReturnsPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const linkedReturnId = searchParams.get('returnId');
   const [returns, setReturns] = useState<ReturnOrder[]>([]);
@@ -291,11 +293,24 @@ export function ReturnsPage() {
       ),
     },
     {
-      header: 'Hóa đơn gốc',
+      header: 'Hóa đơn liên quan',
       cell: r => (
-        <span className="font-mono text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded">
-          {r.invoiceNo}
-        </span>
+        <div className="space-y-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-slate-400">Gốc:</span>
+            <span className="font-mono text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+              {r.invoiceNo}
+            </span>
+          </div>
+          {r.exchangeInvoiceNo || r.exchangeInvoiceId ? (
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-emerald-600 font-medium">Đổi:</span>
+              <span className="font-mono text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded" title="Hóa đơn đổi thuốc liên kết">
+                {r.exchangeInvoiceNo || r.exchangeInvoiceId}
+              </span>
+            </div>
+          ) : null}
+        </div>
       ),
     },
     {
@@ -336,13 +351,24 @@ export function ReturnsPage() {
     {
       header: 'Thao tác',
       cell: r => (
-        <button
-          onClick={() => handleOpenDetail(r)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-mint hover:text-forest cursor-pointer"
-          title="Xem chi tiết phiếu trả"
-        >
-          <Eye size={15} /> Chi tiết
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => handleOpenDetail(r)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-mint hover:text-forest cursor-pointer"
+            title="Xem chi tiết phiếu trả"
+          >
+            <Eye size={14} /> Chi tiết
+          </button>
+          {!r.exchangeInvoiceId && (
+            <button
+              onClick={() => navigate(`/checkout?exchangeReturnId=${encodeURIComponent(r.id)}&returnNo=${encodeURIComponent(r.returnNo)}&refundAmount=${r.totalRefundAmount}`)}
+              className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 cursor-pointer"
+              title="Xuất hóa đơn đổi thuốc tại quầy POS"
+            >
+              <ShoppingBag size={13} /> Đổi thuốc (POS)
+            </button>
+          )}
+        </div>
       ),
     },
   ];
@@ -426,6 +452,17 @@ export function ReturnsPage() {
                 <span className="font-mono font-bold text-ink">{selectedReturn.invoiceNo}</span>
               </div>
               <div>
+                <span className="text-slate-400 block">Hóa đơn đổi thuốc (POS):</span>
+                {selectedReturn.exchangeInvoiceNo || selectedReturn.exchangeInvoiceId ? (
+                  <span className="inline-flex items-center gap-1 font-mono font-bold text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                    <CheckCircle2 size={12} className="text-emerald-600" />
+                    {selectedReturn.exchangeInvoiceNo || selectedReturn.exchangeInvoiceId}
+                  </span>
+                ) : (
+                  <span className="text-slate-400 italic">Chưa liên kết hóa đơn đổi</span>
+                )}
+              </div>
+              <div>
                 <span className="text-slate-400 block">Ngày thực hiện:</span>
                 <span className="text-ink">
                   {dateTime.format(new Date(selectedReturn.createdDate))}
@@ -506,7 +543,17 @@ export function ReturnsPage() {
               </span>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <div className="flex justify-between items-center gap-2 pt-2 border-t border-slate-100">
+              {!selectedReturn.exchangeInvoiceId ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/checkout?exchangeReturnId=${encodeURIComponent(selectedReturn.id)}&returnNo=${encodeURIComponent(selectedReturn.returnNo)}&refundAmount=${selectedReturn.totalRefundAmount}`)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-forest hover:bg-forest/90 rounded-lg transition-colors cursor-pointer shadow-sm"
+                >
+                  <ShoppingBag size={14} />
+                  Xuất hóa đơn đổi thuốc (POS)
+                </button>
+              ) : <div />}
               <button
                 type="button"
                 onClick={() => setSelectedReturn(null)}

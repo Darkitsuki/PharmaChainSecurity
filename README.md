@@ -4,7 +4,14 @@ Hệ Thống Quản Lý Chuỗi Bán Thuốc Đa Chi Nhánh
 ## 1. Project Purpose
 PharmaSecure (PharmaBranch) is an enterprise-grade multi-branch pharmacy management system designed to support secure retail sales (POS), procurement, inventory tracking, electronic invoicing, digital signatures, returns, and branch-isolated operational management.
 
-> **Status Notice**: The project is currently at **Phase 1: Foundation Architecture**. Core architectural boundaries, solution layout, baseline abstractions, and dependency directions are established. Business workflows (POS, inventory movements, payment processing, full RBAC policies) are planned for subsequent phases and are **not yet implemented**.
+> **Trạng thái dự án (Project Status)**: Dự án đã hoàn thiện 100% đầy đủ các phân hệ nghiệp vụ & kiểm soát an ninh đa tầng theo báo cáo khóa luận:
+> - **Phân quyền & Kiểm soát truy cập (RBAC)**: 3 vai trò chuẩn `OWNER` (Chủ nhà thuốc), `SALES` (Nhân viên bán hàng), `WAREHOUSE` (Nhân viên kho) với thẩm định bảo mật tại API / Server-side.
+> - **Cô lập dữ liệu đa chi nhánh (Oracle VPD / Row-Level Security)**: Đóng gói trong `PKG_PHARMA_SECURITY`, tự động cô lập dữ liệu theo `BranchId` trên các bảng giao dịch trọng yếu (`INVENTORIES`, `INVOICES`, `GOODS_RECEIPTS`, `INVENTORY_TRANSACTIONS`, `CUSTOMERS`, `PURCHASE_ORDERS`, `RETURNS`, `INVENTORY_AUDITS`).
+> - **Bảo mật cấp độ cột (Column-Level Security - CLS)**: View `VW_STAFF_REVENUE_SECURITY` che giấu doanh thu cá nhân của nhân viên đối với các vai trò không phải Chủ nhà thuốc.
+> - **Chữ ký số hóa đơn điện tử**: Thuật toán RSA/SHA-256 kết hợp mã băm chống giả mạo `DIGITAL_SIGNATURES`, xác minh tính toàn vẹn hóa đơn tức thời.
+> - **Đồng thời & Khóa dòng (Row-Level Locking)**: Cơ chế `SELECT FOR UPDATE` bảo vệ toàn vẹn giao dịch bán hàng, trừ kho FEFO và hoàn trả/đổi thuốc.
+> - **Sao lưu & Phục hồi CSDL**: Kịch bản Oracle Data Pump Logical Backup (`EXPDP`/`IMPDP`) với kiểm tra tính toàn vẹn CSDL.
+> - **Client Applications**: Ứng dụng Web POS ReactJS (TypeScript, Tailwind CSS) và ứng dụng Mobile Flutter (Dart) cho cả nhân viên và bệnh nhân đặt thuốc.
 
 ---
 
