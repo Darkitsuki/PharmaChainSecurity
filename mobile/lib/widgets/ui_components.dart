@@ -9,14 +9,17 @@ class Panel extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   @override
-  Widget build(BuildContext context) => Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.line)),
-      child: child);
+  Widget build(BuildContext context) => Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.line),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: padding,
+        child: child,
+      ));
 }
 
 class StatusBadge extends StatelessWidget {

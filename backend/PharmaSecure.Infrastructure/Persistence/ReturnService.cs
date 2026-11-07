@@ -240,6 +240,27 @@ public sealed class ReturnService : IReturnService
                 ? await BuildExchangeInvoiceAsync(request, originalInvoice.CustomerId, branchId, cashierId, lockedInventory, cancellationToken)
                 : null;
 
+            var linkedExchangeInvoiceId = exchange?.Invoice.Id;
+            string? linkedExchangeInvoiceNo = exchange?.Invoice.InvoiceNumber;
+
+            if (linkedExchangeInvoiceId is null && !string.IsNullOrWhiteSpace(request.ExchangeInvoiceId))
+            {
+                var cleanExchangeInvId = request.ExchangeInvoiceId.Trim();
+                if (string.Equals(cleanExchangeInvId, request.InvoiceId, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Hóa đơn đổi thuốc không thể trùng với hóa đơn gốc.");
+
+                await using var exCmd = CreateCommand("SELECT InvoiceNo FROM INVOICES WHERE id = :id AND BranchId = :BranchId");
+                exCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = cleanExchangeInvId;
+                exCmd.Parameters.Add("BranchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+                await using var exReader = await exCmd.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+                if (!await exReader.ReadAsync(cancellationToken))
+                    throw new InvalidOperationException("Hóa đơn đổi thuốc không tồn tại tại chi nhánh.");
+
+                linkedExchangeInvoiceNo = exReader.GetString(0);
+                linkedExchangeInvoiceId = cleanExchangeInvId;
+            }
+
             var now = DateTime.SpecifyKind(VietnamTimeHelper.Now, DateTimeKind.Unspecified);
             var returnId = $"ret-{Guid.NewGuid():N}";
             var returnNo = $"TH{now:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..24];
@@ -249,7 +270,7 @@ public sealed class ReturnService : IReturnService
 
             await InsertReturnAsync(
                 returnId, returnNo, request, branchId, cashierId, originalInvoice.CustomerId,
-                exchange?.Invoice.Id, totalRefund, now, cancellationToken);
+                linkedExchangeInvoiceId, totalRefund, now, cancellationToken);
             await InsertReturnItemsAsync(returnId, returnItems, cancellationToken);
 
             foreach (var item in returnItems.Where(item => item.ActionType == "RESTOCK"))
@@ -282,9 +303,89 @@ public sealed class ReturnService : IReturnService
             return new ReturnResponse(
                 returnId, returnNo, request.InvoiceId, originalInvoice.InvoiceNo, branchId,
                 cashierId, "Thu ngân", originalInvoice.CustomerId, null, totalRefund,
-                exchange?.Invoice.Id, exchange?.Invoice.InvoiceNumber, replacementTotal, difference,
+                linkedExchangeInvoiceId, linkedExchangeInvoiceNo, replacementTotal, difference,
                 transactionType, ResolveSettlementStatus(!isExchange, difference, exchange?.Invoice.PaymentStatus),
                 request.Reason.Trim(), "COMPLETED", now, returnItems);
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+    }
+
+    public async Task<ReturnResponse> LinkExchangeInvoiceAsync(
+        string returnId,
+        string exchangeInvoiceId,
+        string branchId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(returnId))
+            throw new ArgumentException("Mã phiếu đổi trả là bắt buộc.", nameof(returnId));
+
+        if (string.IsNullOrWhiteSpace(exchangeInvoiceId))
+            throw new ArgumentException("Mã hóa đơn đổi thuốc là bắt buộc.", nameof(exchangeInvoiceId));
+
+        if (string.IsNullOrWhiteSpace(branchId))
+            throw new ArgumentException("Mã chi nhánh là bắt buộc.", nameof(branchId));
+
+        var cleanReturnId = returnId.Trim();
+        var cleanExchangeId = exchangeInvoiceId.Trim();
+
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            // 1. Khóa bản ghi RETURNS kiểm tra tồn tại
+            string originalInvoiceId;
+            await using (var lockCmd = CreateCommand("""
+                SELECT id, InvoiceId
+                FROM RETURNS
+                WHERE id = :id AND BranchId = :BranchId
+                FOR UPDATE
+                """))
+            {
+                lockCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = cleanReturnId;
+                lockCmd.Parameters.Add("BranchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+                await using var reader = await lockCmd.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken))
+                    throw new KeyNotFoundException("Phiếu đổi trả không tồn tại tại chi nhánh.");
+
+                originalInvoiceId = reader.GetString(1);
+            }
+
+            // 2. Kiểm tra exchangeInvoiceId tồn tại trong INVOICES tại cùng branchId và không trùng với InvoiceId gốc
+            if (string.Equals(cleanExchangeId, originalInvoiceId, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Hóa đơn đổi thuốc không thể trùng với hóa đơn gốc của phiếu trả.");
+
+            await using (var checkInvCmd = CreateCommand("SELECT id FROM INVOICES WHERE id = :id AND BranchId = :BranchId"))
+            {
+                checkInvCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = cleanExchangeId;
+                checkInvCmd.Parameters.Add("BranchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+                await using var invReader = await checkInvCmd.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+                if (!await invReader.ReadAsync(cancellationToken))
+                    throw new InvalidOperationException("Hóa đơn đổi thuốc không tồn tại tại chi nhánh.");
+            }
+
+            // 3. Thực thi UPDATE RETURNS
+            await using (var updateCmd = CreateCommand("""
+                UPDATE RETURNS
+                SET ExchangeInvoiceId = :ExchangeInvoiceId
+                WHERE id = :id AND BranchId = :BranchId
+                """))
+            {
+                updateCmd.Parameters.Add("ExchangeInvoiceId", OracleDbType.Varchar2, 50).Value = cleanExchangeId;
+                updateCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = cleanReturnId;
+                updateCmd.Parameters.Add("BranchId", OracleDbType.Varchar2, 50).Value = branchId;
+
+                await updateCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await unitOfWork.CommitAsync(cancellationToken);
+
+            var updated = await GetByIdAsync(cleanReturnId, branchId, cancellationToken);
+            return updated ?? throw new KeyNotFoundException("Không thể tìm thấy phiếu đổi trả sau khi liên kết.");
         }
         catch
         {

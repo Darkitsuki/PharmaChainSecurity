@@ -152,5 +152,6 @@ public interface IInvoiceQueryService
 
     Task<IReadOnlyCollection<PatientOrderSummaryDto>> GetPatientOrdersAsync(
         string phoneNumber,
+        string? branchId = null,
         CancellationToken cancellationToken = default);
 }

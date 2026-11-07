@@ -1,6 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowRightLeft, Plus, RotateCcw, Search, Undo2 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import {
+  ArrowRightLeft,
+  Eye,
+  Plus,
+  RotateCcw,
+  Search,
+  ShoppingBag,
+  Undo2,
+} from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertBanner, DataTable, Modal, PageHeader, SearchToolbar, StatCard, type Column } from '../components/common';
 import { ApiError, apiClient } from '../services/apiClient';
 import type {
@@ -35,6 +43,7 @@ type ReplacementSelection = CreateExchangeItemPayload & {
 const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-forest focus:ring-2 focus:ring-forest/10 disabled:bg-slate-100 disabled:text-slate-400';
 
 export function ReturnsPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [returns, setReturns] = useState<ReturnOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -254,10 +263,35 @@ export function ReturnsPage() {
   const columns: Column<ReturnOrder>[] = [
     { header: 'Phiếu / Ngày lập', cell: item => <div><strong className="text-forest">{item.returnNo}</strong><p className="text-xs text-slate-500">{dateTime(new Date(item.createdDate))}</p></div> },
     { header: 'Loại', cell: item => <span className="font-medium">{item.transactionType === 'EXCHANGE' ? 'Đổi thuốc' : 'Trả hàng'}</span> },
-    { header: 'Hóa đơn', cell: item => <div><span>{item.invoiceNo}</span>{item.exchangeInvoiceNo && <p className="text-xs text-slate-500">Mới: {item.exchangeInvoiceNo}</p>}</div> },
+    { header: 'Hóa đơn', cell: item => <div><span>{item.invoiceNo}</span>{item.exchangeInvoiceNo && <p className="text-xs text-slate-500 font-semibold text-emerald-700">Đổi: {item.exchangeInvoiceNo}</p>}</div> },
     { header: 'Khách hàng', cell: item => item.customerName || 'Khách lẻ' },
     { header: 'Giá trị', cell: item => <div className="text-right"><strong>{money(item.totalRefundAmount)}</strong>{item.transactionType === 'EXCHANGE' && <p className="text-xs text-slate-500">Chênh lệch: {money(item.balanceDifference)}</p>}</div> },
     { header: 'Trạng thái tiền', cell: item => settlementLabel(item.settlementStatus) },
+    {
+      header: 'Thao tác',
+      cell: item => (
+        <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => void openDetail(item)}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            title="Xem chi tiết phiếu trả"
+          >
+            <Eye size={13} /> Chi tiết
+          </button>
+          {!item.exchangeInvoiceId && (
+            <button
+              type="button"
+              onClick={() => navigate(`/checkout?exchangeReturnId=${encodeURIComponent(item.id)}&returnNo=${encodeURIComponent(item.returnNo)}&refundAmount=${item.totalRefundAmount}`)}
+              className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+              title="Xuất hóa đơn đổi thuốc tại quầy POS"
+            >
+              <ShoppingBag size={13} /> Đổi thuốc (POS)
+            </button>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return <div className="ui-page">
@@ -265,7 +299,7 @@ export function ReturnsPage() {
     {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
     {success && <AlertBanner type="success" message={success} onClose={() => setSuccess('')} />}
 
-    <div className="grid gap-4 sm:grid-cols-3">
+<div className="grid gap-4 sm:grid-cols-3">
       <StatCard loading={loading} unavailable={Boolean(error)} icon={RotateCcw} title="Tổng giao dịch" value={returns.length} subValue="Phiếu đã ghi nhận" colorTheme="blue" />
       <StatCard loading={loading} unavailable={Boolean(error)} icon={Undo2} title="Trả hàng" value={returns.filter(item => item.transactionType === 'RETURN').length} subValue="Khoản hoàn cần xử lý" colorTheme="amber" />
       <StatCard loading={loading} unavailable={Boolean(error)} icon={ArrowRightLeft} title="Đổi thuốc" value={returns.filter(item => item.transactionType === 'EXCHANGE').length} subValue="Có hóa đơn mới liên kết" colorTheme="emerald" />
@@ -324,7 +358,8 @@ function ReplacementEditor({ drugs, drugId, batches, batchId, quantity, items, o
 }
 
 function ReturnDetail({ item }: { item: ReturnOrder }) {
-  return <div className="space-y-5 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><span className="text-slate-500">Loại:</span> {item.transactionType === 'EXCHANGE' ? 'Đổi thuốc' : 'Trả hàng & hoàn tiền'}</p><p><span className="text-slate-500">Ngày:</span> {dateTime(new Date(item.createdDate))}</p><p><span className="text-slate-500">Hóa đơn gốc:</span> {item.invoiceNo}</p>{item.exchangeInvoiceNo && <p><span className="text-slate-500">Hóa đơn mới:</span> <Link to={`/invoices?invoiceId=${encodeURIComponent(item.exchangeInvoiceId!)}`} className="font-semibold text-forest underline">{item.exchangeInvoiceNo}</Link></p>}<p><span className="text-slate-500">Khách:</span> {item.customerName || 'Khách lẻ'}</p><p><span className="text-slate-500">Nhân viên:</span> {item.cashierName}</p></div><div><strong>Thuốc trả</strong><div className="mt-2 divide-y divide-slate-100 border-y border-slate-200">{item.items.map(returnItem => <div key={`${returnItem.drugId}_${returnItem.batchId}`} className="flex flex-wrap justify-between gap-2 py-3"><span>{returnItem.drugName} · Lô {returnItem.batchNo} · SL {returnItem.quantity}</span><span>{returnItem.actionType === 'RESTOCK' ? 'Nhập lại kho' : 'Không nhập lại kho'} · {money(returnItem.subTotal)}</span></div>)}</div></div><div className="grid gap-2 border-t border-slate-200 pt-4 sm:grid-cols-3"><p>Giá trị thuốc trả<br/><strong>{money(item.totalRefundAmount)}</strong></p>{item.transactionType === 'EXCHANGE' && <><p>Hóa đơn mới<br/><strong>{money(item.replacementTotalAmount)}</strong></p><p>Chênh lệch<br/><strong>{money(item.balanceDifference)}</strong></p></>}</div><p className="text-slate-600"><strong>Lý do:</strong> {item.reason}</p><p className="rounded-lg bg-amber-50 p-3 text-amber-900">{settlementLabel(item.settlementStatus)}</p></div>;
+  const navigate = useNavigate();
+  return <div className="space-y-5 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><span className="text-slate-500">Loại:</span> {item.transactionType === 'EXCHANGE' ? 'Đổi thuốc' : 'Trả hàng & hoàn tiền'}</p><p><span className="text-slate-500">Ngày:</span> {dateTime(new Date(item.createdDate))}</p><p><span className="text-slate-500">Hóa đơn gốc:</span> {item.invoiceNo}</p>{item.exchangeInvoiceNo && <p><span className="text-slate-500">Hóa đơn mới:</span> <Link to={`/invoices?invoiceId=${encodeURIComponent(item.exchangeInvoiceId!)}`} className="font-semibold text-forest underline">{item.exchangeInvoiceNo}</Link></p>}<p><span className="text-slate-500">Khách:</span> {item.customerName || 'Khách lẻ'}</p><p><span className="text-slate-500">Nhân viên:</span> {item.cashierName}</p></div><div><strong>Thuốc trả</strong><div className="mt-2 divide-y divide-slate-100 border-y border-slate-200">{item.items.map(returnItem => <div key={`${returnItem.drugId}_${returnItem.batchId}`} className="flex flex-wrap justify-between gap-2 py-3"><span>{returnItem.drugName} · Lô {returnItem.batchNo} · SL {returnItem.quantity}</span><span>{returnItem.actionType === 'RESTOCK' ? 'Nhập lại kho' : 'Không nhập lại kho'} · {money(returnItem.subTotal)}</span></div>)}</div></div><div className="grid gap-2 border-t border-slate-200 pt-4 sm:grid-cols-3"><p>Giá trị thuốc trả<br/><strong>{money(item.totalRefundAmount)}</strong></p>{item.transactionType === 'EXCHANGE' && <><p>Hóa đơn mới<br/><strong>{money(item.replacementTotalAmount)}</strong></p><p>Chênh lệch<br/><strong>{money(item.balanceDifference)}</strong></p></>}</div><p className="text-slate-600"><strong>Lý do:</strong> {item.reason}</p><p className="rounded-lg bg-amber-50 p-3 text-amber-900">{settlementLabel(item.settlementStatus)}</p>{!item.exchangeInvoiceId && <div className="pt-2"><button type="button" onClick={() => navigate(`/checkout?exchangeReturnId=${encodeURIComponent(item.id)}&returnNo=${encodeURIComponent(item.returnNo)}&refundAmount=${item.totalRefundAmount}`)} className="inline-flex items-center gap-1.5 rounded-lg bg-forest px-3 py-2 text-xs font-semibold text-white hover:bg-forest/90 cursor-pointer"><ShoppingBag size={14}/>Xuất hóa đơn đổi thuốc (POS)</button></div>}</div>;
 }
 
 function settlementLabel(status: ReturnOrder['settlementStatus']) {

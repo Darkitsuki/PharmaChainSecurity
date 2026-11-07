@@ -1,0 +1,46 @@
+# ==============================================================================
+# Prometheus Configuration for PharmaChainSecurity
+# Complies with Rule 09 (Observability & Operations) and Thesis Section 4.4
+# ==============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+
+scrape_configs:
+  # Scrape ASP.NET Core Web API application metrics
+  - job_name: "pharma-webapi"
+    metrics_path: "/metrics"
+    scheme: "http"
+    static_configs:
+      - targets: ["webapi:5000"]
+        labels:
+          environment: "production"
+          service: "pharma-webapi"
+
+  # Scrape ASP.NET Core Database Readiness & Liveness Probes
+  - job_name: "pharma-health-readiness"
+    metrics_path: "/health/ready"
+    scheme: "http"
+    scrape_interval: 10s
+    static_configs:
+      - targets: ["webapi:5000"]
+        labels:
+          environment: "production"
+          probe_type: "database-readiness"
+
+  # Scrape Prometheus internal metrics
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+

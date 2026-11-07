@@ -1,0 +1,54 @@
+# ==============================================================================
+# Prometheus Alert Rules for PharmaChainSecurity
+# Complies with Rule 09 (Observability & Operations) and Thesis Section 4.4
+# Operational Alert Priorities:
+#   P1: Urgent operational condition (complete outage, database unreachable)
+#   P2: Significant operational condition (elevated error rate, latency/resource spike)
+#   P3: Informational / routine operations
+# ==============================================================================
+
+groups:
+  - name: pharma_system_alerts
+    rules:
+      # P1 Alert: Database Connectivity Failure via Readiness Probe
+      - alert: DatabaseReadinessProbeFailed
+        expr: probe_success{probe_type="database-readiness"} == 0 or up{job="pharma-health-readiness"} == 0
+        for: 30s
+        labels:
+          severity: "P1"
+          category: "database-availability"
+        annotations:
+          summary: "Oracle Database connection probe failed on pharma-webapi"
+          description: "Health readiness probe /health/ready has failed for > 30s. Backend cannot reach Oracle Database instance. Transactions are failing closed."
+          runbook_url: "https://docs.pharmachainsecurity.internal/runbooks/db-down"
+
+      # P2 Alert: High API Error Rate (> 5% in 5-minute rolling window)
+      - alert: HighApiErrorRate
+        expr: >-
+          (sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum(rate(http_requests_total[5m]))) * 100 > 5
+        for: 1m
+        labels:
+          severity: "P2"
+          category: "api-reliability"
+        annotations:
+          summary: "High HTTP 5xx error rate detected (> 5%)"
+          description: "Server error rate is {{ $value | printf \"%.2f\" }}% over the last 5 minutes, exceeding the 5% threshold."
+          runbook_url: "https://docs.pharmachainsecurity.internal/runbooks/api-errors"
+
+      # P2 Alert: High CPU or Memory Usage (> 80% for 2 minutes)
+      - alert: HighCpuOrMemoryUsage
+        expr: >-
+          process_cpu_usage{service="pharma-webapi"} > 0.80
+          or
+          (process_working_set_bytes{service="pharma-webapi"} / (1024 * 1024 * 1024)) > 1.6
+        for: 2m
+        labels:
+          severity: "P2"
+          category: "resource-exhaustion"
+        annotations:
+          summary: "Process CPU or memory utilization exceeded 80% for 2 minutes"
+          description: "PharmaSecure WebApi instance is consuming excessive host resources (> 80% capacity) continuously for 2 minutes."
+          runbook_url: "https://docs.pharmachainsecurity.internal/runbooks/high-resource"
+

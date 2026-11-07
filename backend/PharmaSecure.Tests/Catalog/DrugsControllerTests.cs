@@ -238,13 +238,14 @@ public class DrugsControllerTests
     public async Task GetPageAsync_WhenAnonymous_ResolvesDefaultBranchAndReturnsOk()
     {
         // Arrange
+        const string defaultBranchId = "br-00000000-0000-0000-0000-000000000001";
         var paged = new PharmaSecure.Application.Common.PagedResult<DrugResponse>(
             new List<DrugResponse>
             {
                 new("dr-001", "THUOC001", "Paracetamol", null, "Hộp", 35000m, true)
             }, 1, 20, 1);
 
-        drugQueryServiceMock.Setup(s => s.GetPageAsync("BR001", 1, 20, null, It.IsAny<CancellationToken>()))
+        drugQueryServiceMock.Setup(s => s.GetPageAsync(defaultBranchId, 1, 20, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(paged);
 
         var controller = CreateController(branchId: null, role: "");
@@ -256,15 +257,16 @@ public class DrugsControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result);
         var returned = Assert.IsType<PharmaSecure.Application.Common.PagedResult<DrugResponse>>(okResult.Value);
         Assert.Single(returned.Items);
-        drugQueryServiceMock.Verify(s => s.GetPageAsync("BR001", 1, 20, null, It.IsAny<CancellationToken>()), Times.Once);
+        drugQueryServiceMock.Verify(s => s.GetPageAsync(defaultBranchId, 1, 20, null, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task GetByIdAsync_WhenAnonymous_ResolvesDefaultBranchAndReturnsOk()
     {
         // Arrange
+        const string defaultBranchId = "br-00000000-0000-0000-0000-000000000001";
         var drug = new DrugResponse("dr-001", "THUOC001", "Paracetamol", null, "Hộp", 35000m, true);
-        drugQueryServiceMock.Setup(s => s.GetByIdAsync("BR001", "dr-001", It.IsAny<CancellationToken>()))
+        drugQueryServiceMock.Setup(s => s.GetByIdAsync(defaultBranchId, "dr-001", It.IsAny<CancellationToken>()))
             .ReturnsAsync(drug);
 
         var controller = CreateController(branchId: null, role: "");

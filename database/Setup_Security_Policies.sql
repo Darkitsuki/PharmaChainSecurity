@@ -155,6 +155,28 @@ BEGIN
         statement_types => 'SELECT, INSERT, UPDATE, DELETE',
         update_check    => TRUE
     );
+
+    -- 7. Bảng Phiếu đổi trả hàng (RETURNS)
+    DBMS_RLS.ADD_POLICY(
+        object_schema   => USER,
+        object_name     => 'RETURNS',
+        policy_name     => 'POL_VPD_RETURNS',
+        function_schema => USER,
+        policy_function => 'PKG_PHARMA_SECURITY.FN_VPD_BRANCH_ISOLATION',
+        statement_types => 'SELECT, INSERT, UPDATE, DELETE',
+        update_check    => TRUE
+    );
+
+    -- 8. Bảng Phiếu kiểm kê tồn kho (INVENTORY_AUDITS)
+    DBMS_RLS.ADD_POLICY(
+        object_schema   => USER,
+        object_name     => 'INVENTORY_AUDITS',
+        policy_name     => 'POL_VPD_INVENTORY_AUDITS',
+        function_schema => USER,
+        policy_function => 'PKG_PHARMA_SECURITY.FN_VPD_BRANCH_ISOLATION',
+        statement_types => 'SELECT, INSERT, UPDATE, DELETE',
+        update_check    => TRUE
+    );
 END;
 /
 
@@ -178,5 +200,7 @@ SELECT
 FROM USERS u
 JOIN ROLES r ON u.RoleId = r.Id
 LEFT JOIN INVOICES i ON u.Id = i.CashierId
+                     AND i.Status = 'COMPLETED'
+                     AND i.PaymentStatus = 'PAID'
 GROUP BY u.Id, u.Username, u.FullName, u.PhoneNumber, u.BranchId, r.RoleName;
 /

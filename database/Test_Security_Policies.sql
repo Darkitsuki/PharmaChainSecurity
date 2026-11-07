@@ -23,3 +23,12 @@ SELECT BranchId, DrugId, BatchId, Quantity FROM INVENTORIES;
 
 -- Kiểm tra CLS: Chủ nhà thuốc nhìn thấy rõ cột PersonalRevenue của từng nhân viên
 SELECT Username, FullName, PhoneNumber, RoleName, PersonalRevenue FROM VW_STAFF_REVENUE_SECURITY;
+
+-- 3. Kiểm tra VPD trên bảng RETURNS và INVENTORY_AUDITS
+EXEC PKG_PHARMA_SECURITY.SET_USER_CONTEXT('us-00000000-0000-0000-0000-000000000001', 'SALES', 'br-00000000-0000-0000-0000-000000000001');
+
+-- Kiểm tra: Chỉ trả về phiếu đổi trả của Chi nhánh Quận 1
+SELECT id, ReturnNo, BranchId, TotalRefundAmount FROM RETURNS;
+
+-- Kiểm tra: Chỉ trả về phiếu kiểm kê của Chi nhánh Quận 1
+SELECT id, AuditNo, BranchId, Status FROM INVENTORY_AUDITS;

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Oracle.ManagedDataAccess.Client;
 using PharmaSecure.Application.Common;
 using PharmaSecure.Application.Features.Invoices;
@@ -693,15 +693,18 @@ public sealed class InvoiceQueryService : IInvoiceQueryService
 
     public async Task<IReadOnlyCollection<PatientOrderSummaryDto>> GetPatientOrdersAsync(
         string phoneNumber,
+        string? branchId = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(phoneNumber))
             return Array.Empty<PatientOrderSummaryDto>();
 
         var cleanPhone = phoneNumber.Trim();
-        const string defaultBranchId = "br-00000000-0000-0000-0000-000000000001";
+        var resolvedBranchId = !string.IsNullOrWhiteSpace(branchId)
+            ? branchId.Trim()
+            : "br-00000000-0000-0000-0000-000000000001";
 
-        await unitOfWork.BeginTransactionAsync(defaultBranchId, cancellationToken);
+        await unitOfWork.BeginTransactionAsync(resolvedBranchId, cancellationToken);
         try
         {
             var orders = new List<PatientOrderSummaryDto>();

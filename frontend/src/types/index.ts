@@ -466,10 +466,11 @@ export interface CreateReturnPayload {
   invoiceId: string;
   reason: string;
   items: CreateReturnItemPayload[];
-  transactionType: 'RETURN' | 'EXCHANGE';
+  transactionType?: 'RETURN' | 'EXCHANGE';
   replacementItems?: CreateExchangeItemPayload[];
-  paymentMethod: 'CASH';
-  settlementConfirmed: boolean;
+  paymentMethod?: 'CASH';
+  settlementConfirmed?: boolean;
+  exchangeInvoiceId?: string | null;
 }
 
 export interface ReturnableInvoiceItem {

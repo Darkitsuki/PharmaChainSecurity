@@ -77,7 +77,10 @@ public sealed record CreateReturnRequest(
     string TransactionType = "RETURN",
     IReadOnlyList<CreateExchangeItemRequest>? ReplacementItems = null,
     string PaymentMethod = "CASH",
-    bool SettlementConfirmed = false);
+    bool SettlementConfirmed = false,
+    string? ExchangeInvoiceId = null);
+
+public sealed record LinkExchangeInvoiceRequest(string ExchangeInvoiceId);
 
 public sealed record ReturnableInvoiceItemResponse(
     string DrugId,
