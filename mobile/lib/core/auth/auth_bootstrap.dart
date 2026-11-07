@@ -16,8 +16,14 @@ Uri parseApiUrl(String value) {
 }
 
 Future<AuthSession> createAuthSession() async {
-  const url = String.fromEnvironment('API_BASE_URL');
-  const trustLocalDevCa = bool.fromEnvironment('TRUST_LOCAL_DEV_CA');
+  const url = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://10.13.226.181:55198/api/v1',
+  );
+  const trustLocalDevCa = bool.fromEnvironment(
+    'TRUST_LOCAL_DEV_CA',
+    defaultValue: true,
+  );
   final uri = parseApiUrl(url);
   return AuthSession(ApiClient(
       baseUrl: uri.toString(),

@@ -21,10 +21,12 @@ class PharmaSecureApp extends StatefulWidget {
     super.key,
     this.session,
     this.startAsPatient,
+    this.configurationError,
   });
 
   final AuthSession? session;
   final bool? startAsPatient;
+  final String? configurationError;
 
   @override
   State<PharmaSecureApp> createState() => _PharmaSecureAppState();
@@ -33,14 +35,16 @@ class PharmaSecureApp extends StatefulWidget {
 class _PharmaSecureAppState extends State<PharmaSecureApp>
     with WidgetsBindingObserver {
   AuthSession? session;
-  String? configurationError;
+  late String? configurationError = widget.configurationError;
   late bool _showStaffPortal = (widget.session != null && widget.startAsPatient != true);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(initialize());
+    if (widget.configurationError == null) {
+      unawaited(initialize());
+    }
   }
 
   Future<void> initialize() async {

@@ -7,7 +7,10 @@ import 'package:pharmasecure_mobile/data/demo_data.dart';
 void main() {
   testWidgets('Missing API configuration cannot bypass authentication',
       (tester) async {
-    await tester.pumpWidget(const PharmaSecureApp());
+    await tester.pumpWidget(const PharmaSecureApp(
+      configurationError:
+          'Chưa cấu hình API HTTPS hợp lệ. Xem mobile/README.md.',
+    ));
     await tester.pumpAndSettle();
     final login = tester.widget<FilledButton>(
         find.widgetWithText(FilledButton, 'Đăng nhập'));
