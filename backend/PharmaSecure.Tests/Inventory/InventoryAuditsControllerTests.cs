@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
@@ -188,6 +190,17 @@ public class InventoryAuditsControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         var returned = Assert.IsType<InventoryAuditDetailResponse>(okResult.Value);
         Assert.Equal("COMPLETED", returned.Status);
+    }
+
+    [Fact]
+    public void Reconcile_RequiresOwnerRole()
+    {
+        var method = typeof(InventoryAuditsController).GetMethod(
+            nameof(InventoryAuditsController.ReconcileAsync),
+            BindingFlags.Instance | BindingFlags.Public);
+
+        var authorization = Assert.Single(method!.GetCustomAttributes<AuthorizeAttribute>());
+        Assert.Equal("OWNER", authorization.Roles);
     }
 
     [Fact]

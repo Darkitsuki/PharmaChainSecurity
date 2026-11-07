@@ -72,8 +72,13 @@ export interface DrugBatch {
 export interface InventoryRow {
   branchId: string;
   drugId: string;
+  drugName: string;
   batchId: string;
+  batchNo: string;
+  mfgDate: string | null;
+  expiryDate: string;
   quantity: number;
+  availableQuantity: number;
 }
 
 export interface AvailableInventory {
@@ -255,6 +260,15 @@ export interface CreateSupplierPayload {
   taxCode?: string;
 }
 
+export interface UpdateSupplierPayload {
+  supplierName: string;
+  contactPerson?: string;
+  phoneNumber?: string;
+  email?: string;
+  address?: string;
+  taxCode?: string;
+}
+
 export interface GoodsReceiptItem {
   id: string;
   receiptId: string;
@@ -419,12 +433,16 @@ export interface ReturnOrder {
   customerId: string | null;
   customerName: string | null;
   totalRefundAmount: number;
+  exchangeInvoiceId: string | null;
+  exchangeInvoiceNo: string | null;
+  replacementTotalAmount: number;
+  balanceDifference: number;
+  transactionType: 'RETURN' | 'EXCHANGE';
+  settlementStatus: 'REFUND_REQUIRED' | 'NO_DIFFERENCE' | 'SETTLED' | 'PAYMENT_PENDING';
   reason: string;
   status: 'COMPLETED' | 'REJECTED';
   createdDate: string;
   items: ReturnItem[];
-  exchangeInvoiceId?: string | null;
-  exchangeInvoiceNo?: string | null;
 }
 
 export interface CreateReturnItemPayload {
@@ -433,12 +451,23 @@ export interface CreateReturnItemPayload {
   quantity: number;
   refundPrice: number;
   actionType: 'RESTOCK' | 'DISCARD';
+  restockInspectionConfirmed: boolean;
+}
+
+export interface CreateExchangeItemPayload {
+  drugId: string;
+  batchId: string;
+  quantity: number;
 }
 
 export interface CreateReturnPayload {
   invoiceId: string;
   reason: string;
   items: CreateReturnItemPayload[];
+  transactionType?: 'RETURN' | 'EXCHANGE';
+  replacementItems?: CreateExchangeItemPayload[];
+  paymentMethod?: 'CASH';
+  settlementConfirmed?: boolean;
   exchangeInvoiceId?: string | null;
 }
 

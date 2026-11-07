@@ -1,13 +1,12 @@
 import { dateTime, calendarDate } from '../utils/formatters';
 import { PageHeader } from '../components/common/PageHeader';
 import { loadAllPages } from '../utils/loadAllPages';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeftRight,
   ArrowRight,
   CheckCircle2,
   Clock,
-  Eye,
   Plus,
   Send,
   Trash2,
@@ -34,6 +33,86 @@ import {
   type Column,
 } from '../components/common';
 
+type PickerOption = { value: string; label: string; description?: string; searchText?: string };
+
+function SearchablePicker({ value, options, placeholder, disabled, onChange }: {
+  value: string;
+  options: PickerOption[];
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const listId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const selected = options.find(option => option.value === value);
+  const filtered = options.filter(option =>
+    `${option.label} ${option.description ?? ''} ${option.searchText ?? ''}`.toLocaleLowerCase('vi')
+      .includes(query.trim().toLocaleLowerCase('vi')),
+  );
+
+  function choose(nextValue: string) {
+    onChange(nextValue);
+    setQuery('');
+    setOpen(false);
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      onBlur={(event) => {
+        if (!containerRef.current?.contains(event.relatedTarget as Node | null)) {
+          setOpen(false);
+          setQuery('');
+        }
+      }}
+    >
+      <input
+        ref={inputRef}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        value={open ? query : (selected?.label ?? '')}
+        disabled={disabled}
+        placeholder={placeholder}
+        onFocus={() => { setOpen(true); setQuery(''); setActiveIndex(0); }}
+        onChange={event => { setQuery(event.target.value); setOpen(true); setActiveIndex(0); }}
+        onKeyDown={event => {
+          if (event.key === 'Escape') { event.stopPropagation(); setOpen(false); setQuery(''); inputRef.current?.blur(); }
+          if (event.key === 'ArrowDown' && filtered.length > 0) { event.preventDefault(); setOpen(true); setActiveIndex(index => Math.min(index + 1, filtered.length - 1)); }
+          if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex(index => Math.max(index - 1, 0)); }
+          if (event.key === 'Enter' && open && filtered[activeIndex]) { event.preventDefault(); choose(filtered[activeIndex].value); }
+        }}
+        className="w-full rounded-lg border border-line bg-white p-2 text-xs text-ink focus:border-forest focus:outline-none disabled:bg-slate-100 disabled:text-slate-400"
+      />
+      {open && !disabled && (
+        <div id={listId} role="listbox" className="mt-1 max-h-52 w-full overflow-y-auto rounded-lg border border-line bg-white p-1 shadow-lg">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-slate-400">Không tìm thấy lựa chọn phù hợp.</div>
+          ) : filtered.map((option, index) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => choose(option.value)}
+              className={`w-full rounded-md px-3 py-2 text-left text-xs transition ${index === activeIndex ? 'bg-mint text-forest' : 'hover:bg-slate-50'}`}
+            >
+              <span className="block font-semibold">{option.label}</span>
+              {option.description && <span className="mt-0.5 block text-slate-500">{option.description}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function StockTransferPage() {
   const { currentUser } = useAuth();
   const currentBranchId = currentUser?.branchId;
@@ -55,6 +134,7 @@ export function StockTransferPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
   const [detailSuccess, setDetailSuccess] = useState('');
+  const [pendingAction, setPendingAction] = useState<'SHIP' | 'RECEIVE' | 'CANCEL' | null>(null);
 
   // Create Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -70,7 +150,8 @@ export function StockTransferPage() {
   const [loadingStock, setLoadingStock] = useState(false);
 
   // Selected item line inputs
-  const [selectedStockKey, setSelectedStockKey] = useState('');
+  const [selectedDrugId, setSelectedDrugId] = useState('');
+  const [selectedBatchId, setSelectedBatchId] = useState('');
   const [inputQuantity, setInputQuantity] = useState<number>(1);
   const [itemNote, setItemNote] = useState('');
   const [stagedItems, setStagedItems] = useState<(CreateStockTransferItemPayload & { drugName: string; drugCode: string; batchNo: string; maxQty: number })[]>([]);
@@ -120,7 +201,8 @@ export function StockTransferPage() {
     setTargetBranchId('');
     setTransferNotes('');
     setStagedItems([]);
-    setSelectedStockKey('');
+    setSelectedDrugId('');
+    setSelectedBatchId('');
     setInputQuantity(1);
     setItemNote('');
 
@@ -134,8 +216,15 @@ export function StockTransferPage() {
       ]);
 
       setBranches(branchList.filter(b => b.id !== currentBranchId));
-      setAvailableStock(invPage.filter(i => i.quantity > 0));
-      setDrugDict(Object.fromEntries(drugPage.map(d => [d.drugId, d])));
+      const nextDrugDict = Object.fromEntries(drugPage.map(d => [d.drugId, d]));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      setAvailableStock(invPage.filter(i =>
+        i.availableQuantity > 0 &&
+        nextDrugDict[i.drugId]?.isActive &&
+        new Date(i.expiryDate) >= today,
+      ));
+      setDrugDict(nextDrugDict);
     } catch (err) {
       setCreateError('Không thể tải danh sách chi nhánh hoặc tồn kho.');
     } finally {
@@ -144,13 +233,14 @@ export function StockTransferPage() {
   }
 
   function handleAddStagedItem() {
-    if (!selectedStockKey) return;
-    const [dId, bId] = selectedStockKey.split('__');
+    if (!selectedDrugId || !selectedBatchId) return;
+    const dId = selectedDrugId;
+    const bId = selectedBatchId;
     const stockRow = availableStock.find(s => s.drugId === dId && s.batchId === bId);
     if (!stockRow) return;
 
-    if (inputQuantity <= 0 || inputQuantity > stockRow.quantity) {
-      setCreateError(`Số lượng chuyển phải từ 1 đến ${stockRow.quantity}.`);
+    if (inputQuantity <= 0 || inputQuantity > stockRow.availableQuantity) {
+      setCreateError(`Số lượng chuyển phải từ 1 đến ${stockRow.availableQuantity}.`);
       return;
     }
 
@@ -169,12 +259,13 @@ export function StockTransferPage() {
         notes: itemNote.trim() || undefined,
         drugName: drug?.name || dId,
         drugCode: drug?.drugCode || '',
-        batchNo: bId,
-        maxQty: stockRow.quantity,
+        batchNo: stockRow.batchNo,
+        maxQty: stockRow.availableQuantity,
       },
     ]);
 
-    setSelectedStockKey('');
+    setSelectedDrugId('');
+    setSelectedBatchId('');
     setInputQuantity(1);
     setItemNote('');
     setCreateError('');
@@ -231,8 +322,6 @@ export function StockTransferPage() {
 
   async function handleShipTransfer() {
     if (!selectedTransfer) return;
-    if (!window.confirm(`Xác nhận xuất kho cho phiếu chuyển ${selectedTransfer.transferNo}? Tồn kho chi nhánh gửi sẽ bị trừ ngay lập tức.`)) return;
-
     setActionLoading(true);
     setDetailError('');
     try {
@@ -240,6 +329,7 @@ export function StockTransferPage() {
         method: 'POST',
       });
       setSelectedTransfer(updated);
+      setPendingAction(null);
       setDetailSuccess('Đã xuất kho điều chuyển thành công. Hàng đang trên đường chuyển đến chi nhánh nhận.');
       await loadTransfers();
     } catch (err) {
@@ -255,8 +345,6 @@ export function StockTransferPage() {
 
   async function handleReceiveTransfer() {
     if (!selectedTransfer) return;
-    if (!window.confirm(`Xác nhận đã nhận đủ hàng cho phiếu ${selectedTransfer.transferNo}? Tồn kho chi nhánh nhận sẽ được cộng ngay lập tức.`)) return;
-
     setActionLoading(true);
     setDetailError('');
     try {
@@ -264,6 +352,7 @@ export function StockTransferPage() {
         method: 'POST',
       });
       setSelectedTransfer(updated);
+      setPendingAction(null);
       setDetailSuccess('Đã tiếp nhận hàng thành công. Tồn kho chi nhánh nhận đã được cập nhật.');
       await loadTransfers();
     } catch (err) {
@@ -279,8 +368,6 @@ export function StockTransferPage() {
 
   async function handleCancelTransfer() {
     if (!selectedTransfer) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn hủy phiếu điều chuyển ${selectedTransfer.transferNo}?`)) return;
-
     setActionLoading(true);
     setDetailError('');
     try {
@@ -288,6 +375,7 @@ export function StockTransferPage() {
         method: 'POST',
       });
       setSelectedTransfer(updated);
+      setPendingAction(null);
       setDetailSuccess('Đã hủy phiếu điều chuyển.');
       await loadTransfers();
     } catch (err) {
@@ -394,19 +482,6 @@ export function StockTransferPage() {
         <span className="text-xs text-slate-500">
           {calendarDate.format(new Date(t.createdDate))}
         </span>
-      ),
-    },
-    {
-      header: 'Thao tác',
-      align: 'right',
-      cell: t => (
-        <button
-          onClick={() => handleOpenDetail(t.id)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50"
-        >
-          <Eye size={14} />
-          Chi tiết
-        </button>
       ),
     },
   ];
@@ -528,6 +603,8 @@ export function StockTransferPage() {
             pageSize,
             onPageChange: setCurrentPage,
           }}
+          onRowClick={(transfer) => void handleOpenDetail(transfer.id)}
+          rowLabel={(transfer) => `Xem chi tiết phiếu điều chuyển ${transfer.transferNo}`}
         />
       </div>
 
@@ -546,19 +623,18 @@ export function StockTransferPage() {
               <label className="block text-xs font-semibold text-slate-700">
                 Chi nhánh nhận hàng <span className="text-rose-500">*</span>
               </label>
-              <select
-                value={targetBranchId}
-                onChange={e => setTargetBranchId(e.target.value)}
-                required
-                className="mt-1 w-full rounded-lg border border-line bg-white p-2 text-xs font-semibold text-ink focus:border-forest focus:outline-none"
-              >
-                <option value="">-- Chọn chi nhánh nhận --</option>
-                {branches.map(b => (
-                  <option key={b.id} value={b.id}>
-                    {b.branchName} ({b.address || 'Chưa cập nhật địa chỉ'})
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1">
+                <SearchablePicker
+                  value={targetBranchId}
+                  placeholder="Tìm và chọn chi nhánh nhận"
+                  options={branches.map(branch => ({
+                    value: branch.id,
+                    label: branch.branchName,
+                    description: branch.address || 'Chưa cập nhật địa chỉ',
+                  }))}
+                  onChange={setTargetBranchId}
+                />
+              </div>
             </div>
 
             <div>
@@ -587,27 +663,39 @@ export function StockTransferPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-12">
-                <div className="sm:col-span-6">
-                  <select
-                    value={selectedStockKey}
-                    onChange={e => {
-                      setSelectedStockKey(e.target.value);
-                      const [dId, bId] = e.target.value.split('__');
-                      const r = availableStock.find(s => s.drugId === dId && s.batchId === bId);
-                      if (r) setInputQuantity(Math.min(1, r.quantity));
+                <div className="sm:col-span-3">
+                  <SearchablePicker
+                    value={selectedDrugId}
+                    placeholder="Tìm theo tên hoặc mã thuốc"
+                    options={Array.from(new Set(availableStock.map(stock => stock.drugId))).map(drugId => ({
+                      value: drugId,
+                      label: drugDict[drugId]?.name ?? 'Thuốc chưa xác định',
+                      description: drugDict[drugId]?.drugCode,
+                    }))}
+                    onChange={drugId => {
+                      setSelectedDrugId(drugId);
+                      setSelectedBatchId('');
+                      setInputQuantity(1);
                     }}
-                    className="w-full rounded-lg border border-line bg-white p-2 text-xs focus:border-forest focus:outline-none"
-                  >
-                    <option value="">-- Chọn thuốc & lô còn tồn --</option>
-                    {availableStock.map(s => {
-                      const drug = drugDict[s.drugId];
-                      return (
-                        <option key={`${s.drugId}__${s.batchId}`} value={`${s.drugId}__${s.batchId}`}>
-                          {drug ? drug.name : s.drugId} (Lô: {s.batchId}) - Tồn: {s.quantity}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  />
+                </div>
+
+                <div className="sm:col-span-3">
+                  <SearchablePicker
+                    value={selectedBatchId}
+                    disabled={!selectedDrugId}
+                    placeholder={selectedDrugId ? 'Chọn lô còn hạn' : 'Chọn thuốc trước'}
+                    options={availableStock.filter(stock => stock.drugId === selectedDrugId).map(stock => ({
+                      value: stock.batchId,
+                      label: `Lô ${stock.batchNo}`,
+                      description: `HSD ${calendarDate.format(new Date(stock.expiryDate))} · Khả dụng ${stock.availableQuantity}`,
+                      searchText: stock.batchNo,
+                    }))}
+                    onChange={batchId => {
+                      setSelectedBatchId(batchId);
+                      setInputQuantity(1);
+                    }}
+                  />
                 </div>
 
                 <div className="sm:col-span-2">
@@ -634,7 +722,7 @@ export function StockTransferPage() {
                 <div className="sm:col-span-1">
                   <button
                     type="button"
-                    disabled={!selectedStockKey}
+                    disabled={!selectedDrugId || !selectedBatchId}
                     onClick={handleAddStagedItem}
                     className="w-full rounded-lg bg-forest py-2 text-xs font-bold text-white shadow-sm transition hover:bg-forest/90 disabled:opacity-40"
                   >
@@ -717,7 +805,9 @@ export function StockTransferPage() {
       {/* Modal: Chi tiết phiếu điều chuyển */}
       <Modal
         isOpen={!!selectedTransfer}
-        onClose={() => setSelectedTransfer(null)}
+        onClose={() => {
+          if (!pendingAction && !actionLoading) setSelectedTransfer(null);
+        }}
         title={`Chi tiết phiếu điều chuyển: ${selectedTransfer?.transferNo || ''}`}
         maxWidth="4xl"
       >
@@ -811,7 +901,7 @@ export function StockTransferPage() {
                   <button
                     type="button"
                     disabled={actionLoading}
-                    onClick={handleCancelTransfer}
+                    onClick={() => { setDetailError(''); setPendingAction('CANCEL'); }}
                     className="text-xs font-semibold text-rose-600 hover:text-rose-700 underline"
                   >
                     Hủy phiếu điều chuyển này
@@ -833,7 +923,7 @@ export function StockTransferPage() {
                   <button
                     type="button"
                     disabled={actionLoading}
-                    onClick={handleShipTransfer}
+                    onClick={() => { setDetailError(''); setPendingAction('SHIP'); }}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-forest px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-forest/90 disabled:opacity-50"
                   >
                     <Send size={14} />
@@ -846,7 +936,7 @@ export function StockTransferPage() {
                   <button
                     type="button"
                     disabled={actionLoading}
-                    onClick={handleReceiveTransfer}
+                    onClick={() => { setDetailError(''); setPendingAction('RECEIVE'); }}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
                   >
                     <CheckCircle2 size={14} />
@@ -857,6 +947,42 @@ export function StockTransferPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={pendingAction !== null}
+        onClose={() => !actionLoading && setPendingAction(null)}
+        closeOnOverlayClick={!actionLoading}
+        title={pendingAction === 'SHIP' ? 'Xác nhận xuất kho chuyển hàng' : pendingAction === 'RECEIVE' ? 'Xác nhận nhận hàng' : 'Xác nhận hủy phiếu điều chuyển'}
+        subtitle={selectedTransfer?.transferNo}
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-slate-600">
+            {pendingAction === 'SHIP' && 'Tồn kho khả dụng tại chi nhánh gửi sẽ được kiểm tra lại và trừ khi xuất hàng thành công.'}
+            {pendingAction === 'RECEIVE' && 'Xác nhận hàng đã được nhận đủ. Tồn kho tại chi nhánh nhận sẽ được cộng sau khi hệ thống xử lý thành công.'}
+            {pendingAction === 'CANCEL' && 'Phiếu sẽ chuyển sang trạng thái đã hủy và không thể tiếp tục xuất kho.'}
+          </p>
+          {detailError && <AlertBanner type="error" message={detailError} />}
+          <div className="flex justify-end gap-2 border-t border-line pt-4">
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={() => setPendingAction(null)}
+              className="rounded-lg border border-line px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
+            >
+              Quay lại
+            </button>
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={() => void (pendingAction === 'SHIP' ? handleShipTransfer() : pendingAction === 'RECEIVE' ? handleReceiveTransfer() : handleCancelTransfer())}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-60 ${pendingAction === 'CANCEL' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-forest hover:bg-forest/90'}`}
+            >
+              {actionLoading ? 'Đang xử lý...' : pendingAction === 'CANCEL' ? 'Xác nhận hủy' : 'Xác nhận'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

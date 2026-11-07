@@ -60,4 +60,39 @@ public sealed class SuppliersController : ControllerBase
             return Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
         }
     }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "OWNER")]
+    public async Task<ActionResult<SupplierResponse>> UpdateAsync(
+        string id, [FromBody] UpdateSupplierRequest request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id) || request is null || string.IsNullOrWhiteSpace(request.SupplierName))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Supplier ID and SupplierName are required.");
+
+        try
+        {
+            var updated = await supplierService.UpdateAsync(id, request, cancellationToken);
+            return updated is null
+                ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Supplier was not found.")
+                : Ok(updated);
+        }
+        catch (ArgumentException ex)
+        {
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: ex.Message);
+        }
+    }
+
+    [HttpPut("{id}/status")]
+    [Authorize(Roles = "OWNER")]
+    public async Task<ActionResult<SupplierResponse>> UpdateStatusAsync(
+        string id, [FromBody] UpdateSupplierStatusRequest request, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Supplier ID is required.");
+
+        var updated = await supplierService.UpdateStatusAsync(id, request.IsActive, cancellationToken);
+        return updated is null
+            ? Problem(statusCode: StatusCodes.Status404NotFound, title: "Supplier was not found.")
+            : Ok(updated);
+    }
 }

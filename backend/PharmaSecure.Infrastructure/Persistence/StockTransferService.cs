@@ -201,8 +201,12 @@ public sealed class StockTransferService : IStockTransferService
 
                 // Validate stock availability in fromBranch
                 const string checkStockSql = @"
-                    SELECT Quantity FROM INVENTORIES
-                    WHERE BranchId = :fromBranchId AND DrugId = :drugId AND BatchId = :batchId";
+                    SELECT i.Quantity
+                    FROM INVENTORIES i
+                    JOIN DRUG_BATCHES b ON b.id = i.BatchId AND b.DrugId = i.DrugId
+                    JOIN DRUGS d ON d.id = i.DrugId
+                    WHERE i.BranchId = :fromBranchId AND i.DrugId = :drugId AND i.BatchId = :batchId
+                      AND b.ExpiryDate >= TRUNC(SYSDATE) AND d.IsActive = 1";
 
                 using var checkCmd = connection.CreateCommand();
                 checkCmd.Transaction = tx;
@@ -300,8 +304,13 @@ public sealed class StockTransferService : IStockTransferService
             foreach (var item in transferItems)
             {
                 const string lockInvSql = @"
-                    SELECT Quantity FROM INVENTORIES
-                    WHERE BranchId = :fromBranchId AND DrugId = :drugId AND BatchId = :batchId FOR UPDATE";
+                    SELECT i.Quantity
+                    FROM INVENTORIES i
+                    JOIN DRUG_BATCHES b ON b.id = i.BatchId AND b.DrugId = i.DrugId
+                    JOIN DRUGS d ON d.id = i.DrugId
+                    WHERE i.BranchId = :fromBranchId AND i.DrugId = :drugId AND i.BatchId = :batchId
+                      AND b.ExpiryDate >= TRUNC(SYSDATE) AND d.IsActive = 1
+                    FOR UPDATE";
 
                 using var lockCmd = connection.CreateCommand();
                 lockCmd.Transaction = tx;

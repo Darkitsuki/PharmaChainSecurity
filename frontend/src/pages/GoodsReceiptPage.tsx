@@ -1,13 +1,12 @@
 import { DateRangeFilter, withinDateRange } from '../components/common/DateRangeFilter';
 import { loadAllPages } from '../utils/loadAllPages';
-import { money, dateTime } from '../utils/formatters';
+import { money, dateTime, calendarDate } from '../utils/formatters';
 import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { PurchaseOrder } from '../services/purchaseOrders';
 import {
   Building2,
-  Eye,
   LoaderCircle,
   PackagePlus,
   Plus,
@@ -33,8 +32,12 @@ import {
   type Column,
 } from '../components/common';
 
-
-
+function receiptStatus(status: string) {
+  if (status === 'COMPLETED') return { label: 'Đã nhập kho', badge: 'bg-emerald-50 text-emerald-700', text: 'text-emerald-700' };
+  if (status === 'PENDING') return { label: 'Đang xử lý', badge: 'bg-amber-50 text-amber-700', text: 'text-amber-700' };
+  if (status === 'CANCELLED') return { label: 'Đã hủy', badge: 'bg-slate-100 text-slate-600', text: 'text-slate-600' };
+  return { label: status || 'Chưa xác định', badge: 'bg-slate-100 text-slate-600', text: 'text-slate-600' };
+}
 
 export function GoodsReceiptPage() {
   const [params] = useSearchParams();
@@ -297,11 +300,11 @@ export function GoodsReceiptPage() {
     },
     {
       header: 'Nhà Cung Cấp',
-      cell: (r) => <span className="font-semibold text-slate-900">{r.supplierName}</span>,
+      cell: (r) => <span className="block max-w-56 break-words font-semibold text-slate-900" title={r.supplierName}>{r.supplierName}</span>,
     },
     {
       header: 'Người Tiếp Nhận',
-      cell: (r) => <span className="text-slate-600">{r.warehouseStaffName || 'Thủ kho'}</span>,
+      cell: (r) => <span className="block max-w-48 break-words text-slate-600" title={r.warehouseStaffName || 'Chưa xác định'}>{r.warehouseStaffName || 'Chưa xác định'}</span>,
     },
     {
       header: 'Tổng Tiền',
@@ -312,24 +315,9 @@ export function GoodsReceiptPage() {
       header: 'Trạng Thái',
       align: 'center',
       cell: (r) => (
-        <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-          {r.status === 'COMPLETED' ? 'Đã nhập kho' : r.status}
+        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${receiptStatus(r.status).badge}`}>
+          {receiptStatus(r.status).label}
         </span>
-      ),
-    },
-    {
-      header: 'Hành Động',
-      align: 'right',
-      cell: (r) => (
-        <button
-          type="button"
-          onClick={() => handleViewDetail(r.id)}
-          disabled={loadingDetailId === r.id}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
-        >
-          {loadingDetailId === r.id ? <LoaderCircle size={13} className="animate-spin" /> : <Eye size={13} />}
-          <span>Xem chi tiết</span>
-        </button>
       ),
     },
   ];
@@ -410,6 +398,8 @@ export function GoodsReceiptPage() {
         loading={loading}
         loadingText="Đang tải danh sách phiếu nhập kho..."
         emptyMessage="Chưa có phiếu nhập kho nào. Bấm nút 'Tạo Phiếu Nhập Kho' để tiếp nhận lô thuốc mới."
+        onRowClick={(receipt) => { if (!loadingDetailId) void handleViewDetail(receipt.id); }}
+        rowLabel={(receipt) => `Xem chi tiết phiếu nhập ${receipt.receiptNo}`}
       />
 
       {/* MODAL: CHI TIẾT PHIẾU NHẬP KHO */}
@@ -419,7 +409,8 @@ export function GoodsReceiptPage() {
         title="Chi Tiết Phiếu Nhập Kho"
         subtitle={selectedReceipt ? `Mã phiếu: ${selectedReceipt.receiptNo}` : undefined}
         icon={ReceiptText}
-        maxWidth="3xl"
+        maxWidth="5xl"
+        printable
         footer={
           <div className="flex items-center justify-between w-full">
             <button
@@ -441,11 +432,16 @@ export function GoodsReceiptPage() {
         }
       >
         {selectedReceipt && (
-          <div className="space-y-4">
+          <div id="goods-receipt-printable" className="space-y-4">
+            <div className="hidden border-b-2 border-forest pb-4 text-center print:block">
+              <div className="text-left text-sm font-bold text-forest">PharmaSecure</div>
+              <h1 className="mt-2 text-xl font-bold uppercase tracking-wide text-ink">Phiếu nhập kho</h1>
+              <p className="mt-1 text-sm text-slate-600">Mã phiếu: {selectedReceipt.receiptNo}</p>
+            </div>
             <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs sm:grid-cols-4">
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Nhà cung cấp</span>
-                <p className="mt-1 font-semibold text-ink">{selectedReceipt.supplierName}</p>
+                <p className="mt-1 break-words font-semibold text-ink" title={selectedReceipt.supplierName}>{selectedReceipt.supplierName}</p>
               </div>
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Thời gian tạo</span>
@@ -453,22 +449,30 @@ export function GoodsReceiptPage() {
               </div>
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Người lập phiếu</span>
-                <p className="mt-1 text-slate-700">{selectedReceipt.warehouseStaffName || 'Thủ kho'}</p>
+                <p className="mt-1 break-words text-slate-700" title={selectedReceipt.warehouseStaffName || 'Chưa xác định'}>{selectedReceipt.warehouseStaffName || 'Chưa xác định'}</p>
               </div>
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Trạng thái</span>
-                <p className="mt-1 font-semibold text-emerald-700">Đã cập nhật kho</p>
+                <p className={`mt-1 font-semibold ${receiptStatus(selectedReceipt.status).text}`}>{receiptStatus(selectedReceipt.status).label}</p>
               </div>
             </div>
 
             {selectedReceipt.note && (
-              <p className="text-xs italic text-slate-500">
+              <p className="break-words text-xs italic text-slate-500" title={selectedReceipt.note}>
                 <span className="font-semibold text-slate-600">Ghi chú:</span> {selectedReceipt.note}
               </p>
             )}
 
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="ui-data-table w-full text-left text-xs">
+            <div data-goods-receipt-table className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="ui-data-table min-w-[760px] w-full text-left text-xs">
+                <colgroup>
+                  <col className="w-[22%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[19%]" />
+                </colgroup>
                 <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
                   <tr>
                     <th className="p-3">Mã / Tên Thuốc</th>
@@ -486,8 +490,8 @@ export function GoodsReceiptPage() {
                         {item.drugName}
                         <span className="block font-mono text-xs text-slate-400">{item.drugCode}</span>
                       </td>
-                      <td className="p-3 font-mono text-slate-600">{item.batchNo}</td>
-                      <td className="p-3 text-slate-600">{dateTime.format(new Date(item.expiryDate))}</td>
+                      <td className="p-3 break-all font-mono text-slate-600" title={item.batchNo}>{item.batchNo}</td>
+                      <td className="p-3 whitespace-nowrap text-slate-600">{calendarDate.format(new Date(item.expiryDate))}</td>
                       <td className="p-3 text-center font-bold text-ink">{item.quantity}</td>
                       <td className="p-3 text-right font-mono text-slate-600">{money.format(item.importPrice)}</td>
                       <td className="p-3 text-right font-mono font-bold text-forest">{money.format(item.subTotal)}</td>
@@ -506,6 +510,34 @@ export function GoodsReceiptPage() {
                 </tfoot>
               </table>
             </div>
+
+            <style>{`
+              @media print {
+                @page { size: A4 portrait; margin: 12mm; }
+                html, body { width: auto !important; min-height: auto !important; background: #fff !important; }
+                body > *:not([data-print-modal]) { display: none !important; }
+                [data-print-modal] { display: block !important; position: static !important; padding: 0 !important; background: #fff !important; backdrop-filter: none !important; animation: none !important; }
+                [data-print-modal] [role=dialog] { display: block !important; width: 100% !important; max-width: none !important; max-height: none !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; animation: none !important; }
+                [data-print-modal] [role=dialog] > :first-child,
+                [data-print-modal] [role=dialog] > :last-child { display: none !important; }
+                [data-print-modal] [role=dialog] > :nth-child(2) { display: block !important; padding: 0 !important; overflow: visible !important; }
+                #goods-receipt-printable { width: 100% !important; margin: 0 !important; color: #172c2a !important; font-size: 10.5pt !important; }
+                #goods-receipt-printable [data-goods-receipt-table] { overflow: visible !important; }
+                #goods-receipt-printable table { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; font-size: 9pt !important; }
+                #goods-receipt-printable th,
+                #goods-receipt-printable td { padding: 7px 6px !important; overflow-wrap: break-word !important; }
+                #goods-receipt-printable th { padding: 7px 6px !important; font-size: 8.5pt !important; white-space: normal !important; line-height: 1.25 !important; }
+                #goods-receipt-printable tbody td:nth-child(2),
+                #goods-receipt-printable tbody td:nth-child(2).font-mono { white-space: normal !important; word-break: break-all !important; }
+                #goods-receipt-printable tbody td:nth-child(3),
+                #goods-receipt-printable tbody td:nth-child(4),
+                #goods-receipt-printable tbody td:nth-child(5),
+                #goods-receipt-printable tbody td:nth-child(6),
+                #goods-receipt-printable tfoot td:last-child { white-space: nowrap !important; }
+                #goods-receipt-printable thead { display: table-header-group !important; }
+                #goods-receipt-printable tr { break-inside: avoid !important; }
+              }
+            `}</style>
           </div>
         )}
       </Modal>
@@ -573,7 +605,7 @@ export function GoodsReceiptPage() {
               {receiptItems.map((item, idx) => (
                 <div key={idx} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/50 p-3 sm:flex-row sm:items-center">
                   <div className="flex-1 min-w-[160px]">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase">Thuốc</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Thuốc <span className="text-rose-500" aria-hidden="true">*</span></label>
                     <select
                       required
                       value={item.drugId}
@@ -590,7 +622,7 @@ export function GoodsReceiptPage() {
                   </div>
 
                   <div className="w-full sm:w-28">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase">Số Lô</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Số Lô <span className="text-rose-500" aria-hidden="true">*</span></label>
                     <input
                       type="text"
                       required
@@ -602,7 +634,7 @@ export function GoodsReceiptPage() {
                   </div>
 
                   <div className="w-full sm:w-32">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase">Hạn Dùng (FEFO)</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Hạn Dùng (FEFO) <span className="text-rose-500" aria-hidden="true">*</span></label>
                     <input
                       type="date"
                       required
@@ -613,7 +645,7 @@ export function GoodsReceiptPage() {
                   </div>
 
                   <div className="w-full sm:w-24">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase">Số Lượng</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Số Lượng <span className="text-rose-500" aria-hidden="true">*</span></label>
                     <input
                       type="number"
                       min="1"
@@ -625,7 +657,7 @@ export function GoodsReceiptPage() {
                   </div>
 
                   <div className="w-full sm:w-28">
-                    <label className="block text-xs font-semibold text-slate-500 uppercase">Giá Nhập (VNĐ)</label>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase">Giá Nhập (VNĐ) <span className="text-rose-500" aria-hidden="true">*</span></label>
                     <input
                       type="number"
                       min="0"
@@ -686,7 +718,7 @@ export function GoodsReceiptPage() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-slate-700">Mã Nhà Cung Cấp *</label>
+              <label className="block text-xs font-semibold text-slate-700">Mã Nhà Cung Cấp <span className="text-rose-500" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 required
@@ -709,7 +741,7 @@ export function GoodsReceiptPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700">Tên Doanh Nghiệp / Đơn Vị *</label>
+            <label className="block text-xs font-semibold text-slate-700">Tên Doanh Nghiệp / Đơn Vị <span className="text-rose-500" aria-hidden="true">*</span></label>
             <input
               type="text"
               required

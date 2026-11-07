@@ -19,7 +19,7 @@ export function PurchaseOrderForm({ busy, error, onSave, onCancel }: {
   const [supplierId, setSupplierId] = useState('');
   const [expected, setExpected] = useState('');
   const [notes, setNotes] = useState('');
-  const [lines, setLines] = useState<Line[]>([{ drugId: '', quantity: 1, estimatedUnitPrice: 0, notes: '' }]);
+  const [lines, setLines] = useState<Line[]>([{ drugId: '', quantity: 1, estimatedUnitPrice: 1000, notes: '' }]);
   useEffect(() => {
     const abort = new AbortController();
     async function catalogs() {
@@ -40,7 +40,7 @@ export function PurchaseOrderForm({ busy, error, onSave, onCancel }: {
   const total = lines.reduce((sum, line) => sum + line.quantity * line.estimatedUnitPrice, 0);
   function submit(e: FormEvent) {
     e.preventDefault(); setValidation('');
-    if (!supplierId || lines.some(l => !l.drugId || !Number.isInteger(l.quantity) || l.quantity <= 0 || !Number.isFinite(l.estimatedUnitPrice) || l.estimatedUnitPrice < 0)) { setValidation('Chọn nhà cung cấp, thuốc, số lượng nguyên dương và giá không âm.'); return; }
+    if (!supplierId || lines.some(l => !l.drugId || !Number.isInteger(l.quantity) || l.quantity <= 0 || !Number.isSafeInteger(l.estimatedUnitPrice) || l.estimatedUnitPrice < 1000 || l.estimatedUnitPrice > 9_999_999_999_999)) { setValidation('Chọn nhà cung cấp, thuốc, số lượng nguyên dương và đơn giá nguyên từ 1.000đ.'); return; }
     if (new Set(lines.map(l => l.drugId)).size !== lines.length) { setValidation('Mỗi thuốc chỉ xuất hiện một lần trong đơn mua.'); return; }
     if (new TextEncoder().encode(notes.trim()).length > 500) { setValidation('Ghi chú vượt giới hạn 500 byte. Vui lòng rút ngắn nội dung.'); return; }
     onSave({ supplierId, expectedDeliveryDate: expected || null, notes: notes.trim() || null, items: lines });
@@ -58,10 +58,10 @@ export function PurchaseOrderForm({ busy, error, onSave, onCancel }: {
         {lines.map((line, i) => <div key={i} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3"><div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
           <label className="min-w-0 text-xs font-semibold text-slate-600">Thuốc {i + 1}<select aria-label={`Thuốc ${i + 1}`} required className={fieldClass} value={line.drugId} onChange={e => change(i, { drugId: e.target.value })}><option value="">Chọn thuốc</option>{drugs.map(d => <option key={d.drugId} value={d.drugId}>{d.name} · {d.drugCode}</option>)}</select></label>
           <label className="text-xs font-semibold text-slate-600">Số lượng<input aria-label={`Số lượng ${i + 1}`} required type="number" min="1" step="1" className={fieldClass} value={line.quantity} onChange={e => change(i, { quantity: Number(e.target.value) })} /></label>
-          <label className="text-xs font-semibold text-slate-600">Đơn giá dự kiến (đ)<input aria-label={`Giá dự kiến ${i + 1}`} required type="number" min="0" step="0.01" className={fieldClass} value={line.estimatedUnitPrice} onChange={e => change(i, { estimatedUnitPrice: Number(e.target.value) })} /></label>
+          <label className="text-xs font-semibold text-slate-600">Đơn giá dự kiến (đ)<span className="mt-1.5 flex items-stretch"><button type="button" aria-label={`Giảm giá dự kiến ${i + 1}`} className="rounded-l-lg border border-r-0 border-slate-200 px-2 hover:bg-slate-100" onClick={() => change(i, { estimatedUnitPrice: Math.max(1000, line.estimatedUnitPrice - 1000) })}>−</button><input aria-label={`Giá dự kiến ${i + 1}`} required type="number" min="1000" max="9999999999999" step="1" className={`${fieldClass} !mt-0 rounded-none`} value={line.estimatedUnitPrice} onChange={e => change(i, { estimatedUnitPrice: Number(e.target.value) })} /><button type="button" aria-label={`Tăng giá dự kiến ${i + 1}`} className="rounded-r-lg border border-l-0 border-slate-200 px-2 hover:bg-slate-100" onClick={() => change(i, { estimatedUnitPrice: Math.min(9_999_999_999_999, line.estimatedUnitPrice + 1000) })}>+</button></span></label>
           <button type="button" className="mb-1 justify-self-end rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-30" aria-label={`Bỏ thuốc ${i + 1}`} disabled={lines.length === 1} onClick={() => setLines(old => old.filter((_, n) => n !== i))}><Trash2 size={16} /></button>
         </div><p className="mt-2 text-right text-xs text-slate-500">Thành tiền: <strong className="text-ink">{money(line.quantity * line.estimatedUnitPrice)}</strong></p></div>)}
-      </div><button type="button" className={`${secondaryButton} mt-3`} disabled={lines.length >= 100} onClick={() => setLines(old => [...old, { drugId: '', quantity: 1, estimatedUnitPrice: 0, notes: '' }])}><Plus size={14} />Thêm thuốc</button></div>
+      </div><button type="button" className={`${secondaryButton} mt-3`} disabled={lines.length >= 100} onClick={() => setLines(old => [...old, { drugId: '', quantity: 1, estimatedUnitPrice: 1000, notes: '' }])}><Plus size={14} />Thêm thuốc</button></div>
       <label className="block text-xs font-semibold text-slate-700">3. Ghi chú yêu cầu<textarea aria-label="Ghi chú đơn mua" className={fieldClass} rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Thông tin bổ sung cho người duyệt và nhà cung cấp" /></label>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-forest/15 bg-mint/50 p-4"><div><p className="text-xs text-slate-600">Tổng chi phí dự kiến</p><strong className="font-display text-xl text-forest">{money(total)}</strong></div><p className="max-w-xs text-xs leading-relaxed text-slate-500">Gửi yêu cầu để Chủ nhà thuốc xem xét. Chưa đặt hàng, nhập kho hoặc thanh toán.</p></div>
     </fieldset>

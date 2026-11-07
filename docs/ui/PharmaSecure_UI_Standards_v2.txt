@@ -1,0 +1,45 @@
+PHARMASECURE — QUY CHUẨN HIỂN THỊ & TƯƠNG TÁC WEB
+Phiên bản: 2.0 | Phạm vi: áp dụng cho các trang chức năng được phát triển/chỉnh sửa về sau.
+
+1. VAI TRÒ TÀI LIỆU
+- Lấy Bán hàng tại quầy, Hóa đơn bán hàng, Đổi trả & Hoàn tiền làm nguồn tham khảo hành vi đã được người dùng phê duyệt; KHÔNG tự ý sửa 3 trang này.
+- Tài liệu quy định NGUYÊN TẮC chung, không ép mọi trang giống bố cục nhau. Thẩm mỹ và ngoại lệ cụ thể do prompt từng nhiệm vụ quyết định.
+- Ưu tiên component/style hiện có; tuân thủ AGENTS.md và docs/ui/PHARMASECURE_UI_STANDARDS.md. Không xây thêm UI trùng chức năng.
+
+2. BẢNG DANH SÁCH: ƯU TIÊN DỮ LIỆU, KHÔNG NHỒI NÚT
+- Bảng chính để tra cứu và nhận diện bản ghi, KHÔNG phải nơi tập hợp các nút Sửa/Xóa/Chi tiết/Khóa/Duyệt...
+- Nếu bản ghi có trang/modal chi tiết: click toàn bộ dòng (hoặc liên kết ở trường chính) để mở chi tiết. Hiển thị hover, focus, thao tác Enter/Space phù hợp.
+- Đặt các thao tác theo bản ghi (Sửa, Vô hiệu hóa, Hủy, Duyệt, In...) trong màn hình CHI TIẾT hoặc menu thao tác ngữ cảnh; hành động nguy hiểm phải có xác nhận và kiểm tra quyền.
+- KHÔNG tạo cột “Thao tác” chỉ để chứa nút “Sửa”, “Chi tiết”, “Vô hiệu hóa” khi có thể mở chi tiết bằng dòng. Không lặp nút và cơ chế click dòng cho cùng mục đích.
+- Ngoại lệ: thao tác nhanh có tần suất cao, thực sự cần ngay trên danh sách; chỉ thêm khi nghiệp vụ/prompt yêu cầu rõ, số nút tối thiểu.
+- Nút tạo mới (chung cho trang) đặt ở header/toolbar, không đưa vào từng dòng.
+
+3. CHỈ HIỂN THỊ THÔNG TIN CẦN THIẾT
+- Trước khi thêm cột/trường, hỏi: “Người dùng có cần thông tin này để nhận diện, so sánh, tìm kiếm hoặc ra quyết định ngay ở DANH SÁCH không?” Nếu không, chuyển vào CHI TIẾT hoặc bỏ khỏi UI.
+- KHÔNG mặc định hiển thị ID khóa chính, UUID, mã kỹ thuật, khóa ngoại, mã nội bộ dài. Những giá trị này vẫn dùng trong code/API; chỉ hiển thị khi có nhu cầu nghiệp vụ/truy vết thực tế.
+- Phân biệt MÃ NGHIỆP VỤ (số hóa đơn/phiếu/đơn đặt để tra cứu, đối soát) với ID kỹ thuật: mã nghiệp vụ cần cho công việc có thể và thường nên giữ; ID kỹ thuật mặc định ẩn.
+- Không lặp một thông tin ở nhiều cột hoặc lặp lại tên/ID trong các chip. Ưu tiên các cột ngắn, dễ quét; thông tin phụ đưa xuống dòng thứ hai hoặc màn chi tiết khi thật cần.
+- Không hiển thị địa chỉ dài, email, metadata phụ trên bảng nếu không phục vụ công việc chính. Nếu cần, đảm bảo có cách xem đầy đủ ở chi tiết.
+- Chỉ hiển thị số liệu, trạng thái, nút theo dữ liệu/API và quyền thực tế; không bịa, không để ô trống gây hiểu nhầm.
+
+4. VÍ DỤ CỤ THỂ (KHÔNG PHẢI DANH SÁCH CỘT CỨNG)
+- Khách hàng & Tích điểm: ưu tiên Họ tên (+ SĐT), Điểm tích lũy, Tổng chi tiêu khi hữu ích, Trạng thái. Mã KH chỉ hiện nếu thực sự dùng để tra cứu/chăm sóc; địa chỉ/email đầy đủ và nút Sửa chuyển vào chi tiết. Không cần cột Thao tác chỉ có “Sửa”.
+- Nhân viên: ưu tiên Họ tên, Vai trò, Trạng thái; tên đăng nhập/SĐT chỉ giữ nếu có giá trị quản trị trực tiếp. ID dạng “us-...” mặc định ẩn; Vô hiệu hóa/khôi phục chuyển vào chi tiết hoặc thao tác quản trị có xác nhận.
+- Hóa đơn: giữ SỐ HÓA ĐƠN vì cần tra cứu/đối soát, cùng ngày giờ, thu ngân, thanh toán, tổng tiền, chữ ký nếu có ích. Click dòng để xem chi tiết; không cần cột “Chi tiết”.
+- Các trang khác: tự chọn dữ liệu chính theo vai trò/nghiệp vụ, không sao chép máy móc ví dụ trên.
+
+5. HIỂN THỊ & TƯƠNG TÁC NHẤT QUÁN
+- Thông tin chỉ đọc (mã, số, chữ) hiển thị dạng text; KHÔNG bọc chip/khung xám/viền/bo góc chỉ để trang trí. Badge chỉ dành cho trạng thái/thông tin cần nhấn mạnh có lý do. Giữ viền chức năng của input, bảng, modal, nút.
+- Tái sử dụng PageHeader, SearchToolbar, DataTable, PaginationBar, Modal, AlertBanner và formatter có sẵn khi phù hợp. Một hành động chính nổi bật; nút phụ nhẹ hơn; không lạm dụng popup xác nhận.
+- Input có nhãn, kiểm tra hợp lệ; loading, empty, error, disabled, success rõ ràng. Chống gửi trùng; chỉ báo thành công sau khi API xác nhận. Refresh/filter/phân trang hoạt động thực.
+- Kích thước, căn lề, khoảng cách hợp lý: không sát nhau, không tràn cột, không chữ gãy vụn, không che nội dung/nút. Cột nhiều thông tin phải có chiến lược wrap/truncate và xem đầy đủ; mobile dùng bảng cuộn ngang nội bộ hoặc bố cục phù hợp.
+- Không tự thêm cột, badge, nút, bộ lọc hoặc thẻ thống kê chỉ để “đầy” giao diện. Mọi thành phần phải có mục đích cụ thể.
+- Bảo toàn RBAC, branch scope, API contract và nghiệp vụ hiện hành; frontend không tự quyết định quyền hay kết quả giao dịch.
+
+6. CÁCH ÁP DỤNG
+- Mỗi nhiệm vụ: đọc tài liệu này + quy chuẩn UI gốc + phần code liên quan; chọn mẫu hành vi phù hợp trong 3 trang tham chiếu.
+- Chỉ sửa phạm vi được giao. Không tự refactor 3 trang tham chiếu hoặc trang khác. Các yêu cầu thẩm mỹ riêng trong prompt được ưu tiên nếu không xung đột bảo mật/nghiệp vụ.
+- Trước khi bàn giao: kiểm tra từng cột “có thật cần thiết?”, từng nút “có cần ở bảng?”, từng khung “có chức năng?”, tương tác bàn phím, tình trạng lỗi, responsive và build/test phù hợp. Không tự nhận PASS nếu chưa chạy.
+
+PROMPT GỌI NHANH:
+“Tuân thủ docs/ui/PHARMASECURE_WEB_UI_INTERACTION_STANDARD.txt và docs/ui/PHARMASECURE_UI_STANDARDS.md. Ưu tiên bảng tối giản, mở chi tiết bằng dòng, hành động theo bản ghi nằm trong chi tiết; ẩn thông tin/mã kỹ thuật không cần thiết. Chỉ sửa phạm vi được giao, kiểm thử và báo cáo ngắn.”

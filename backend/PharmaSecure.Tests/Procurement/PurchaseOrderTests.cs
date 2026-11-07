@@ -12,7 +12,7 @@ namespace PharmaSecure.Tests.Procurement;
 
 public sealed class PurchaseOrderTests
 {
-    private static CreatePurchaseOrderRequest Request(int quantity = 2, decimal price = 12.50m)
+    private static CreatePurchaseOrderRequest Request(int quantity = 2, decimal price = 145500m)
         => new("supplier", null, null, new[] { new CreatePurchaseOrderItem("drug", quantity, price) });
 
     [Fact]
@@ -20,13 +20,16 @@ public sealed class PurchaseOrderTests
     {
         var request = Request();
         var total = PurchaseOrderService.Validate(request);
-        Assert.Equal(25m, total);
+        Assert.Equal(291000m, total);
     }
     [Theory]
-    [InlineData(0, 1)]
-    [InlineData(-1, 1)]
+    [InlineData(0, 1000)]
+    [InlineData(-1, 1000)]
+    [InlineData(1, 0)]
     [InlineData(1, -1)]
-    [InlineData(1, 1.001)]
+    [InlineData(1, 999)]
+    [InlineData(1, 145500.5)]
+    [InlineData(1, 10000000000000)]
     public void Validate_WhenQuantityOrPriceInvalid_RejectsInput(int qty, double price)
     {
         var request = Request(qty, (decimal)price);
@@ -36,7 +39,7 @@ public sealed class PurchaseOrderTests
     [Fact]
     public void Validate_WhenDrugRepeated_RejectsCompositeKeyCollision()
     {
-        var request = Request() with { Items = new[] { new CreatePurchaseOrderItem("drug", 1, 1), new CreatePurchaseOrderItem("drug", 2, 1) } };
+        var request = Request() with { Items = new[] { new CreatePurchaseOrderItem("drug", 1, 1000), new CreatePurchaseOrderItem("drug", 2, 1000) } };
         Assert.Throws<ArgumentException>(() => PurchaseOrderService.Validate(request));
     }
     [Fact]

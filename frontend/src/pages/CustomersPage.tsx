@@ -5,7 +5,6 @@ import {
   Award,
   CheckCircle2,
   Coins,
-  Edit2,
   HeartHandshake,
   LoaderCircle,
   MapPin,
@@ -206,15 +205,6 @@ export function CustomersPage() {
 
   const columns: Column<Customer>[] = [
     {
-      header: 'Mã KH',
-      cell: (row) => (
-        <span className="font-mono text-xs font-bold text-forest">
-          {row.customerCode}
-        </span>
-      ),
-      className: 'whitespace-nowrap',
-    },
-    {
       header: 'Họ và tên',
       cell: (row) => (
         <div>
@@ -273,19 +263,6 @@ export function CustomersPage() {
             <PowerOff size={12} /> Tạm ngưng
           </span>
         ),
-    },
-    {
-      header: 'Thao tác',
-      cell: (row) => (
-        <button
-          onClick={() => handleOpenEditModal(row)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-xs transition hover:bg-slate-50 hover:text-forest"
-          title="Chỉnh sửa thông tin"
-        >
-          <Edit2 size={13} /> Sửa
-        </button>
-      ),
-      align: 'right',
     },
   ];
 
@@ -381,6 +358,8 @@ export function CustomersPage() {
             keyExtractor={(item) => item.id}
             loading={loading}
             emptyMessage="Không tìm thấy khách hàng nào phù hợp với bộ lọc."
+            onRowClick={handleOpenEditModal}
+            rowLabel={(item) => `Cập nhật thông tin khách hàng ${item.fullName}`}
             pagination={{
               page: currentPage,
               totalPages,
