@@ -28,14 +28,17 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String query = '';
-  final Map<DemoMedicine, int> cart = {};
+  final Map<DrugModel, int> cart = {};
 
-  final _customerNameController = TextEditingController(text: 'Khách mua tại quầy');
+  final _customerNameController =
+      TextEditingController(text: 'Khách mua tại quầy');
   final _customerPhoneController = TextEditingController(text: '0908123456');
   final _deliveryAddressController = TextEditingController();
 
   late final OrderService _orderService;
-
+  late final DrugService _drugService;
+  List<DrugModel> _drugs = [];
+  bool _isLoadingDrugs = false;
   bool _isSubmitting = false;
 
   @override
@@ -47,6 +50,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           tokenProvider: () => widget.session?.token,
           defaultBranchId: widget.session?.user?.branchId,
         );
+    _drugService = widget.drugService ??
+        DrugService(
+          api: widget.session?.api,
+          tokenProvider: () => widget.session?.token,
+        );
+    _loadDrugs();
+  }
+
+  Future<void> _loadDrugs() async {
+    setState(() => _isLoadingDrugs = true);
+    try {
+      final list = await _drugService.getDrugs();
+      if (mounted) {
+        setState(() {
+          _drugs = list;
+          _isLoadingDrugs = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingDrugs = false);
+    }
   }
 
   @override
@@ -64,23 +88,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     try {
       final items = cart.entries.map((e) {
-        final drug = DrugModel(
-          drugId: e.key.code,
-          drugCode: e.key.code,
-          name: e.key.name,
-          activeIngredient: e.key.ingredient,
-          unit: e.key.unit,
-          price: e.key.price.toDouble(),
-        );
-        return CartItem(drug: drug, quantity: e.value);
+        return CartItem(drug: e.key, quantity: e.value);
       }).toList();
 
-      final branchId = widget.session?.user?.branchId ?? 'br-00000000-0000-0000-0000-000000000001';
+      final branchId = widget.session?.user?.branchId ??
+          'br-00000000-0000-0000-0000-000000000001';
       final branchName = widget.session?.user?.branchName ?? 'Chi nhánh Quận 1';
 
       final request = CustomerOrderRequest(
-        customerName: _customerNameController.text.trim().isEmpty ? 'Khách lẻ' : _customerNameController.text.trim(),
-        phoneNumber: _customerPhoneController.text.trim().isEmpty ? '0908123456' : _customerPhoneController.text.trim(),
+        customerName: _customerNameController.text.trim().isEmpty
+            ? 'Khách lẻ'
+            : _customerNameController.text.trim(),
+        phoneNumber: _customerPhoneController.text.trim().isEmpty
+            ? '0908123456'
+            : _customerPhoneController.text.trim(),
         deliveryMethod: DeliveryMethod.pickup,
         branchId: branchId,
         branchName: branchName,
@@ -96,12 +117,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Row(
             children: [
               Icon(Icons.check_circle, color: AppColors.forest, size: 28),
               SizedBox(width: 10),
-              Text('Thanh toán thành công', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+              Text('Thanh toán thành công',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
             ],
           ),
           content: Column(
@@ -109,28 +132,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Mã hóa đơn: ${result.invoiceNumber}',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.forest)),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: AppColors.forest)),
               const SizedBox(height: 6),
               Text('Tổng thanh toán: ${money(result.totalAmount.toInt())}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800, fontSize: 16)),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(8)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                    color: AppColors.mint,
+                    borderRadius: BorderRadius.circular(8)),
                 child: Row(
                   children: [
-                    const Icon(Icons.verified_outlined, size: 16, color: AppColors.forest),
+                    const Icon(Icons.verified_outlined,
+                        size: 16, color: AppColors.forest),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text('ĐÃ KÝ SỐ HSM: ${result.hashValueSha256.substring(0, 16)}...',
-                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.forest)),
+                      child: Text(
+                          'ĐÃ KÝ SỐ HSM: ${result.hashValueSha256.length > 16 ? result.hashValueSha256.substring(0, 16) : result.hashValueSha256}...',
+                          style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.forest)),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
-              const Text('Hóa đơn điện tử đã được ghi nhận vào hệ thống CSDL và trừ tồn kho chi nhánh.',
-                  style: TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
+              const Text(
+                  'Hóa đơn điện tử đã được ghi nhận vào hệ thống CSDL và trừ tồn kho chi nhánh.',
+                  style: TextStyle(
+                      fontSize: 12, color: AppColors.muted, height: 1.4)),
             ],
           ),
           actions: [
@@ -172,10 +209,33 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final items = demoMedicines.where((m) =>
-        m.active && m.name.toLowerCase().contains(query.toLowerCase().trim()));
-    final total =
-        cart.entries.fold<int>(0, (sum, e) => sum + e.key.price * e.value);
+    final sourceList = _drugs.isNotEmpty
+        ? _drugs
+        : demoMedicines
+            .where((m) => m.active)
+            .map((m) => DrugModel(
+                  drugId: m.code,
+                  drugCode: m.code,
+                  name: m.name,
+                  activeIngredient: m.ingredient,
+                  unit: m.unit,
+                  price: m.price.toDouble(),
+                  isActive: m.active,
+                  stock: m.stock,
+                  batch: m.batch,
+                  expiry: m.expiry,
+                  expiring: m.expiring,
+                ))
+            .toList();
+
+    final items = sourceList.where((m) =>
+        m.isActive &&
+        (m.name.toLowerCase().contains(query.toLowerCase().trim()) ||
+            m.drugCode.toLowerCase().contains(query.toLowerCase().trim()) ||
+            (m.activeIngredient?.toLowerCase().contains(query.toLowerCase().trim()) ?? false)));
+
+    final total = cart.entries.fold<int>(
+        0, (sum, e) => sum + (e.key.price.toInt() * e.value));
 
     return ListView(padding: const EdgeInsets.all(20), children: [
       // Banner to switch to Patient Ordering App
@@ -207,7 +267,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   color: const Color(0x33FFFFFF),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 28),
+                child: const Icon(Icons.shopping_bag_outlined,
+                    color: Colors.white, size: 28),
               ),
               const SizedBox(width: 14),
               const Expanded(
@@ -215,14 +276,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Mở Ứng dụng Bệnh nhân Đặt thuốc',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15)),
                     SizedBox(height: 4),
-                    Text('Giao diện E-commerce: Đặt giao tận nơi, chụp đơn thuốc Rx.',
-                        style: TextStyle(color: Color(0xFFD6EAE3), fontSize: 11)),
+                    Text(
+                        'Giao diện E-commerce: Đặt giao tận nơi, chụp đơn thuốc Rx.',
+                        style:
+                            TextStyle(color: Color(0xFFD6EAE3), fontSize: 11)),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
+              const Icon(Icons.arrow_forward_ios,
+                  color: Colors.white, size: 14),
             ],
           ),
         ),
@@ -235,34 +302,42 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           hint: 'Tìm thuốc theo tên hoặc hoạt chất...',
           onChanged: (q) => setState(() => query = q)),
       const SizedBox(height: 18),
-      for (final m in items)
-        Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Panel(
-                padding: const EdgeInsets.all(12),
-                child: Row(children: [
-                  const Icon(Icons.medication_outlined,
-                      color: AppColors.forest),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        Text(m.name,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 5),
-                        Text('${money(m.price)} · ${m.unit}',
-                            style: const TextStyle(
-                                color: AppColors.muted, fontSize: 12))
-                      ])),
-                  IconButton(
-                      tooltip: 'Thêm vào giỏ',
-                      icon: const Icon(Icons.add_circle_outline,
-                          color: AppColors.forest),
-                      onPressed: () => setState(() =>
-                          cart.update(m, (n) => n + 1, ifAbsent: () => 1)))
-                ]))),
+      if (_isLoadingDrugs)
+        const Center(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: CircularProgressIndicator(),
+          ),
+        )
+      else
+        for (final m in items)
+          Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Panel(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(children: [
+                    const Icon(Icons.medication_outlined,
+                        color: AppColors.forest),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Text(m.name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 5),
+                          Text('${money(m.price.toInt())} · ${m.unit}',
+                              style: const TextStyle(
+                                  color: AppColors.muted, fontSize: 12))
+                        ])),
+                    IconButton(
+                        tooltip: 'Thêm vào giỏ',
+                        icon: const Icon(Icons.add_circle_outline,
+                            color: AppColors.forest),
+                        onPressed: () => setState(() =>
+                            cart.update(m, (n) => n + 1, ifAbsent: () => 1)))
+                  ]))),
       const SizedBox(height: 20),
       Panel(
           child:
@@ -301,7 +376,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               setState(() => cart[e.key] = e.value + 1),
                           icon: const Icon(Icons.add_circle_outline)),
                       Expanded(
-                          child: Text(money(e.key.price * e.value),
+                          child: Text(money((e.key.price * e.value).toInt()),
                               textAlign: TextAlign.end,
                               style:
                                   const TextStyle(fontWeight: FontWeight.w700)))
@@ -309,7 +384,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ])),
         const Divider(height: 24),
         Text('Tổng tiền: ${money(total)}',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.forest)),
+            style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: AppColors.forest)),
         const SizedBox(height: 18),
         TextField(
             controller: _customerPhoneController,
@@ -326,10 +404,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         const SizedBox(height: 18),
         FilledButton.icon(
             icon: _isSubmitting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2))
                 : const Icon(Icons.check_circle_outline),
             onPressed: cart.isEmpty || _isSubmitting ? null : _handleCheckout,
-            label: Text(_isSubmitting ? 'Đang xuất hóa đơn...' : 'Thanh toán & Xuất hóa đơn Ký số')),
+            label: Text(_isSubmitting
+                ? 'Đang xuất hóa đơn...'
+                : 'Thanh toán & Xuất hóa đơn Ký số')),
         const SizedBox(height: 10),
         const Text(
             'Hóa đơn điện tử bảo mật tuân thủ Thông tư 78/2021/TT-BTC và chuẩn chữ ký số HSM SHA-256.',

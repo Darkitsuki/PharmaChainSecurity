@@ -4,6 +4,7 @@ enum AppSection {
   overview('Tổng quan', Icons.dashboard_outlined),
   catalog('Danh mục thuốc', Icons.medication_outlined),
   inventory('Tồn kho chi nhánh', Icons.inventory_2_outlined),
+  purchaseOrders('Đơn đặt mua hàng', Icons.assignment_outlined),
   receipts('Nhập kho thuốc', Icons.add_box_outlined),
   checkout('Bán hàng tại quầy', Icons.shopping_cart_outlined),
   invoices('Hóa đơn bán hàng', Icons.receipt_long_outlined),
@@ -54,6 +55,20 @@ class DemoRecord {
 }
 
 const demoRecords = <AppSection, List<DemoRecord>>{
+  AppSection.purchaseOrders: [
+    DemoRecord(
+        'PO20261105-001',
+        'Công ty Cổ phần Dược phẩm Hậu Giang (DHG Pharma)',
+        '05/11/2026 · Thủ kho Minh',
+        'Chờ duyệt',
+        ['3 mặt hàng', 'Tổng tiền: 12.500.000 ₫', 'Chi nhánh Quận 1']),
+    DemoRecord(
+        'PO20261101-002',
+        'Công ty Cổ phần Traphaco',
+        '01/11/2026 · Thủ kho Minh',
+        'Đã duyệt',
+        ['2 mặt hàng', 'Tổng tiền: 6.800.000 ₫', 'Chi nhánh Quận 1']),
+  ],
   AppSection.receipts: [
     DemoRecord(
         'PN20261022-001',

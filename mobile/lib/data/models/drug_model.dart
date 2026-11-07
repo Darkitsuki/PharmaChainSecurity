@@ -29,6 +29,38 @@ class DrugModel {
   final String expiry;
   final bool expiring;
 
+  DrugModel copyWith({
+    String? drugId,
+    String? drugCode,
+    String? name,
+    String? activeIngredient,
+    String? unit,
+    double? price,
+    bool? isActive,
+    String? category,
+    bool? prescriptionRequired,
+    int? stock,
+    String? batch,
+    String? expiry,
+    bool? expiring,
+  }) {
+    return DrugModel(
+      drugId: drugId ?? this.drugId,
+      drugCode: drugCode ?? this.drugCode,
+      name: name ?? this.name,
+      activeIngredient: activeIngredient ?? this.activeIngredient,
+      unit: unit ?? this.unit,
+      price: price ?? this.price,
+      isActive: isActive ?? this.isActive,
+      category: category ?? this.category,
+      prescriptionRequired: prescriptionRequired ?? this.prescriptionRequired,
+      stock: stock ?? this.stock,
+      batch: batch ?? this.batch,
+      expiry: expiry ?? this.expiry,
+      expiring: expiring ?? this.expiring,
+    );
+  }
+
   factory DrugModel.fromJson(Map<String, dynamic> json) {
     final name = json['name'] as String? ?? '';
     // Infer if prescription required based on active ingredient or name if not provided
@@ -75,6 +107,16 @@ class DrugModel {
     }
     return 'Dược phẩm thiết yếu';
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DrugModel &&
+          runtimeType == other.runtimeType &&
+          drugId == other.drugId;
+
+  @override
+  int get hashCode => drugId.hashCode;
 }
 
 class DrugBatchModel {
@@ -95,6 +137,10 @@ class DrugBatchModel {
   final int stockQuantity;
 
   factory DrugBatchModel.fromJson(Map<String, dynamic> json) {
+    final qty = (json['quantity'] as num?)?.toInt() ??
+        (json['stockQuantity'] as num?)?.toInt() ??
+        (json['availableQuantity'] as num?)?.toInt() ??
+        0;
     return DrugBatchModel(
       batchId: json['batchId'] as String? ?? json['id'] as String? ?? '',
       drugId: json['drugId'] as String? ?? '',
@@ -103,11 +149,12 @@ class DrugBatchModel {
       expiryDate: json['expiryDate'] != null
           ? DateTime.tryParse(json['expiryDate'] as String) ?? DateTime.now().add(const Duration(days: 365))
           : DateTime.now().add(const Duration(days: 365)),
-      stockQuantity: (json['stockQuantity'] as num?)?.toInt() ?? 0,
+      stockQuantity: qty,
     );
   }
 
   bool get isExpired => expiryDate.isBefore(DateTime.now());
+  bool get isExpiringSoon => !isExpired && expiryDate.difference(DateTime.now()).inDays <= 90;
   bool get isAvailable => stockQuantity > 0 && !isExpired;
 }
 

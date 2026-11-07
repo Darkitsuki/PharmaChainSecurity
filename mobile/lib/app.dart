@@ -8,9 +8,11 @@ import 'screens/checkout_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/medicine_screen.dart';
+import 'screens/purchase_order_screen.dart';
 import 'screens/records_screen.dart';
 import 'screens/patient_shell.dart';
 import 'services/drug_service.dart';
+import 'services/order_service.dart';
 import 'services/staff_notification_service.dart';
 import 'widgets/ui_components.dart';
 
@@ -168,32 +170,72 @@ class _PharmaShellState extends State<PharmaShell> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   late AppSection selected = widget.initialSection;
 
-  List<AppSection> get primarySections => [
-        AppSection.overview,
-        AppSection.catalog,
+  late final DrugService _drugService = DrugService(
+    api: widget.session?.api,
+    tokenProvider: () => widget.session?.token,
+  );
+  late final OrderService _orderService = OrderService(
+    api: widget.session?.api,
+    tokenProvider: () => widget.session?.token,
+    defaultBranchId: widget.user?.branchId,
+  );
+
+  List<AppSection> get primarySections {
+    final role = widget.user?.role;
+    if (role == 'WAREHOUSE') {
+      return [
         AppSection.inventory,
-        AppSection.checkout
+        AppSection.purchaseOrders,
+        AppSection.receipts,
+        AppSection.transfers,
       ].where(canOpen).toList();
+    }
+    if (role == 'SALES') {
+      return [
+        AppSection.checkout,
+        AppSection.invoices,
+        AppSection.inventory,
+        AppSection.returns,
+      ].where(canOpen).toList();
+    }
+    return [
+      AppSection.overview,
+      AppSection.catalog,
+      AppSection.inventory,
+      AppSection.checkout,
+    ].where(canOpen).toList();
+  }
 
   // Visibility follows Web AppRoutes; server remains the authorization authority.
   bool canOpen(AppSection section) {
     final role = widget.user?.role;
-    if (role == null || role == 'OWNER') return true;
-    if ([AppSection.checkout, AppSection.invoices, AppSection.inventory]
-        .contains(section)) {
-      return true;
+    if (role == null) return true; // Preview mode when unauthenticated
+    if (role == 'OWNER') return true;
+
+    if (role == 'WAREHOUSE') {
+      // WAREHOUSE: inventory, purchaseOrders, receipts, audits, transfers, suppliers
+      // Exclude catalog from drawer to satisfy auth_test.dart
+      return [
+        AppSection.inventory,
+        AppSection.purchaseOrders,
+        AppSection.receipts,
+        AppSection.audits,
+        AppSection.transfers,
+        AppSection.suppliers,
+      ].contains(section);
     }
-    if ([AppSection.customers, AppSection.returns].contains(section)) {
-      return role == 'SALES';
+
+    if (role == 'SALES') {
+      // SALES: checkout, invoices, returns, customers, inventory
+      return [
+        AppSection.checkout,
+        AppSection.invoices,
+        AppSection.returns,
+        AppSection.customers,
+        AppSection.inventory,
+      ].contains(section);
     }
-    if ([
-      AppSection.receipts,
-      AppSection.audits,
-      AppSection.transfers,
-      AppSection.suppliers
-    ].contains(section)) {
-      return role == 'WAREHOUSE';
-    }
+
     return false;
   }
 
@@ -204,29 +246,53 @@ class _PharmaShellState extends State<PharmaShell> {
   Widget get screen => switch (selected) {
         AppSection.overview => DashboardScreen(onNavigate: select),
         AppSection.reports => DashboardScreen(report: true, onNavigate: select),
-        AppSection.catalog => MedicineScreen(drugService: DrugService(api: widget.session?.api, tokenProvider: () => widget.session?.token)),
-        AppSection.inventory => const MedicineScreen(inventory: true),
-        AppSection.checkout => CheckoutScreen(session: widget.session),
+        AppSection.catalog => MedicineScreen(
+            drugService: _drugService,
+            branchName: widget.user?.branchName,
+          ),
+        AppSection.inventory => MedicineScreen(
+            inventory: true,
+            drugService: _drugService,
+            branchName: widget.user?.branchName,
+            onOrderSupplements: (drug) {
+              if (canOpen(AppSection.purchaseOrders)) {
+                select(AppSection.purchaseOrders);
+              }
+            },
+          ),
+        AppSection.purchaseOrders => PurchaseOrderScreen(
+            session: widget.session,
+            user: widget.user,
+            orderService: _orderService,
+            drugService: _drugService,
+          ),
+        AppSection.checkout => CheckoutScreen(
+            session: widget.session,
+            drugService: _drugService,
+            orderService: _orderService,
+          ),
         _ => RecordsScreen(section: selected),
       };
 
   Widget navigation(bool drawer) => SafeArea(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        const Padding(
-            padding: EdgeInsets.fromLTRB(20, 24, 16, 18),
+        Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 16, 18),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(Icons.local_pharmacy_outlined,
+              const Icon(Icons.local_pharmacy_outlined,
                   color: AppColors.forest, size: 32),
-              SizedBox(height: 12),
-              Text('PharmaSecure',
+              const SizedBox(height: 12),
+              const Text('PharmaSecure',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 22)),
-              SizedBox(height: 5),
-              Text('Quản trị chuỗi nhà thuốc',
+              const SizedBox(height: 5),
+              const Text('Quản trị chuỗi nhà thuốc',
                   style: TextStyle(color: AppColors.muted, fontSize: 12)),
-              SizedBox(height: 16),
-              StatusBadge('KHÔNG GIAN XEM TRƯỚC'),
+              const SizedBox(height: 16),
+              StatusBadge(widget.user == null
+                  ? 'KHÔNG GIAN XEM TRƯỚC'
+                  : 'PHIÊN BẢO MẬT JWT'),
             ])),
         const Divider(height: 1),
         Expanded(
@@ -295,7 +361,10 @@ class _PharmaShellState extends State<PharmaShell> {
                   );
                 },
             icon: const Icon(Icons.shopping_bag_outlined)),
-        const Center(child: StatusBadge('Nghiệp vụ mẫu')),
+        Center(
+            child: StatusBadge(widget.user == null
+                ? 'Nghiệp vụ mẫu'
+                : (widget.user?.branchName ?? 'Phiên bảo mật JWT'))),
         const SizedBox(width: 8),
         IconButton(
             tooltip: 'Đăng xuất',
@@ -342,7 +411,7 @@ class _PharmaShellState extends State<PharmaShell> {
                   );
                 },
               ),
-              const PreviewNotice(),
+              if (widget.user == null) const PreviewNotice(),
               Expanded(
                   child: Center(
                       child: ConstrainedBox(
@@ -371,7 +440,12 @@ class _PharmaShellState extends State<PharmaShell> {
                           AppSection.overview => 'Tổng quan',
                           AppSection.catalog => 'Thuốc',
                           AppSection.inventory => 'Kho',
-                          _ => 'Bán hàng',
+                          AppSection.purchaseOrders => 'Đặt hàng',
+                          AppSection.receipts => 'Nhập kho',
+                          AppSection.invoices => 'Hóa đơn',
+                          AppSection.checkout => 'Bán hàng',
+                          AppSection.returns => 'Đổi trả',
+                          _ => section.title,
                         }),
                   const NavigationDestination(
                       icon: Icon(Icons.menu), label: 'Khác'),

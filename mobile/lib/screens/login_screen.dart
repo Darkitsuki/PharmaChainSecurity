@@ -180,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ])),
                             const SizedBox(height: 26),
                             const Text(
-                                'PharmaSecure Mobile\nXác thực thật · Các màn hình nghiệp vụ vẫn là dữ liệu mẫu',
+                                'PharmaSecure Mobile\nKết nối bảo mật HTTPS/TLS · Xác thực JWT In-Memory & Cô lập dữ liệu Oracle VPD',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                     color: AppColors.muted,

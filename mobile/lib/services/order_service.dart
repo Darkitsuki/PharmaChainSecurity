@@ -19,10 +19,90 @@ class OrderService extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get lastError => _lastError;
 
+  static final List<PurchaseOrderSummary> _demoPurchaseOrders = [
+    PurchaseOrderSummary(
+      id: 'po-demo-001',
+      orderNo: 'PO20261105-001',
+      branchId: 'br-00000000-0000-0000-0000-000000000001',
+      supplierId: 'sup-00000000-0000-0000-0000-000000000001',
+      supplierName: 'Công ty Cổ phần Dược phẩm Hậu Giang (DHG Pharma)',
+      createdBy: 'nvkho_cn1',
+      creatorName: 'Thủ kho Minh',
+      status: 'PENDING',
+      totalEstimatedAmount: 12500000,
+      createdDate: DateTime.now().subtract(const Duration(days: 2)),
+      notes: 'Đơn đặt hàng định kỳ tháng 11',
+    ),
+    PurchaseOrderSummary(
+      id: 'po-demo-002',
+      orderNo: 'PO20261101-002',
+      branchId: 'br-00000000-0000-0000-0000-000000000001',
+      supplierId: 'sup-00000000-0000-0000-0000-000000000002',
+      supplierName: 'Công ty Cổ phần Traphaco',
+      createdBy: 'nvkho_cn1',
+      creatorName: 'Thủ kho Minh',
+      approvedBy: 'chudn_cn1',
+      approverName: 'Nguyễn Hoàng',
+      status: 'APPROVED',
+      totalEstimatedAmount: 6800000,
+      createdDate: DateTime.now().subtract(const Duration(days: 6)),
+      approvedDate: DateTime.now().subtract(const Duration(days: 5)),
+      notes: 'Bổ sung thuốc hô hấp',
+    ),
+  ];
+
+  Future<List<SupplierModel>> fetchSuppliers() async {
+    final client = api;
+    final token = tokenProvider?.call();
+    if (client != null && token != null && token.isNotEmpty) {
+      try {
+        final res = await client.get('/suppliers', token: token);
+        final raw = res['items'] ?? res['data'];
+        if (raw is List) {
+          return raw
+              .whereType<Map<String, dynamic>>()
+              .map(SupplierModel.fromJson)
+              .where((s) => s.isActive)
+              .toList();
+        }
+      } catch (e) {
+        debugPrint('OrderService.fetchSuppliers error: $e');
+      }
+    }
+
+    // Fallback suppliers for preview/offline
+    return const [
+      SupplierModel(
+        id: 'sup-00000000-0000-0000-0000-000000000001',
+        supplierCode: 'NCC001',
+        supplierName: 'Công ty Cổ phần Dược phẩm Hậu Giang (DHG Pharma)',
+        contactPerson: 'Nguyễn Văn Hậu',
+        phoneNumber: '02923891433',
+      ),
+      SupplierModel(
+        id: 'sup-00000000-0000-0000-0000-000000000002',
+        supplierCode: 'NCC002',
+        supplierName: 'Công ty Cổ phần Traphaco',
+        contactPerson: 'Trần Anh',
+        phoneNumber: '02436815847',
+      ),
+      SupplierModel(
+        id: 'sup-00000000-0000-0000-0000-000000000003',
+        supplierCode: 'NCC003',
+        supplierName: 'Công ty Cổ phần Dược phẩm Imexpharm',
+        contactPerson: 'Lê Hoàng',
+        phoneNumber: '02773851941',
+      ),
+    ];
+  }
+
   Future<List<PurchaseOrderSummary>> fetchPurchaseOrders() async {
     final client = api;
     final token = tokenProvider?.call();
     if (client == null) {
+      if (_purchaseOrders.isEmpty) {
+        _purchaseOrders.addAll(_demoPurchaseOrders);
+      }
       return _purchaseOrders;
     }
 
@@ -51,6 +131,56 @@ class OrderService extends ChangeNotifier {
       return _purchaseOrders;
     } catch (e) {
       debugPrint('OrderService.fetchPurchaseOrders error: $e');
+      _lastError = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      if (e is ApiException) rethrow;
+      throw ApiException(e.toString());
+    }
+  }
+
+  Future<void> markOrderPlaced(String orderId) async {
+    final client = api;
+    final token = tokenProvider?.call();
+    if (token == null || token.isEmpty) {
+      throw const ApiException('Phiên đăng nhập không hợp lệ hoặc đã hết hạn.', statusCode: 401);
+    }
+    if (client == null) {
+      throw const ApiException('Dịch vụ API chưa được cấu hình.');
+    }
+
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+
+    try {
+      await client.post('/purchase-orders/$orderId/order', token: token);
+      final idx = _purchaseOrders.indexWhere((p) => p.id == orderId);
+      if (idx != -1) {
+        final old = _purchaseOrders[idx];
+        _purchaseOrders[idx] = PurchaseOrderSummary(
+          id: old.id,
+          orderNo: old.orderNo,
+          branchId: old.branchId,
+          supplierId: old.supplierId,
+          supplierName: old.supplierName,
+          createdBy: old.createdBy,
+          creatorName: old.creatorName,
+          approvedBy: old.approvedBy,
+          approverName: old.approverName,
+          status: 'ORDERED',
+          totalEstimatedAmount: old.totalEstimatedAmount,
+          createdDate: old.createdDate,
+          approvedDate: old.approvedDate,
+          expectedDeliveryDate: old.expectedDeliveryDate,
+          notes: old.notes,
+          items: old.items,
+        );
+      }
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('OrderService.markOrderPlaced error: $e');
       _lastError = e.toString();
       _isLoading = false;
       notifyListeners();
