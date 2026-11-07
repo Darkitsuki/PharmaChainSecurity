@@ -33,7 +33,6 @@ public sealed class SupplierService : ISupplierService
             command.CommandText = """
                 SELECT id, SupplierCode, SupplierName, ContactPerson, PhoneNumber, Email, Address, TaxCode, IsActive, CreatedDate
                 FROM SUPPLIERS
-                WHERE IsActive = 1
                 ORDER BY SupplierName
                 """;
 
@@ -174,4 +173,105 @@ public sealed class SupplierService : ISupplierService
             throw;
         }
     }
+
+    public async Task<SupplierResponse?> UpdateAsync(string id, UpdateSupplierRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(id))
+            throw new ArgumentException("Supplier ID is required.");
+        if (string.IsNullOrWhiteSpace(request.SupplierName))
+            throw new ArgumentException("Supplier name is required.");
+
+        var branchId = GetActiveBranchId();
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var command = (OracleCommand)unitOfWork.Connection.CreateCommand();
+            command.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+            command.BindByName = true;
+            command.CommandText = """
+                UPDATE SUPPLIERS
+                SET SupplierName = :name, ContactPerson = :contact, PhoneNumber = :phone,
+                    Email = :email, Address = :address, TaxCode = :tax
+                WHERE id = :id
+                """;
+            command.Parameters.Add("name", OracleDbType.Varchar2, 255).Value = request.SupplierName.Trim();
+            command.Parameters.Add("contact", OracleDbType.Varchar2, 100).Value = DbValue(request.ContactPerson);
+            command.Parameters.Add("phone", OracleDbType.Varchar2, 20).Value = DbValue(request.PhoneNumber);
+            command.Parameters.Add("email", OracleDbType.Varchar2, 100).Value = DbValue(request.Email);
+            command.Parameters.Add("address", OracleDbType.Varchar2, 500).Value = DbValue(request.Address);
+            command.Parameters.Add("tax", OracleDbType.Varchar2, 50).Value = DbValue(request.TaxCode);
+            command.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id.Trim();
+
+            if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+            {
+                await unitOfWork.RollbackAsync(cancellationToken);
+                return null;
+            }
+
+            var updated = await ReadByIdAsync(id.Trim(), cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return updated;
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<SupplierResponse?> UpdateStatusAsync(string id, bool isActive, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            throw new ArgumentException("Supplier ID is required.");
+
+        var branchId = GetActiveBranchId();
+        await unitOfWork.BeginTransactionAsync(branchId, cancellationToken);
+        try
+        {
+            await using var command = (OracleCommand)unitOfWork.Connection.CreateCommand();
+            command.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+            command.BindByName = true;
+            command.CommandText = "UPDATE SUPPLIERS SET IsActive = :isActive WHERE id = :id";
+            command.Parameters.Add("isActive", OracleDbType.Int16).Value = isActive ? 1 : 0;
+            command.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id.Trim();
+
+            if (await command.ExecuteNonQueryAsync(cancellationToken) == 0)
+            {
+                await unitOfWork.RollbackAsync(cancellationToken);
+                return null;
+            }
+
+            var updated = await ReadByIdAsync(id.Trim(), cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return updated;
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task<SupplierResponse?> ReadByIdAsync(string id, CancellationToken cancellationToken)
+    {
+        await using var command = (OracleCommand)unitOfWork.Connection.CreateCommand();
+        command.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+        command.BindByName = true;
+        command.CommandText = """
+            SELECT id, SupplierCode, SupplierName, ContactPerson, PhoneNumber, Email, Address, TaxCode, IsActive, CreatedDate
+            FROM SUPPLIERS WHERE id = :id
+            """;
+        command.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = id;
+        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? new SupplierResponse(reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7), reader.GetInt32(8) == 1, reader.GetDateTime(9))
+            : null;
+    }
+
+    private static object DbValue(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
 }

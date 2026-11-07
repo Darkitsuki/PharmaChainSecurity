@@ -20,3 +20,13 @@ public sealed record CreateSupplierRequest(
     string? Email,
     string? Address,
     string? TaxCode);
+
+public sealed record UpdateSupplierRequest(
+    string SupplierName,
+    string? ContactPerson,
+    string? PhoneNumber,
+    string? Email,
+    string? Address,
+    string? TaxCode);
+
+public sealed record UpdateSupplierStatusRequest(bool IsActive);

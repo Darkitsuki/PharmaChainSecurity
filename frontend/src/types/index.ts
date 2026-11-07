@@ -260,6 +260,15 @@ export interface CreateSupplierPayload {
   taxCode?: string;
 }
 
+export interface UpdateSupplierPayload {
+  supplierName: string;
+  contactPerson?: string;
+  phoneNumber?: string;
+  email?: string;
+  address?: string;
+  taxCode?: string;
+}
+
 export interface GoodsReceiptItem {
   id: string;
   receiptId: string;
