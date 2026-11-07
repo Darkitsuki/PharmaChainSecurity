@@ -29,6 +29,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .login-password-input::-ms-clear {
   display: none;
 }
+.account-password-input::-ms-reveal,
+.account-password-input::-ms-clear {
+  display: none;
+}
 .login-input:-webkit-autofill,
 .login-input:-webkit-autofill:hover,
 .login-input:-webkit-autofill:focus {
