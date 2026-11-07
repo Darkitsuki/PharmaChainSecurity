@@ -103,10 +103,10 @@ export function PurchaseOrderDetail({
             type="button"
             onClick={() => setIsVoucherOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-forest hover:bg-mint/40 hover:text-forest transition-colors cursor-pointer shadow-2xs"
-            title="Xem & in phiếu đặt hàng mua thuốc gửi Chủ nhà thuốc"
+            title="Xem trước chứng từ theo trạng thái hiện tại"
           >
             <Printer size={15} />
-            <span>In phiếu đặt hàng</span>
+            <span>Xem &amp; In phiếu</span>
           </button>
           <OrderBadge status={order.status} />
         </div>
@@ -346,6 +346,14 @@ export function PurchaseOrderDetail({
                     Khi nhận hàng, lập phiếu nhập theo đơn. Có thể nhập nhiều đợt, không vượt số lượng
                     đặt.
                   </p>
+                  <button
+                    type="button"
+                    className={`${secondaryButton} w-full`}
+                    onClick={() => setIsVoucherOpen(true)}
+                  >
+                    <Printer size={15} />
+                    Xem &amp; In phiếu đặt hàng
+                  </button>
                   <Link
                     className={`${primaryButton} w-full`}
                     to={`/goods-receipts?purchaseOrderId=${encodeURIComponent(order.id)}`}

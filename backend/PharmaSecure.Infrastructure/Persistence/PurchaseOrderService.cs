@@ -10,6 +10,7 @@ namespace PharmaSecure.Infrastructure.Persistence;
 
 public sealed class PurchaseOrderService(IUnitOfWork unitOfWork, ICurrentUserContext user) : IPurchaseOrderService
 {
+    private const decimal MinimumEstimatedUnitPrice = 1000m;
     private const decimal MaximumMoney = 9999999999999.99m;
     private string Branch => !string.IsNullOrWhiteSpace(user.BranchId) && user.IsAuthenticated
         ? user.BranchId : throw new UnauthorizedAccessException("Authenticated branch is required.");
@@ -53,8 +54,10 @@ public sealed class PurchaseOrderService(IUnitOfWork unitOfWork, ICurrentUserCon
         {
             if (item is null || string.IsNullOrWhiteSpace(item.DrugId) || item.DrugId.Length > 50 || !drugs.Add(item.DrugId))
                 throw new ArgumentException("Thuốc không hợp lệ hoặc bị lặp trong đơn.");
-            if (item.Quantity <= 0 || item.EstimatedUnitPrice < 0 || decimal.Round(item.EstimatedUnitPrice, 2) != item.EstimatedUnitPrice)
-                throw new ArgumentException("Số lượng phải dương; giá không âm và tối đa hai chữ số thập phân.");
+            if (item.Quantity <= 0 || item.EstimatedUnitPrice < MinimumEstimatedUnitPrice ||
+                item.EstimatedUnitPrice > decimal.Truncate(MaximumMoney) ||
+                decimal.Truncate(item.EstimatedUnitPrice) != item.EstimatedUnitPrice)
+                throw new ArgumentException("Số lượng phải dương; đơn giá phải là số nguyên VND từ 1.000 đến 9.999.999.999.999 đồng.");
             Text(item.Notes, 255);
             try { total = checked(total + item.Quantity * item.EstimatedUnitPrice); }
             catch (OverflowException) { throw new ArgumentException("Tổng tiền vượt giới hạn."); }

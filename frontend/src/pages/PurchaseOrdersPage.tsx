@@ -5,11 +5,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ClipboardCheck,
   Clock3,
-  Eye,
   LoaderCircle,
   PackageCheck,
   Plus,
-  Printer,
   Truck,
 } from 'lucide-react';
 import {
@@ -34,7 +32,6 @@ import {
   orderLabel,
   primaryButton,
 } from '../components/purchase-orders/PurchaseOrderUi';
-import { PurchaseOrderVoucherModal } from '../components/purchase-orders/PurchaseOrderVoucherModal';
 import { useAuth } from '../context/AuthContext';
 import { ApiError, apiClient } from '../services/apiClient';
 import { purchaseOrderStatuses, type PurchaseOrder } from '../services/purchaseOrders';
@@ -61,7 +58,6 @@ export function PurchaseOrdersPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [voucherOrder, setVoucherOrder] = useState<PurchaseOrder | null>(null);
   const firstLoad = useRef(true);
   const inFlight = useRef(false);
   const listAbort = useRef<AbortController>();
@@ -193,13 +189,9 @@ export function PurchaseOrdersPage() {
       header: 'Đơn mua / Nhà cung cấp',
       cell: (o) => (
         <div className="max-w-[280px]">
-          <Link
-            to={`/purchase-orders/${encodeURIComponent(o.id)}`}
-            title={o.orderNo}
-            className="font-semibold text-forest hover:underline"
-          >
+          <span title={o.orderNo} className="font-semibold text-forest">
             {orderLabel(o.orderNo)}
-          </Link>
+          </span>
           <p className="mt-1 truncate text-xs text-slate-500" title={o.supplierName}>
             {o.supplierName}
           </p>
@@ -223,31 +215,6 @@ export function PurchaseOrdersPage() {
       ),
     },
     { header: 'Trạng thái', cell: (o) => <OrderBadge status={o.status} /> },
-    {
-      header: 'Thao tác',
-      align: 'right',
-      cell: (o) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <button
-            type="button"
-            onClick={() => setVoucherOrder(o)}
-            title={`Xem & in phiếu đơn ${orderLabel(o.orderNo)}`}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:border-forest hover:bg-mint/30 hover:text-forest transition-colors cursor-pointer"
-          >
-            <Printer size={13} />
-            <span className="hidden lg:inline text-xs">In phiếu</span>
-          </button>
-          <Link
-            aria-label={`Xem đơn ${orderLabel(o.orderNo)}`}
-            to={`/purchase-orders/${encodeURIComponent(o.id)}`}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold hover:bg-slate-50"
-          >
-            <Eye size={14} />
-            <span>Chi tiết</span>
-          </Link>
-        </div>
-      ),
-    },
   ];
 
   return (
@@ -286,7 +253,7 @@ export function PurchaseOrdersPage() {
                     ? 'Đã phê duyệt chi phí dự kiến. Đây không phải xác nhận thanh toán.'
                     : action === 'reject'
                     ? 'Đã từ chối đơn mua.'
-                    : 'Đã xác nhận đặt hàng. Có thể lập phiếu khi nhận hàng.'
+                    : 'Đã xác nhận đặt hàng thành công.'
                 )
               }
             />
@@ -454,6 +421,8 @@ export function PurchaseOrdersPage() {
                   onPageChange: setPage,
                   itemLabel: 'đơn mua',
                 }}
+                onRowClick={(order) => navigate(`/purchase-orders/${encodeURIComponent(order.id)}`)}
+                rowLabel={(order) => `Xem chi tiết đơn ${orderLabel(order.orderNo)}`}
               />
             </div>
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white md:hidden">
@@ -471,14 +440,11 @@ export function PurchaseOrdersPage() {
               ) : (
                 <div className="divide-y divide-slate-100">
                   {visible.map((order) => (
-                    <div key={order.id} className="p-4 space-y-3 hover:bg-slate-50">
+                    <div key={order.id} role="link" tabIndex={0} onClick={() => navigate(`/purchase-orders/${encodeURIComponent(order.id)}`)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate(`/purchase-orders/${encodeURIComponent(order.id)}`); } }} className="cursor-pointer space-y-3 p-4 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-forest">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Link
-                          to={`/purchase-orders/${encodeURIComponent(order.id)}`}
-                          className="break-all text-xs font-bold text-forest hover:underline"
-                        >
+                        <span className="break-all text-xs font-bold text-forest">
                           {orderLabel(order.orderNo)}
-                        </Link>
+                        </span>
                         <OrderBadge status={order.status} />
                       </div>
                       <p className="text-xs font-medium text-ink">{order.supplierName}</p>
@@ -487,23 +453,6 @@ export function PurchaseOrdersPage() {
                           {order.creatorName} · {dateLabel(order.createdDate)}
                         </span>
                         <strong className="text-ink">{money(order.totalEstimatedAmount)}</strong>
-                      </div>
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                        <button
-                          type="button"
-                          onClick={() => setVoucherOrder(order)}
-                          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:text-forest hover:border-forest"
-                        >
-                          <Printer size={13} />
-                          <span>In phiếu</span>
-                        </button>
-                        <Link
-                          to={`/purchase-orders/${encodeURIComponent(order.id)}`}
-                          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                        >
-                          <Eye size={13} />
-                          <span>Chi tiết</span>
-                        </Link>
                       </div>
                     </div>
                   ))}
@@ -547,13 +496,6 @@ export function PurchaseOrdersPage() {
         )}
       </Modal>
 
-      {/* Purchase Order Voucher Print Modal */}
-      <PurchaseOrderVoucherModal
-        isOpen={!!voucherOrder}
-        onClose={() => setVoucherOrder(null)}
-        order={voucherOrder}
-        branchName={currentUser?.branchName || voucherOrder?.branchId || 'Chưa xác định'}
-      />
     </div>
   );
 }
