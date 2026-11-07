@@ -31,7 +31,7 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             command.BindByName = true;
             command.CommandText = """
                 SELECT r.id, r.ReceiptNo, r.BranchId, r.SupplierId, s.SupplierName,
-                       r.WarehouseStaffId, u.Username, r.TotalAmount, r.Note, r.Status, r.CreatedDate
+                       r.WarehouseStaffId, u.FullName, r.TotalAmount, r.Note, r.Status, r.CreatedDate
                 FROM GOODS_RECEIPTS r
                 JOIN SUPPLIERS s ON r.SupplierId = s.id
                 JOIN USERS u ON r.WarehouseStaffId = u.id
@@ -84,7 +84,7 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             headerCmd.BindByName = true;
             headerCmd.CommandText = """
                 SELECT r.id, r.ReceiptNo, r.BranchId, r.SupplierId, s.SupplierName,
-                       r.WarehouseStaffId, u.Username, r.TotalAmount, r.Note, r.Status, r.CreatedDate
+                       r.WarehouseStaffId, u.FullName, r.TotalAmount, r.Note, r.Status, r.CreatedDate
                 FROM GOODS_RECEIPTS r
                 JOIN SUPPLIERS s ON r.SupplierId = s.id
                 JOIN USERS u ON r.WarehouseStaffId = u.id
