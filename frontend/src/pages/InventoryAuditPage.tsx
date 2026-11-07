@@ -5,7 +5,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   ClipboardCheck,
-  Eye,
   FileSpreadsheet,
   Plus,
   RefreshCw,
@@ -65,6 +64,8 @@ export function InventoryAuditPage() {
 
   // Reconcile modal
   const [showReconcileModal, setShowReconcileModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [reconcileReason, setReconcileReason] = useState('');
   const [reconciling, setReconciling] = useState(false);
 
@@ -212,14 +213,14 @@ export function InventoryAuditPage() {
 
   async function handleCancelAudit() {
     if (!selectedAudit) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn hủy đợt kiểm kê ${selectedAudit.auditNo}?`)) return;
-
+    setCancelling(true);
     setDetailActionError('');
     try {
       const cancelled = await apiClient<InventoryAuditDetail>(`/inventory-audits/${selectedAudit.id}/cancel`, {
         method: 'POST',
       });
       setSelectedAudit(cancelled);
+      setShowCancelModal(false);
       setSuccessMsg(`Đã hủy đợt kiểm kê ${cancelled.auditNo}.`);
       await loadAudits();
     } catch (err) {
@@ -228,6 +229,8 @@ export function InventoryAuditPage() {
       } else {
         setDetailActionError('Hủy đợt kiểm kê thất bại.');
       }
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -303,7 +306,7 @@ export function InventoryAuditPage() {
     {
       header: 'Mã đợt kiểm',
       cell: audit => (
-        <span className="font-mono font-bold text-ink">
+        <span className="block max-w-44 break-all font-mono font-bold text-ink" title={audit.auditNo}>
           {audit.auditNo}
         </span>
       ),
@@ -318,7 +321,7 @@ export function InventoryAuditPage() {
     },
     {
       header: 'Người lập',
-      cell: audit => <span className="font-medium text-slate-700">{audit.creatorName}</span>,
+      cell: audit => <span className="block max-w-48 break-words font-medium text-slate-700" title={audit.creatorName}>{audit.creatorName}</span>,
     },
     {
       header: 'Trạng thái',
@@ -370,26 +373,13 @@ export function InventoryAuditPage() {
         <span className="text-xs text-slate-500">
           {audit.approverName ? (
             <>
-              <div className="font-medium text-slate-700">{audit.approverName}</div>
+              <div className="max-w-48 break-words font-medium text-slate-700" title={audit.approverName}>{audit.approverName}</div>
               {audit.approvedDate && <div>{calendarDate.format(new Date(audit.approvedDate))}</div>}
             </>
           ) : (
             '—'
           )}
         </span>
-      ),
-    },
-    {
-      header: 'Thao tác',
-      align: 'right',
-      cell: audit => (
-        <button
-          onClick={() => handleOpenDetail(audit.id)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-line bg-white px-2.5 py-1.5 text-xs font-semibold text-ink shadow-sm transition hover:bg-slate-50"
-        >
-          <Eye size={14} />
-          {audit.status === 'IN_PROGRESS' ? 'Kiểm đếm' : 'Chi tiết'}
-        </button>
       ),
     },
   ];
@@ -488,6 +478,8 @@ export function InventoryAuditPage() {
             pageSize,
             onPageChange: setCurrentPage,
           }}
+          onRowClick={(audit) => void handleOpenDetail(audit.id)}
+          rowLabel={(audit) => `${audit.status === 'IN_PROGRESS' ? 'Kiểm đếm' : 'Xem chi tiết'} đợt kiểm kê ${audit.auditNo}`}
         />
       </div>
 
@@ -544,7 +536,9 @@ export function InventoryAuditPage() {
       {/* Modal: Chi tiết & Kiểm đếm (Detail & Counting Modal) */}
       <Modal
         isOpen={!!selectedAudit}
-        onClose={() => setSelectedAudit(null)}
+        onClose={() => {
+          if (!showCancelModal && !showReconcileModal && !cancelling && !reconciling) setSelectedAudit(null);
+        }}
         title={`Phiếu kiểm kê: ${selectedAudit?.auditNo || ''}`}
         maxWidth="5xl"
       >
@@ -554,8 +548,8 @@ export function InventoryAuditPage() {
             {detailSuccessMsg && <AlertBanner type="success" message={detailSuccessMsg} onClose={() => setDetailSuccessMsg('')} />}
 
             {/* Header info cards */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 rounded-xl border border-line bg-slate-50/70 p-3.5 text-xs">
-              <div>
+            <div className="grid grid-cols-1 gap-3 rounded-xl border border-line bg-slate-50/70 p-3.5 text-xs sm:grid-cols-2 lg:grid-cols-4">
+              <div className="min-w-0">
                 <span className="text-slate-500">Trạng thái:</span>
                 <div className="mt-0.5 font-bold">
                   {selectedAudit.status === 'COMPLETED' && <span className="text-emerald-700">Đã cân bằng</span>}
@@ -563,19 +557,19 @@ export function InventoryAuditPage() {
                   {selectedAudit.status === 'CANCELLED' && <span className="text-slate-600">Đã hủy</span>}
                 </div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-slate-500">Người lập:</span>
-                <div className="mt-0.5 font-bold text-slate-800">{selectedAudit.creatorName}</div>
+                <div className="mt-0.5 break-words font-bold text-slate-800" title={selectedAudit.creatorName}>{selectedAudit.creatorName}</div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-slate-500">Thời gian tạo:</span>
                 <div className="mt-0.5 font-bold text-slate-800">
                   {dateTime.format(new Date(selectedAudit.auditDate))}
                 </div>
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-slate-500">Ghi chú:</span>
-                <div className="mt-0.5 font-medium text-slate-700 truncate" title={selectedAudit.notes || ''}>
+                <div className="mt-0.5 break-words font-medium text-slate-700" title={selectedAudit.notes || ''}>
                   {selectedAudit.notes || '—'}
                 </div>
               </div>
@@ -627,7 +621,7 @@ export function InventoryAuditPage() {
 
             {/* Items Table with Live Editing */}
             <div className="max-h-[380px] overflow-auto rounded-xl border border-line">
-              <table className="ui-data-table min-w-full divide-y divide-line text-left text-xs">
+              <table className="ui-data-table min-w-[900px] divide-y divide-line text-left text-xs">
                 <thead className="sticky top-0 bg-slate-50 font-semibold text-slate-600">
                   <tr>
                     <th className="px-3 py-2.5">Tên thuốc & Mã</th>
@@ -657,13 +651,13 @@ export function InventoryAuditPage() {
                       return (
                         <tr key={key} className="hover:bg-slate-50/80 transition-colors">
                           <td className="px-3 py-2">
-                            <div className="font-semibold text-ink">{item.drugName}</div>
+                            <div className="max-w-52 break-words font-semibold text-ink" title={item.drugName}>{item.drugName}</div>
                             <div className="font-mono text-xs text-slate-400">
                               {item.drugCode} • {item.unit}
                             </div>
                           </td>
                           <td className="px-3 py-2">
-                            <div className="font-mono font-medium text-slate-800">{item.batchNumber}</div>
+                            <div className="max-w-40 break-all font-mono font-medium text-slate-800" title={item.batchNumber}>{item.batchNumber}</div>
                             <div className="text-xs text-slate-400">
                               HSD: {calendarDate.format(new Date(item.expiryDate))}
                             </div>
@@ -753,7 +747,7 @@ export function InventoryAuditPage() {
                 {selectedAudit.status === 'IN_PROGRESS' && (
                   <button
                     type="button"
-                    onClick={handleCancelAudit}
+                    onClick={() => { setDetailActionError(''); setShowCancelModal(true); }}
                     className="text-xs font-semibold text-rose-600 hover:text-rose-700 underline"
                   >
                     Hủy đợt kiểm kê này
@@ -801,6 +795,40 @@ export function InventoryAuditPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        isOpen={showCancelModal}
+        onClose={() => !cancelling && setShowCancelModal(false)}
+        closeOnOverlayClick={!cancelling}
+        title="Xác nhận hủy đợt kiểm kê"
+        subtitle={selectedAudit?.auditNo}
+        maxWidth="md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-slate-600">
+            Đợt kiểm kê sẽ chuyển sang trạng thái đã hủy. Các số lượng đã đếm sẽ không được dùng để cân đối tồn kho.
+          </p>
+          {detailActionError && <AlertBanner type="error" message={detailActionError} />}
+          <div className="flex justify-end gap-2 border-t border-line pt-4">
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={() => setShowCancelModal(false)}
+              className="rounded-lg border border-line px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Quay lại
+            </button>
+            <button
+              type="button"
+              disabled={cancelling}
+              onClick={() => void handleCancelAudit()}
+              className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {cancelling ? 'Đang hủy...' : 'Xác nhận hủy'}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Modal: Xác nhận duyệt cân đối (Owner Only) */}
