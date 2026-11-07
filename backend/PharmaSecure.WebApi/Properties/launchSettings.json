@@ -11,7 +11,7 @@
         "JWT_SECRET": "DEV_ONLY_PHARMASECURE_JWT_SIGNING_KEY_2026_DO_NOT_DEPLOY",
         "PHARMA_CERT_SERIAL": "VN-LONGCHAU-CA-2026-0001"
       },
-      "applicationUrl": "https://localhost:55198;http://localhost:55199"
+      "applicationUrl": "https://0.0.0.0:55198;http://0.0.0.0:55199"
     }
   }
 }

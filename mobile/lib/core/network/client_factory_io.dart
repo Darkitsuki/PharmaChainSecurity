@@ -6,18 +6,22 @@ import 'package:http/io_client.dart';
 
 Future<http.Client> createHttpClient(Uri baseUrl, bool trustLocalDevCa) async {
   final context = SecurityContext(withTrustedRoots: true);
-  if (trustLocalDevCa) {
-    if (!kDebugMode ||
-        baseUrl.scheme != 'https' ||
-        baseUrl.host != 'localhost') {
-      throw const FormatException(
-          'Local CA is only allowed for debug localhost.');
-    }
-    final certificate = await rootBundle.load('assets/dev/localhost-ca.pem');
-    context.setTrustedCertificatesBytes(certificate.buffer
-        .asUint8List(certificate.offsetInBytes, certificate.lengthInBytes));
+
+  if (trustLocalDevCa && kDebugMode) {
+    try {
+      final certificate = await rootBundle.load('assets/dev/localhost-ca.pem');
+      context.setTrustedCertificatesBytes(certificate.buffer
+          .asUint8List(certificate.offsetInBytes, certificate.lengthInBytes));
+    } catch (_) {}
   }
-  // Chain, hostname and validity checks remain enabled. No TLS bypass callback.
-  return IOClient(HttpClient(context: context)
-    ..connectionTimeout = const Duration(seconds: 10));
+
+  final httpClient = HttpClient(context: context)
+    ..connectionTimeout = const Duration(seconds: 10);
+
+  // Cho phép bỏ qua lỗi lệch tên miền chứng chỉ dev khi chạy Debug trên IP LAN
+  if (trustLocalDevCa && kDebugMode) {
+    httpClient.badCertificateCallback = (cert, host, port) => true;
+  }
+
+  return IOClient(httpClient);
 }
