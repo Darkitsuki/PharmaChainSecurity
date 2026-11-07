@@ -157,6 +157,7 @@ public class UsersControllerTests
     [InlineData("username", "12345", "Full Name", "SALES")] // Password < 6 chars
     [InlineData("username", "Secret123", "", "SALES")]
     [InlineData("username", "Secret123", "Full Name", "")]
+    [InlineData("username", "Secret123", "Full Name", "OWNER")]
     public async Task Create_WhenInvalidData_ReturnsBadRequest(string username, string password, string fullName, string role)
     {
         // Arrange

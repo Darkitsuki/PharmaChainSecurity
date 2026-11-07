@@ -8,6 +8,7 @@ interface AuthContextValue {
   isLoading: boolean;
   signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void> | void;
+  switchBranch: (branchId: string) => Promise<void>;
   refreshCurrentUser: () => Promise<void>;
   clearSession: (notice?: string) => void;
 }
@@ -34,6 +35,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('pharmasecure:unauthorized', onUnauthorized);
     return () => window.removeEventListener('pharmasecure:unauthorized', onUnauthorized);
   }, [navigate]);
+
+  useEffect(() => {
+    const synchronizeSession = (event: StorageEvent) => {
+      if ((event.key === 'auth_token' || event.key === 'auth_user') && event.oldValue !== event.newValue) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener('storage', synchronizeSession);
+    return () => window.removeEventListener('storage', synchronizeSession);
+  }, []);
 
   useEffect(() => {
     if (!localStorage.getItem('auth_token')) {
@@ -93,6 +104,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function switchBranch(branchId: string) {
+    const response = await apiClient<LoginResponse>('/auth/switch-branch', {
+      method: 'POST',
+      body: JSON.stringify({ branchId }),
+    });
+    localStorage.setItem('auth_token', response.accessToken);
+    localStorage.setItem('auth_user', JSON.stringify(response.user));
+    setCurrentUser(response.user);
+    window.location.assign('/reports');
+  }
+
   async function refreshCurrentUser() {
     const user = await apiClient<CurrentUser>('/auth/me');
     setCurrentUser(user);
@@ -106,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, signIn, signOut, refreshCurrentUser, clearSession }}>
+    <AuthContext.Provider value={{ currentUser, isLoading, signIn, signOut, switchBranch, refreshCurrentUser, clearSession }}>
       {children}
     </AuthContext.Provider>
   );

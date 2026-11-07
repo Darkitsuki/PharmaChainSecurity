@@ -2,13 +2,11 @@ import { calendarDate } from '../utils/formatters';
 import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useState } from 'react';
 import {
-  CheckCircle2,
   Eye,
   EyeOff,
   KeyRound,
   LoaderCircle,
   Phone,
-  PowerOff,
   ShieldAlert,
   ShieldCheck,
   UserCheck,
@@ -50,6 +48,8 @@ export function UsersPage() {
 
   // Toggle status state
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<StaffUser | null>(null);
+  const [confirmingUser, setConfirmingUser] = useState<StaffUser | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -89,6 +89,8 @@ export function UsersPage() {
       });
 
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+      setSelectedUser(updated);
+      setConfirmingUser(null);
       setSuccessMsg(`Tài khoản nhân viên '${updated.username}' hiện đã ${newStatus ? 'kích hoạt hoạt động' : 'tạm ngưng hoạt động'}.`);
     } catch (err) {
       if (err instanceof ApiError) {
@@ -149,18 +151,25 @@ export function UsersPage() {
     }
   }
 
+  const roleKey = (user: StaffUser): 'OWNER' | 'SALES' | 'WAREHOUSE' | 'UNKNOWN' => {
+    if (user.roleId.endsWith('0001')) return 'OWNER';
+    if (user.roleId.endsWith('0002')) return 'WAREHOUSE';
+    if (user.roleId.endsWith('0003')) return 'SALES';
+    return 'UNKNOWN';
+  };
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase('vi-VN');
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
-      u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (u.phoneNumber && u.phoneNumber.includes(searchTerm));
+      u.username.toLocaleLowerCase('vi-VN').includes(normalizedSearch) ||
+      u.fullName.toLocaleLowerCase('vi-VN').includes(normalizedSearch) ||
+      Boolean(u.phoneNumber?.includes(normalizedSearch));
 
-    const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+    const matchesRole = roleFilter === 'ALL' || roleKey(u) === roleFilter;
     return matchesSearch && matchesRole && (statusFilter === 'ALL' || u.isActive === (statusFilter === 'ACTIVE'));
   });
 
-  const renderRoleBadge = (role: string) => {
-    switch (role) {
+  const renderRoleBadge = (user: StaffUser) => {
+    switch (roleKey(user)) {
       case 'OWNER':
         return (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700 ring-1 ring-inset ring-purple-600/20">
@@ -185,7 +194,7 @@ export function UsersPage() {
       default:
         return (
           <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-            {role}
+            {user.role}
           </span>
         );
     }
@@ -210,7 +219,6 @@ export function UsersPage() {
                   </span>
                 )}
               </div>
-              <span className="text-xs text-slate-400 font-mono">Mã: {user.id.slice(0, 10)}...</span>
             </div>
           </div>
         );
@@ -222,7 +230,7 @@ export function UsersPage() {
     },
     {
       header: 'Vai Trò Nghiệp Vụ',
-      cell: (user) => renderRoleBadge(user.role),
+      cell: (user) => renderRoleBadge(user),
     },
     {
       header: 'Số Điện Thoại',
@@ -255,51 +263,7 @@ export function UsersPage() {
       header: 'Ngày Tham Gia',
       cell: (user) => <span className="text-slate-500">{calendarDate.format(new Date(user.createdDate))}</span>,
     },
-    {
-      header: 'Thao Tác',
-      align: 'right',
-      cell: (user) => {
-        const isCurrent = user.id === currentUser?.userId;
-        if (isCurrent) {
-          return (
-            <span
-              className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 cursor-not-allowed"
-              title="Nguyên tắc an toàn chống tự khóa tài khoản"
-            >
-              <ShieldAlert size={13} />
-              Khóa (Chính bạn)
-            </span>
-          );
-        }
-        return (
-          <button
-            type="button"
-            onClick={() => handleToggleStatus(user)}
-            disabled={updatingId === user.id}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
-              user.isActive
-                ? 'border border-rose-200 text-rose-700 hover:bg-rose-50'
-                : 'border border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-            }`}
-            title={user.isActive ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt lại tài khoản'}
-          >
-            {updatingId === user.id ? (
-              <LoaderCircle size={14} className="animate-spin" />
-            ) : user.isActive ? (
-              <>
-                <PowerOff size={13} />
-                <span>Vô hiệu hóa</span>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 size={13} />
-                <span>Kích hoạt</span>
-              </>
-            )}
-          </button>
-        );
-      },
-    },
+
   ];
 
   return (
@@ -335,14 +299,14 @@ export function UsersPage() {
             <span className="text-xs font-semibold text-slate-400 whitespace-nowrap mr-1">Lọc:</span>
             {[
               { key: 'ALL', label: 'Tất cả' },
-              { key: 'SALES', label: 'Dược sĩ' },
-              { key: 'WAREHOUSE', label: 'Thủ kho' },
+              { key: 'SALES', label: 'Dược sĩ bán hàng' },
+              { key: 'WAREHOUSE', label: 'Nhân viên kho' },
               { key: 'OWNER', label: 'Chủ nhà thuốc' },
             ].map(({ key, label }) => (
               <button
                 key={key}
                 type="button"
-                onClick={() => setRoleFilter(key as any)}
+                onClick={() => setRoleFilter(key as typeof roleFilter)}
                 className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
                   roleFilter === key
                     ? 'bg-forest text-white shadow-2xs'
@@ -363,14 +327,57 @@ export function UsersPage() {
         columns={columns}
         data={filteredUsers}
         keyExtractor={(item) => item.id}
+        onRowClick={setSelectedUser}
+        rowLabel={item => `Xem thông tin ${item.fullName}`}
         loading={loading}
         loadingText="Đang tải danh sách nhân sự chi nhánh..."
         emptyMessage={
-          searchTerm || roleFilter !== 'ALL'
+          searchTerm.trim() || roleFilter !== 'ALL' || statusFilter !== 'ALL'
             ? 'Không tìm thấy nhân viên phù hợp với bộ lọc tìm kiếm.'
             : 'Chưa có nhân viên nào trong chi nhánh này. Bắt đầu bằng cách thêm nhân viên mới.'
         }
       />
+
+      <Modal
+        isOpen={Boolean(selectedUser)}
+        onClose={() => setSelectedUser(null)}
+        title="Thông tin nhân viên"
+        subtitle={currentUser?.branchName ? `Chi nhánh: ${currentUser.branchName}` : undefined}
+        icon={UserCheck}
+        maxWidth="lg"
+      >
+        {selectedUser && <div className="space-y-5">
+          <dl className="grid gap-4 rounded-xl border border-line bg-slate-50/60 p-4 text-xs sm:grid-cols-2">
+            <div><dt className="text-slate-500">Họ và tên</dt><dd className="mt-1 font-semibold text-ink">{selectedUser.fullName}</dd></div>
+            <div><dt className="text-slate-500">Tên đăng nhập</dt><dd className="mt-1 font-semibold text-ink">@{selectedUser.username}</dd></div>
+            <div><dt className="text-slate-500">Vai trò</dt><dd className="mt-1">{renderRoleBadge(selectedUser)}</dd></div>
+            <div><dt className="text-slate-500">Số điện thoại</dt><dd className="mt-1 font-semibold text-ink">{selectedUser.phoneNumber || 'Chưa cập nhật'}</dd></div>
+            <div><dt className="text-slate-500">Ngày tham gia</dt><dd className="mt-1 font-semibold text-ink">{calendarDate.format(new Date(selectedUser.createdDate))}</dd></div>
+            <div><dt className="text-slate-500">Trạng thái</dt><dd className="mt-1 font-semibold text-ink">{selectedUser.isActive ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</dd></div>
+          </dl>
+          <div className="flex justify-end gap-2 border-t border-line pt-4">
+            <button type="button" onClick={() => setSelectedUser(null)} className="rounded-lg border border-line px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Đóng</button>
+            {selectedUser.id !== currentUser?.userId && <button type="button" onClick={() => setConfirmingUser(selectedUser)} className={`rounded-lg border px-4 py-2 text-xs font-semibold ${selectedUser.isActive ? 'border-rose-200 text-rose-700 hover:bg-rose-50' : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'}`}>{selectedUser.isActive ? 'Vô hiệu hóa tài khoản' : 'Kích hoạt tài khoản'}</button>}
+          </div>
+        </div>}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(confirmingUser)}
+        onClose={() => !updatingId && setConfirmingUser(null)}
+        title={confirmingUser?.isActive ? 'Xác nhận vô hiệu hóa' : 'Xác nhận kích hoạt'}
+        subtitle={confirmingUser ? `Tài khoản @${confirmingUser.username}` : undefined}
+        icon={ShieldAlert}
+        maxWidth="sm"
+      >
+        {confirmingUser && <div className="space-y-5">
+          <p className="text-sm leading-6 text-slate-600">{confirmingUser.isActive ? 'Nhân viên sẽ không thể tiếp tục sử dụng tài khoản này sau khi phiên hiện tại bị xác minh lại.' : 'Nhân viên sẽ có thể đăng nhập và làm việc trở lại tại chi nhánh được phân công.'}</p>
+          <div className="flex justify-end gap-2 border-t border-line pt-4">
+            <button type="button" disabled={Boolean(updatingId)} onClick={() => setConfirmingUser(null)} className="rounded-lg border border-line px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Hủy</button>
+            <button type="button" disabled={Boolean(updatingId)} onClick={() => void handleToggleStatus(confirmingUser)} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 ${confirmingUser.isActive ? 'bg-rose-600 hover:bg-rose-700' : 'bg-forest hover:bg-forest/90'}`}>{updatingId && <LoaderCircle size={14} className="animate-spin" />}{confirmingUser.isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}</button>
+          </div>
+        </div>}
+      </Modal>
 
       {/* Create Staff Member Modal */}
       <Modal
@@ -383,6 +390,7 @@ export function UsersPage() {
       >
         <form onSubmit={handleCreateStaff} className="space-y-4">
           <AlertBanner type="error" message={createError} onClose={() => setCreateError('')} />
+          <p className="rounded-lg bg-mint px-3 py-2 text-xs text-forest">Nhân viên mới sẽ thuộc <strong>{currentUser?.branchName || 'chi nhánh đang làm việc'}</strong>.</p>
 
           <div>
             <label className="block text-xs font-semibold text-slate-700">

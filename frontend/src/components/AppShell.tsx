@@ -1,11 +1,13 @@
 import {
-  ArrowLeftRight, Boxes, Building, ChevronDown, ClipboardCheck,
+  ArrowLeftRight, Boxes, Building, Check, ChevronDown, ClipboardCheck,
   FileText, HeartHandshake, KeyRound, LayoutDashboard, LogOut, Menu, PackagePlus, Pill,
-  PanelLeftClose, PanelLeftOpen, ReceiptText, RotateCcw, Settings, ShieldCheck, Truck, Users, X,
+  LoaderCircle, PanelLeftClose, PanelLeftOpen, ReceiptText, RotateCcw, Settings, ShieldCheck, Truck, Users, X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { apiClient } from '../services/apiClient';
+import type { Branch } from '../types';
 import { NotificationBell } from './notifications/NotificationBell';
 
 type Role = 'OWNER' | 'SALES' | 'WAREHOUSE';
@@ -50,13 +52,19 @@ function getInitials(name?: string, fallback = 'PS') {
 }
 
 export function AppShell() {
-  const { currentUser, signOut } = useAuth();
+  const { currentUser, signOut, switchBranch } = useAuth();
   const location = useLocation();
   const role = currentUser?.role as Role | undefined;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.localStorage.getItem('pharmasecure.sidebar.collapsed') === 'true');
   const [accountOpen, setAccountOpen] = useState(false);
+  const [branchOpen, setBranchOpen] = useState(false);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [switchingBranchId, setSwitchingBranchId] = useState<string | null>(null);
+  const [branchError, setBranchError] = useState('');
   const accountMenu = useRef<HTMLDivElement>(null);
+  const branchMenu = useRef<HTMLDivElement>(null);
   const groups = useMemo(() => navigationGroups
     .filter(group => role && (group.roles as readonly Role[]).includes(role))
     .map(group => ({ ...group, items: group.items.filter(item => role && (item.roles as readonly Role[]).includes(role)) }))
@@ -76,10 +84,12 @@ export function AppShell() {
   useEffect(() => {
     function closeAccount(event: PointerEvent) {
       if (!accountMenu.current?.contains(event.target as Node)) setAccountOpen(false);
+      if (!branchMenu.current?.contains(event.target as Node)) setBranchOpen(false);
     }
     function closeMenus(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setAccountOpen(false);
+        setBranchOpen(false);
         setMobileOpen(false);
       }
     }
@@ -93,6 +103,33 @@ export function AppShell() {
 
   function toggleGroup(id: string) {
     setOpenGroups(current => ({ ...current, [id]: !(current[id] ?? id === activeGroup) }));
+  }
+
+  async function toggleBranchMenu() {
+    const nextOpen = !branchOpen;
+    setBranchOpen(nextOpen);
+    setBranchError('');
+    if (!nextOpen || branches.length > 0 || branchesLoading) return;
+    setBranchesLoading(true);
+    try {
+      setBranches(await apiClient<Branch[]>('/branches'));
+    } catch (error) {
+      setBranchError(error instanceof Error ? error.message : 'Không thể tải danh sách chi nhánh.');
+    } finally {
+      setBranchesLoading(false);
+    }
+  }
+
+  async function selectBranch(branch: Branch) {
+    if (!currentUser || branch.id === currentUser.branchId || switchingBranchId) return;
+    setBranchError('');
+    setSwitchingBranchId(branch.id);
+    try {
+      await switchBranch(branch.id);
+    } catch (error) {
+      setBranchError(error instanceof Error ? error.message : 'Không thể chuyển chi nhánh.');
+      setSwitchingBranchId(null);
+    }
   }
 
   const navigation = (mobile = false) => (
@@ -141,7 +178,26 @@ export function AppShell() {
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-line bg-white/95 px-4 backdrop-blur lg:h-[76px] lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <button type="button" className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-line text-ink lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Mở điều hướng" aria-expanded={mobileOpen}><Menu size={18} /></button>
-          <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Chi nhánh làm việc</p><p className="truncate text-sm font-semibold text-ink">{currentUser?.branchName || currentUser?.branchId || 'Chưa xác định'}</p></div>
+          <div ref={branchMenu} className="relative min-w-0">
+            {role === 'OWNER' ? <button type="button" onClick={() => void toggleBranchMenu()} disabled={Boolean(switchingBranchId)} aria-expanded={branchOpen} aria-controls="branch-menu" className="group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest disabled:cursor-wait disabled:opacity-70">
+              <span className="min-w-0"><span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Chi nh&#225;nh l&#224;m vi&#7879;c</span><span className="block truncate text-sm font-semibold text-ink">{currentUser?.branchName || currentUser?.branchId || 'Chưa xác định'}</span></span>
+              {switchingBranchId ? <LoaderCircle size={15} className="shrink-0 animate-spin text-forest" /> : <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${branchOpen ? 'rotate-180' : ''}`} />}
+            </button> : <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Chi nh&#225;nh l&#224;m vi&#7879;c</p><p className="truncate text-sm font-semibold text-ink">{currentUser?.branchName || currentUser?.branchId || 'Chưa xác định'}</p></div>}
+            {role === 'OWNER' && <div id="branch-menu" aria-hidden={!branchOpen} className={`absolute left-0 top-full z-40 mt-2 w-[min(88vw,320px)] origin-top-left rounded-xl border border-slate-200 bg-white p-2 shadow-panel transition-[opacity,transform,visibility] duration-200 ${branchOpen ? 'visible translate-y-0 opacity-100' : 'invisible pointer-events-none -translate-y-1 opacity-0'}`}>
+              <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Ch&#7885;n chi nh&#225;nh</p>
+              {branchesLoading && <div className="flex items-center gap-2 px-3 py-3 text-xs text-slate-500"><LoaderCircle size={15} className="animate-spin" />&#272;ang t&#7843;i danh s&#225;ch...</div>}
+              {!branchesLoading && branches.map(branch => {
+                const active = branch.id === currentUser?.branchId;
+                const switching = branch.id === switchingBranchId;
+                return <button key={branch.id} type="button" onClick={() => void selectBranch(branch)} disabled={active || Boolean(switchingBranchId)} className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-xs transition-colors ${active ? 'bg-mint font-semibold text-forest' : 'text-slate-600 hover:bg-slate-50 hover:text-ink'} disabled:cursor-default`}>
+                  <span className="min-w-0"><span className="block truncate font-semibold">{branch.branchName}</span>{branch.address && <span className="mt-0.5 block truncate text-[11px] font-normal text-slate-400">{branch.address}</span>}</span>
+                  {switching ? <LoaderCircle size={15} className="shrink-0 animate-spin" /> : active ? <Check size={15} className="shrink-0" /> : null}
+                </button>;
+              })}
+              {!branchesLoading && branches.length === 0 && !branchError && <p className="px-3 py-3 text-xs text-slate-500">Kh&#244;ng c&#243; chi nh&#225;nh kh&#7843; d&#7909;ng.</p>}
+              {branchError && <p role="alert" className="mx-1 mt-1 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{branchError}</p>}
+            </div>}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <NotificationBell />

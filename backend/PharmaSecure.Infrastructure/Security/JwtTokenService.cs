@@ -17,14 +17,16 @@ public sealed class JwtTokenService : IJwtTokenService
         this.options = options.Value;
     }
 
-    public (string Token, string Jti) GenerateTokenWithJti(string userId, string username, UserRole role, string branchId, string? passwordHash = null)
+    public (string Token, string Jti) GenerateTokenWithJti(string userId, string username, UserRole role, string activeBranchId, string? passwordHash = null, string? homeBranchId = null)
     {
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("User ID is required.", nameof(userId));
         if (string.IsNullOrWhiteSpace(username))
             throw new ArgumentException("Username is required.", nameof(username));
-        if (string.IsNullOrWhiteSpace(branchId))
-            throw new ArgumentException("Branch ID is required.", nameof(branchId));
+        if (string.IsNullOrWhiteSpace(activeBranchId))
+            throw new ArgumentException("Branch ID is required.", nameof(activeBranchId));
+
+        homeBranchId = string.IsNullOrWhiteSpace(homeBranchId) ? activeBranchId : homeBranchId;
 
         var secretKey = ExpandEnvironmentPlaceholder(options.SecretKey, "JWT_SECRET");
         if (Encoding.UTF8.GetByteCount(secretKey) < 32)
@@ -40,7 +42,8 @@ public sealed class JwtTokenService : IJwtTokenService
             new Claim("pwdv", passwordHash is null ? "" : SessionCredentialValidator.Stamp(passwordHash, secretKey)),
             new Claim("UserId", userId),
             new Claim("RoleCode", roleCode),
-            new Claim("BranchId", branchId),
+            new Claim("HomeBranchId", homeBranchId),
+            new Claim("BranchId", activeBranchId),
             new Claim(ClaimTypes.NameIdentifier, userId),
             new Claim(ClaimTypes.Name, username),
             new Claim(ClaimTypes.Role, roleCode)
@@ -59,9 +62,9 @@ public sealed class JwtTokenService : IJwtTokenService
         return (new JwtSecurityTokenHandler().WriteToken(token), jti);
     }
 
-    public string GenerateToken(string userId, string username, UserRole role, string branchId, string? passwordHash = null)
+    public string GenerateToken(string userId, string username, UserRole role, string activeBranchId, string? passwordHash = null, string? homeBranchId = null)
     {
-        return GenerateTokenWithJti(userId, username, role, branchId, passwordHash).Token;
+        return GenerateTokenWithJti(userId, username, role, activeBranchId, passwordHash, homeBranchId).Token;
     }
 
     private static string ExpandEnvironmentPlaceholder(string value, string variableName)

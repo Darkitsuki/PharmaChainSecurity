@@ -257,8 +257,6 @@ public sealed class UserService : IUserService
                 ("rl-00000000-0000-0000-0000-000000000002", "Nhân viên kho"),
             "SALES" or "BANHANG" or "NHAN VIEN BAN HANG" =>
                 ("rl-00000000-0000-0000-0000-000000000003", "Nhân viên bán hàng"),
-            "OWNER" or "CHUTIEM" or "CHU NHA THUOC" =>
-                ("rl-00000000-0000-0000-0000-000000000001", "Chủ nhà thuốc"),
             _ => throw new ArgumentException($"Invalid role '{role}'. Allowed roles are SALES or WAREHOUSE.")
         };
     }

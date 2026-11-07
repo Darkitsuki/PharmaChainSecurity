@@ -48,35 +48,13 @@ export const FefoInventoryCard: React.FC<FefoInventoryCardProps> = ({
             Tuyệt vời! Không có lô thuốc nào cận hạn dưới 90 ngày trong chi nhánh.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="ui-data-table w-full text-left text-xs">
-              <thead className="border-b border-slate-100 text-xs font-bold uppercase tracking-wider text-slate-400">
-                <tr>
-                  <th className="pb-2.5">Mã &amp; Tên thuốc</th>
-                  <th className="pb-2.5">Số Lô</th>
-                  <th className="pb-2.5">Tồn kho</th>
-                  <th className="pb-2.5">Hạn dùng (FEFO)</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {displayAlerts.map((item) => (
-                  <tr key={`${item.drugId}-${item.batchId}`} className="group hover:bg-slate-50/80">
-                    <td className="py-3">
-                      <p className="font-bold text-slate-900">{item.drugName}</p>
-                      <p className="font-mono text-xs text-slate-400">{item.drugCode}</p>
-                    </td>
-                    <td className="py-3 font-mono text-slate-600 font-semibold">{item.batchNo}</td>
-                    <td className="py-3">
-                      <span className="font-bold text-slate-900">{item.quantity}</span>
-                      <span className="ml-1 text-xs text-slate-500">đơn vị</span>
-                    </td>
-                    <td className="py-3">
-                      <FefoExpiryBadge expiryDate={item.expiryDate} size="sm" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="divide-y divide-slate-100">
+            {displayAlerts.map((item) => (
+              <div key={`${item.drugId}-${item.batchId}`} className="grid gap-2 py-3 text-xs transition-colors hover:bg-slate-50/80 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] sm:items-center sm:gap-x-4">
+                <div className="min-w-0"><p className="font-bold text-slate-900">{item.drugName}</p><p className="mt-1 truncate font-mono text-slate-500" title={item.batchNo}>Lô {item.batchNo}</p></div>
+                <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 sm:justify-end"><span className="whitespace-nowrap text-slate-500"><strong className="text-slate-900">{item.quantity}</strong> đơn vị</span><FefoExpiryBadge expiryDate={item.expiryDate} size="sm" /></div>
+              </div>
+            ))}
           </div>
         )}
       </div>

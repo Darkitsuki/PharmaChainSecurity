@@ -8,6 +8,7 @@ export interface CurrentUser {
   username: string;
   fullName: string;
   role: UserRole;
+  homeBranchId: string;
   branchId: string;
   branchName: string;
 }
@@ -319,6 +320,7 @@ export interface StaffUser {
   fullName: string;
   phoneNumber: string | null;
   role: string;
+  roleId: string;
   branchId: string;
   branchName: string;
   isActive: boolean;

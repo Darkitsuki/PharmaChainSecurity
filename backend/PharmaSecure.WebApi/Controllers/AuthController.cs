@@ -47,10 +47,39 @@ public sealed class AuthController : ControllerBase
         if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.UserId))
             return Unauthorized();
 
-        var result = await authService.GetCurrentUserAsync(currentUserContext.UserId, cancellationToken);
+        if (string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            return Forbid();
+
+        var result = await authService.GetCurrentUserAsync(currentUserContext.UserId, currentUserContext.BranchId, cancellationToken);
         if (result.IsFailure)
             return Problem(statusCode: StatusCodes.Status404NotFound, title: result.Error);
 
+        return Ok(result.Value);
+    }
+
+    [HttpPost("switch-branch")]
+    [Authorize(Roles = "OWNER")]
+    public async Task<ActionResult<LoginResponse>> SwitchBranchAsync(
+        [FromBody] SwitchBranchRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!currentUserContext.IsAuthenticated || string.IsNullOrWhiteSpace(currentUserContext.UserId) || string.IsNullOrWhiteSpace(currentUserContext.BranchId))
+            return Unauthorized();
+        if (request is null || string.IsNullOrWhiteSpace(request.BranchId))
+            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Target branch is required.");
+
+        var result = await authService.SwitchBranchAsync(
+            currentUserContext.UserId,
+            currentUserContext.BranchId,
+            request.BranchId,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken);
+
+        if (result.IsFailure)
+            return Problem(statusCode: StatusCodes.Status403Forbidden, title: result.Error);
+
+        auditAccess?.RevokeSession();
         return Ok(result.Value);
     }
 

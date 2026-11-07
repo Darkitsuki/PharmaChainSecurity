@@ -1,5 +1,5 @@
 import { money } from '../utils/formatters';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CircleAlert, LoaderCircle, X, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError, apiClient } from '../services/apiClient';
@@ -26,12 +26,14 @@ export function ReportsPage() {
   const [pendingOrdersCount, setPendingOrdersCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const requestVersion = useRef(0);
 
   useEffect(() => {
     loadAllDashboardData(days);
   }, [days]);
 
   async function loadAllDashboardData(selectedDays: number) {
+    const version = ++requestVersion.current;
     setLoading(true);
     setError('');
     try {
@@ -41,6 +43,7 @@ export function ReportsPage() {
         apiClient<PageResult<Invoice>>('/invoices?page=1&pageSize=6'),
         apiClient<PageResult<PurchaseOrder>>('/purchase-orders?status=PENDING&page=1&pageSize=5'),
       ]);
+      if (version !== requestVersion.current) return;
 
       if (reportData.status === 'fulfilled') {
         setReport(reportData.value);
@@ -58,23 +61,41 @@ export function ReportsPage() {
       }
       setPendingOrdersCount(pendingOrdersData.status === 'fulfilled' ? pendingOrdersData.value.totalCount : null);
     } catch (err) {
+      if (version !== requestVersion.current) return;
       setError('Lỗi khi tải dữ liệu tổng quan chi nhánh.');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }
 
   function handleExportCsv() {
     if (!report) return;
-    const header = 'Ngay,DoanhThu,SoHoaDon\n';
-    const rows = (report.dailySales || [])
-      .map((d) => `${d.date},${d.revenue},${d.invoiceCount}`)
-      .join('\n');
-    const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8;' });
+    const csvCell = (value: string | number) => {
+      let text = String(value ?? '');
+      if (/^[=+\-@]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const periodLabel = days === 1 ? 'H\u00f4m nay' : `${days} ng\u00e0y`;
+    const rows: Array<Array<string | number>> = [
+      ['B\u00e1o c\u00e1o', 'Doanh thu h\u00f3a \u0111\u01a1n \u0111\u00e3 thanh to\u00e1n tr\u01b0\u1edbc \u0111i\u1ec1u ch\u1ec9nh'],
+      ['Chi nh\u00e1nh', currentUser?.branchName || 'Ch\u01b0a x\u00e1c \u0111\u1ecbnh'],
+      ['K\u1ef3 b\u00e1o c\u00e1o', periodLabel],
+      ['Th\u1eddi \u0111i\u1ec3m xu\u1ea5t', new Date().toLocaleString('vi-VN')],
+      ['\u0110\u01a1n v\u1ecb ti\u1ec1n', 'VND'],
+      [],
+      ['T\u1ed5ng doanh thu trong k\u1ef3', report.totalRevenue],
+      ['S\u1ed1 h\u00f3a \u0111\u01a1n trong k\u1ef3', report.totalInvoices],
+      [],
+      ['Ng\u00e0y', 'Doanh thu', 'S\u1ed1 h\u00f3a \u0111\u01a1n'],
+      ...(report.dailySales || []).map(item => [item.date, item.revenue, item.invoiceCount]),
+    ];
+    const content = rows.map(row => row.map(csvCell).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `BaoCao_ChiNhanh_${currentUser?.branchId || 'khong-xac-dinh'}_${days}ngay.csv`);
+    const branchFileName = (currentUser?.branchName || 'chi-nhanh').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '-');
+    link.setAttribute('download', `BaoCao_${branchFileName}_${days}ngay.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

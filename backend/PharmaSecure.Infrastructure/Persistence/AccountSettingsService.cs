@@ -20,7 +20,8 @@ public sealed class AccountSettingsService(IUnitOfWork unit, ICurrentUserContext
         var cmd = (OracleCommand)unit.Connection.CreateCommand(); cmd.Transaction = (OracleTransaction?)unit.Transaction;
         cmd.BindByName = true; cmd.CommandText = sql;
         cmd.Parameters.Add("actor", OracleDbType.Varchar2).Value = user.UserId;
-        cmd.Parameters.Add("branch", OracleDbType.Varchar2).Value = user.BranchId;
+        if (sql.Contains(":branch", StringComparison.OrdinalIgnoreCase))
+            cmd.Parameters.Add("branch", OracleDbType.Varchar2).Value = user.BranchId;
         foreach (var (name, value) in values) cmd.Parameters.Add(name, OracleDbType.Varchar2).Value = value ?? DBNull.Value;
         return cmd;
     }
@@ -35,7 +36,7 @@ public sealed class AccountSettingsService(IUnitOfWork unit, ICurrentUserContext
         using var cmd = Command("""
             SELECT u.id,u.Username,u.FullName,u.PhoneNumber,u.Email,u.BranchId,b.BranchName,u.IsActive,u.PasswordHash
             FROM USERS u JOIN BRANCHES b ON b.id=u.BranchId
-            WHERE u.id=:actor AND u.BranchId=:branch AND u.IsActive=1
+            WHERE u.id=:actor AND u.IsActive=1
             """ + (locked ? " FOR UPDATE OF u.PasswordHash" : ""));
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) throw new SensitiveAccessException(403, "Tài khoản không còn hoạt động trong chi nhánh.");
@@ -59,7 +60,7 @@ public sealed class AccountSettingsService(IUnitOfWork unit, ICurrentUserContext
             var fullName = request.FullName.Trim(); var phone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
             if (current.FullName != fullName || current.PhoneNumber != phone)
             {
-                using var cmd = Command("UPDATE USERS SET FullName=:fullName,PhoneNumber=:phone WHERE id=:actor AND BranchId=:branch AND IsActive=1", ("fullName", fullName), ("phone", phone));
+                using var cmd = Command("UPDATE USERS SET FullName=:fullName,PhoneNumber=:phone WHERE id=:actor AND IsActive=1", ("fullName", fullName), ("phone", phone));
                 await cmd.ExecuteNonQueryAsync(ct);
                 await audit.WriteAsync(unit.Connection, unit.Transaction, "PROFILE_UPDATED", ct: ct);
             }
@@ -82,7 +83,7 @@ public sealed class AccountSettingsService(IUnitOfWork unit, ICurrentUserContext
             var row = await Read(true, ct);
             if (!hasher.VerifyPassword(request.CurrentPassword, row.Hash)) { invalidCurrentPassword = true; throw new SensitiveAccessException(400, "Mật khẩu hiện tại không đúng."); }
             if (hasher.VerifyPassword(request.NewPassword, row.Hash)) throw new SensitiveAccessException(400, "Mật khẩu mới phải khác mật khẩu hiện tại.");
-            using var cmd = Command("UPDATE USERS SET PasswordHash=:newHash WHERE id=:actor AND BranchId=:branch AND IsActive=1", ("newHash", hasher.HashPassword(request.NewPassword)));
+            using var cmd = Command("UPDATE USERS SET PasswordHash=:newHash WHERE id=:actor AND IsActive=1", ("newHash", hasher.HashPassword(request.NewPassword)));
             await cmd.ExecuteNonQueryAsync(ct);
             await audit.WriteAsync(unit.Connection, unit.Transaction, "PASSWORD_CHANGED", ct: ct);
             return true;

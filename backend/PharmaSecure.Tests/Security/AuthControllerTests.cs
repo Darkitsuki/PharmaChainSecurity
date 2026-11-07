@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Moq;
 using PharmaSecure.Application.Common;
@@ -41,6 +42,7 @@ public class AuthControllerTests
             "chunhathuoc",
             "Chủ Nhà Thuốc",
             "OWNER",
+            TestBranchId,
             TestBranchId,
             "Chi Nhánh Trung Tâm");
 
@@ -148,6 +150,7 @@ public class AuthControllerTests
         // Arrange
         userContextMock.Setup(u => u.IsAuthenticated).Returns(true);
         userContextMock.Setup(u => u.UserId).Returns(TestUserId);
+        userContextMock.Setup(u => u.BranchId).Returns(TestBranchId);
 
         var expectedProfile = new UserProfileResponse(
             TestUserId,
@@ -155,9 +158,10 @@ public class AuthControllerTests
             "Chủ Nhà Thuốc",
             "OWNER",
             TestBranchId,
+            TestBranchId,
             "Chi Nhánh Trung Tâm");
 
-        authServiceMock.Setup(s => s.GetCurrentUserAsync(TestUserId, It.IsAny<CancellationToken>()))
+        authServiceMock.Setup(s => s.GetCurrentUserAsync(TestUserId, TestBranchId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(Result<UserProfileResponse>.Success(expectedProfile));
 
         var controller = CreateController();
@@ -187,6 +191,41 @@ public class AuthControllerTests
 
         // Assert
         Assert.IsType<UnauthorizedResult>(actionResult.Result);
+    }
+
+    [Fact]
+    public async Task SwitchBranchAsync_WhenOwnerAndTargetIsValid_ReturnsReplacementSession()
+    {
+        userContextMock.Setup(u => u.IsAuthenticated).Returns(true);
+        userContextMock.Setup(u => u.UserId).Returns(TestUserId);
+        userContextMock.Setup(u => u.BranchId).Returns(TestBranchId);
+        const string targetBranchId = "br-00000000-0000-0000-0000-000000000002";
+        var profile = new UserProfileResponse(TestUserId, "chunhathuoc", "Owner", "OWNER", TestBranchId, targetBranchId, "Chi nh?nh 2");
+        var expected = new LoginResponse("replacement-token", "Bearer", 3600, profile);
+        authServiceMock.Setup(s => s.SwitchBranchAsync(
+                TestUserId,
+                TestBranchId,
+                targetBranchId,
+                It.IsAny<string?>(),
+                It.IsAny<string?>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<LoginResponse>.Success(expected));
+
+        var result = await CreateController().SwitchBranchAsync(new SwitchBranchRequest(targetBranchId), CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<LoginResponse>(ok.Value);
+        Assert.Equal("replacement-token", response.AccessToken);
+        Assert.Equal(TestBranchId, response.User.HomeBranchId);
+        Assert.Equal(targetBranchId, response.User.BranchId);
+    }
+
+    [Fact]
+    public void SwitchBranchAsync_RequiresOwnerRole()
+    {
+        var method = typeof(AuthController).GetMethod(nameof(AuthController.SwitchBranchAsync));
+        var authorize = Assert.Single(method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true).Cast<AuthorizeAttribute>());
+        Assert.Equal("OWNER", authorize.Roles);
     }
 
     [Fact]

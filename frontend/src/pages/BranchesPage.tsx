@@ -2,8 +2,6 @@ import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Building,
-  CheckCircle2,
-  Edit2,
   FileText,
   MapPin,
   Plus,
@@ -180,61 +178,24 @@ export function BranchesPage() {
 
   const columns: Column<Branch>[] = [
     {
-      header: 'Mã & Tên Chi nhánh',
+      header: 'Tên chi nhánh',
       cell: b => (
         <div>
-          <div className="flex items-center gap-2">
-
-            <span className="font-semibold text-ink">{b.branchName}</span>
-          </div>
-          {b.address && (
-            <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
-              <MapPin size={12} className="shrink-0 text-slate-400" />
-              <span className="truncate max-w-[320px]">{b.address}</span>
-            </div>
-          )}
+          <span className="font-semibold text-ink">{b.branchName}</span>
+          {b.address && <div className="mt-1 flex items-start gap-1 text-xs text-slate-400">
+            <MapPin size={12} className="mt-0.5 shrink-0" />
+            <span className="max-w-[440px] whitespace-normal break-words" title={b.address}>{b.address}</span>
+          </div>}
         </div>
       ),
     },
     {
       header: 'Nhân viên trực thuộc',
-      cell: b => (
-        <div className="flex items-center gap-1.5 text-xs text-slate-700">
-          <Users size={14} className="text-slate-400" />
-          <span className="font-semibold">{b.activeUsersCount}</span>
-          <span className="text-slate-400 text-xs">nhân sự</span>
-        </div>
-      ),
+      cell: b => <div className="flex items-center gap-1.5 text-xs text-slate-700"><Users size={14} className="text-slate-400" /><span className="font-semibold">{b.activeUsersCount}</span><span className="text-slate-400">nhân sự</span></div>,
     },
     {
       header: 'Giao dịch hóa đơn',
-      cell: b => (
-        <div className="flex items-center gap-1.5 text-xs text-slate-700">
-          <FileText size={14} className="text-slate-400" />
-          <span className="font-semibold">{b.totalInvoicesCount}</span>
-          <span className="text-slate-400 text-xs">hóa đơn</span>
-        </div>
-      ),
-    },
-    {
-      header: 'Trạng thái',
-      cell: () => (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-          <CheckCircle2 size={12} /> Hoạt động
-        </span>
-      ),
-    },
-    {
-      header: 'Thao tác',
-      cell: b => (
-        <button
-          onClick={() => handleOpenEditModal(b)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-mint hover:text-forest cursor-pointer"
-          title="Chỉnh sửa thông tin chi nhánh"
-        >
-          <Edit2 size={15} /> Chỉnh sửa
-        </button>
-      ),
+      cell: b => <div className="flex items-center gap-1.5 text-xs text-slate-700"><FileText size={14} className="text-slate-400" /><span className="font-semibold">{b.totalInvoicesCount}</span><span className="text-slate-400">hóa đơn</span></div>,
     },
   ];
 
@@ -299,6 +260,8 @@ export function BranchesPage() {
         columns={columns}
         data={paginatedBranches}
         keyExtractor={b => b.id}
+        onRowClick={handleOpenEditModal}
+        rowLabel={b => `Xem và cập nhật ${b.branchName}`}
         loading={loading}
         emptyMessage="Không tìm thấy chi nhánh nào phù compliance."
         pagination={{
