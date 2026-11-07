@@ -1,510 +1,164 @@
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Boxes, CalendarClock, PackageCheck, PackageX } from 'lucide-react';
 import { loadAllPages } from '../utils/loadAllPages';
-import { quantity, calendarDate } from '../utils/formatters';
-import { PageHeader } from '../components/common/PageHeader';
-import { useEffect, useState, type FormEvent } from 'react';
-import {
-  AlertTriangle,
-  Boxes,
-  Clock,
-  Edit3,
-  LoaderCircle,
-  SlidersHorizontal,
-} from 'lucide-react';
-import { ApiError, apiClient } from '../services/apiClient';
-import { useAuth } from '../context/AuthContext';
-import type { Drug, DrugBatch, InventoryAlert, InventoryRow } from '../types';
-import {
-  Modal,
-  DataTable,
-  SearchToolbar,
-  AlertBanner,
-  FefoExpiryBadge,
-  StatCard,
-  type Column,
-} from '../components/common';
+import { calendarDate, quantity } from '../utils/formatters';
+import { ApiError } from '../services/apiClient';
+import type { InventoryRow } from '../types';
+import { AlertBanner, DataTable, FefoExpiryBadge, Modal, PageHeader, SearchToolbar, StatCard, type Column } from '../components/common';
+
+type InventoryTab = 'all' | 'expiring' | 'expired' | 'low';
+const LOW_STOCK_THRESHOLD = 10;
+const EXPIRING_DAYS = 90;
+
+function startOfToday() {
+  const value = new Date();
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+function dateOnly(value: string) {
+  return new Date(`${value.slice(0, 10)}T00:00:00`);
+}
+
+function isExpired(row: InventoryRow) {
+  return dateOnly(row.expiryDate) < startOfToday();
+}
+
+function isExpiring(row: InventoryRow) {
+  const expiry = dateOnly(row.expiryDate);
+  const limit = startOfToday();
+  limit.setDate(limit.getDate() + EXPIRING_DAYS);
+  return row.quantity > 0 && expiry >= startOfToday() && expiry <= limit;
+}
 
 export function InventoryPage() {
-  const { currentUser } = useAuth();
-  const isAuthorizedToAdjust = currentUser?.role === 'OWNER' || currentUser?.role === 'WAREHOUSE';
-
-  const [activeTab, setActiveTab] = useState<'all' | 'expiring' | 'low'>('all');
   const [rows, setRows] = useState<InventoryRow[]>([]);
-  const [alertRows, setAlertRows] = useState<InventoryAlert[]>([]);
-  const [drugNames, setDrugNames] = useState<Record<string, string>>({});
-  const [drugCodes, setDrugCodes] = useState<Record<string, string>>({});
-  const [batchDetails, setBatchDetails] = useState<Record<string, DrugBatch>>({});
+  const [activeTab, setActiveTab] = useState<InventoryTab>('all');
+  const [selectedRow, setSelectedRow] = useState<InventoryRow | null>(null);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [successNotice, setSuccessNotice] = useState('');
 
-  // Modal Điều Chỉnh Tồn Kho State
-  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
-  const [adjustDrugId, setAdjustDrugId] = useState('');
-  const [adjustBatchId, setAdjustBatchId] = useState('');
-  const [adjustNewQuantity, setAdjustNewQuantity] = useState<number>(0);
-  const [adjustReason, setAdjustReason] = useState('');
-  const [isSubmittingAdjust, setIsSubmittingAdjust] = useState(false);
-  const [adjustError, setAdjustError] = useState('');
-
-  const enrichAlertsWithMfgDate = async (alerts: InventoryAlert[]) => {
-    if (!alerts.length) {
-      setAlertRows([]);
-      return;
-    }
-    const uniqueDrugIds = Array.from(new Set(alerts.map((a) => a.drugId)));
-    const batchMfgMap: Record<string, string | null> = {};
-    let failedBatchLookups = 0;
-
-    await Promise.all(
-      uniqueDrugIds.map(async (drugId) => {
-        try {
-          const batches = await apiClient<DrugBatch[]>(`/drugs/${encodeURIComponent(drugId)}/batches`);
-          batches.forEach((b) => {
-            batchMfgMap[b.batchId] = b.mfgDate ?? null;
-          });
-        } catch {
-          failedBatchLookups += 1;
-        }
-      })
-    );
-
-    const enriched = alerts.map((a) => ({
-      ...a,
-      mfgDate: batchMfgMap[a.batchId] ?? null,
-    }));
-    setAlertRows(enriched);
-    if (failedBatchLookups > 0) {
-      setError(`Không thể tải ngày sản xuất cho ${failedBatchLookups} thuốc. Dữ liệu tồn kho khác vẫn được giữ nguyên.`);
-    }
-  };
-
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
     setError('');
-
-    if (activeTab === 'all') {
-      Promise.all([
-        loadAllPages<InventoryRow>('/inventory'),
-        loadAllPages<Drug>('/drugs'),
-      ])
-        .then(([inventory, drugs]) => {
-          setRows(inventory);
-          setDrugNames(Object.fromEntries(drugs.map((drug) => [drug.drugId, drug.name])));
-          setDrugCodes(Object.fromEntries(drugs.map(drug => [drug.drugId, drug.drugCode])));
-          return Promise.all(Array.from(new Set(inventory.map(row => row.drugId))).map(async drugId => {
-            const batches = await apiClient<DrugBatch[]>(`/drugs/${encodeURIComponent(drugId)}/batches`);
-            return batches;
-          })).then(groups => setBatchDetails(Object.fromEntries(groups.flat().map(batch => [batch.batchId, batch]))));
-        })
-        .catch((requestError) => {
-          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải tồn kho chi nhánh.');
-        })
-        .finally(() => setLoading(false));
-    } else if (activeTab === 'expiring') {
-      apiClient<InventoryAlert[]>('/inventory/expiring-soon?days=90')
-        .then(async (alerts) => {
-          await enrichAlertsWithMfgDate(alerts);
-        })
-        .catch((requestError) => {
-          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách lô cận hạn.');
-        })
-        .finally(() => setLoading(false));
-    } else if (activeTab === 'low') {
-      apiClient<InventoryAlert[]>('/inventory/low-stock?threshold=10')
-        .then(async (alerts) => {
-          await enrichAlertsWithMfgDate(alerts);
-        })
-        .catch((requestError) => {
-          setError(requestError instanceof ApiError ? requestError.detail || requestError.message : 'Không thể tải danh sách thuốc sắp hết hàng.');
-        })
-        .finally(() => setLoading(false));
+    try {
+      setRows(await loadAllPages<InventoryRow>('/inventory'));
+    } catch (requestError) {
+      setError(requestError instanceof ApiError
+        ? requestError.detail || requestError.message
+        : 'Không thể tải tồn kho chi nhánh.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, [activeTab]);
+  useEffect(() => { void loadData(); }, []);
 
-  function handleOpenAdjust(drugId = '', batchId = '', currentQty = 0) {
-    setAdjustDrugId(drugId);
-    setAdjustBatchId(batchId);
-    setAdjustNewQuantity(currentQty);
-    setAdjustReason('');
-    setAdjustError('');
-    setIsAdjustModalOpen(true);
-  }
+  const metrics = useMemo(() => {
+    const availableByDrug = new Map<string, number>();
+    rows.forEach(row => availableByDrug.set(row.drugId, (availableByDrug.get(row.drugId) ?? 0) + row.availableQuantity));
+    return {
+      recorded: rows.reduce((sum, row) => sum + row.quantity, 0),
+      sellable: rows.reduce((sum, row) => sum + row.availableQuantity, 0),
+      expiredLots: rows.filter(row => row.quantity > 0 && isExpired(row)).length,
+      outOfStockDrugs: [...availableByDrug.values()].filter(value => value === 0).length,
+    };
+  }, [rows]);
 
-  async function handleAdjustSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!adjustDrugId.trim() || !adjustBatchId.trim()) {
-      setAdjustError('Vui lòng chọn thuốc và số lô hợp lệ.');
-      return;
-    }
-    if (adjustNewQuantity < 0) {
-      setAdjustError('Số lượng tồn không thể âm.');
-      return;
-    }
-    if (!adjustReason.trim()) {
-      setAdjustError('Vui lòng nhập lý do điều chỉnh.');
-      return;
-    }
+  const visibleRows = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('vi-VN');
+    return rows.filter(row => {
+      const matches = !term
+        || row.drugName.toLocaleLowerCase('vi-VN').includes(term)
+        || row.batchNo.toLocaleLowerCase('vi-VN').includes(term);
+      if (!matches) return false;
+      if (activeTab === 'expiring') return isExpiring(row);
+      if (activeTab === 'expired') return row.quantity > 0 && isExpired(row);
+      if (activeTab === 'low') return !isExpired(row) && row.availableQuantity <= LOW_STOCK_THRESHOLD;
+      return true;
+    });
+  }, [activeTab, rows, search]);
 
-    setIsSubmittingAdjust(true);
-    setAdjustError('');
-    try {
-      await apiClient('/inventory/adjust', {
-        method: 'POST',
-        body: JSON.stringify({
-          drugId: adjustDrugId.trim(),
-          batchId: adjustBatchId.trim(),
-          newQuantity: adjustNewQuantity,
-          reason: adjustReason.trim(),
-        }),
-      });
-
-      setSuccessNotice(`Đã cập nhật tồn kho lô thành công (${adjustNewQuantity} đơn vị).`);
-      setIsAdjustModalOpen(false);
-      loadData();
-    } catch (err) {
-      setAdjustError(err instanceof ApiError ? err.detail || err.message : 'Không thể điều chỉnh tồn kho.');
-    } finally {
-      setIsSubmittingAdjust(false);
-    }
-  }
-
-  const normalizedSearch = search.trim().toLowerCase();
-
-  const filteredAllRows = rows.filter((row) => {
-    const name = drugNames[row.drugId]?.toLowerCase() ?? '';
-    return name.includes(normalizedSearch) || (drugCodes[row.drugId] ?? '').toLowerCase().includes(normalizedSearch) || (batchDetails[row.batchId]?.batchNo ?? '').toLowerCase().includes(normalizedSearch);
-  });
-
-  const filteredAlertRows = alertRows.filter((alert) => {
-    return alert.drugName.toLowerCase().includes(normalizedSearch) || alert.drugCode.toLowerCase().includes(normalizedSearch) || alert.batchNo.toLowerCase().includes(normalizedSearch);
-  });
-
-  const totalUnits = rows.reduce((sum, item) => sum + item.quantity, 0);
-  const lowStockCount = rows.filter((item) => item.quantity <= 10).length;
-
-  const allColumns: Column<InventoryRow>[] = [
+  const columns: Column<InventoryRow>[] = [
+    { header: 'Thuốc', cell: row => <span className="font-semibold text-ink">{row.drugName}</span> },
+    { header: 'Số lô', cell: row => <span className="font-mono text-xs font-semibold text-slate-600">{row.batchNo}</span> },
+    { header: 'Hạn sử dụng', cell: row => <FefoExpiryBadge expiryDate={row.expiryDate} size="sm" /> },
+    { header: 'Tồn ghi nhận', align: 'right', cell: row => <span className="font-mono font-semibold">{quantity.format(row.quantity)}</span> },
     {
-      header: 'Thuốc',
-      cell: (row) => <span className="font-bold text-ink">{drugNames[row.drugId] ?? 'Đang nạp...'}</span>,
-    },
-    {
-      header: 'Mã Thuốc',
-      cell: (row) => <span className="font-mono text-xs text-slate-500">{drugCodes[row.drugId] || 'Chưa có mã'}</span>,
-    },
-    {
-      header: 'Mã Lô',
-      cell: (row) => <span className="font-mono text-xs text-slate-500">{batchDetails[row.batchId]?.batchNo || 'Chưa tải được số lô'}</span>,
-    },
-    {
-      header: 'Hạn sử dụng',
-      cell: row => batchDetails[row.batchId]?.expiryDate ? <FefoExpiryBadge expiryDate={batchDetails[row.batchId].expiryDate} /> : 'Chưa có dữ liệu',
-    },
-    {
-      header: 'Ngày sản xuất',
-      cell: row => batchDetails[row.batchId]?.mfgDate ? calendarDate.format(new Date(batchDetails[row.batchId].mfgDate!)) : '—',
-    },
-    {
-      header: 'Tồn khả dụng',
-      align: 'right',
-      cell: (row) => (
-        <span
-          className={`inline-flex min-w-12 justify-center rounded-md px-2 py-1 font-mono text-xs font-semibold ${
-            row.quantity <= 10 ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/20' : 'bg-mint text-forest'
-          }`}
-        >
-          {quantity.format(row.quantity)}
+      header: 'Có thể bán', align: 'right', cell: row => (
+        <span className={`inline-flex min-w-12 justify-center rounded-md px-2 py-1 font-mono text-xs font-semibold ${row.availableQuantity <= LOW_STOCK_THRESHOLD ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/20' : 'bg-mint text-forest'}`}>
+          {quantity.format(row.availableQuantity)}
         </span>
       ),
     },
-    ...(isAuthorizedToAdjust
-      ? [
-          {
-            header: 'Thao Tác',
-            align: 'center' as const,
-            cell: (row: InventoryRow) => (
-              <button
-                type="button"
-                onClick={() => handleOpenAdjust(row.drugId, row.batchId, row.quantity)}
-                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-forest hover:bg-mint hover:text-forest cursor-pointer transition-colors"
-                title="Điều chỉnh số lượng lô này"
-              >
-                <Edit3 size={12} />
-                <span>Chỉnh</span>
-              </button>
-            ),
-          },
-        ]
-      : []),
   ];
 
-  const alertColumns: Column<InventoryAlert>[] = [
-    {
-      header: 'Thuốc',
-      cell: (alert) => <span className="font-bold text-ink">{alert.drugName}</span>,
-    },
-    {
-      header: 'Mã Thuốc',
-      cell: (alert) => <span className="font-mono text-xs text-slate-500">{alert.drugCode}</span>,
-    },
-    {
-      header: 'Số Lô',
-      cell: (alert) => <span className="font-mono text-xs text-slate-700 font-semibold">{alert.batchNo}</span>,
-    },
-    {
-      header: 'Ngày Sản Xuất',
-      cell: (alert) => {
-        if (!alert.mfgDate) {
-          return <span className="font-mono text-xs text-slate-400">—</span>;
-        }
-        try {
-          const d = new Date(alert.mfgDate);
-          if (isNaN(d.getTime())) {
-            return <span className="font-mono text-xs text-slate-400">—</span>;
-          }
-          return (
-            <span className="font-mono text-xs text-slate-600 font-medium">
-              {String(d.getDate()).padStart(2, '0')}/{String(d.getMonth() + 1).padStart(2, '0')}/{d.getFullYear()}
-            </span>
-          );
-        } catch {
-          return <span className="font-mono text-xs text-slate-400">—</span>;
-        }
-      },
-    },
-    {
-      header: 'Hạn Sử Dụng (FEFO)',
-      cell: (alert) => <FefoExpiryBadge expiryDate={alert.expiryDate} size="sm" />,
-    },
-    {
-      header: 'Hạn sử dụng',
-      cell: row => batchDetails[row.batchId]?.expiryDate ? <FefoExpiryBadge expiryDate={batchDetails[row.batchId].expiryDate} /> : 'Chưa có dữ liệu',
-    },
-    {
-      header: 'Ngày sản xuất',
-      cell: row => batchDetails[row.batchId]?.mfgDate ? calendarDate.format(new Date(batchDetails[row.batchId].mfgDate!)) : '—',
-    },
-    {
-      header: 'Tồn khả dụng',
-      align: 'right',
-      cell: (alert) => (
-        <span
-          className={`inline-flex min-w-12 justify-center rounded-md px-2 py-1 font-mono text-xs font-semibold ${
-            alert.quantity <= 10 ? 'bg-rose-50 text-rose-800 ring-1 ring-rose-600/20' : 'bg-amber-50 text-amber-800 ring-1 ring-amber-600/20'
-          }`}
-        >
-          {alert.quantity}
-        </span>
-      ),
-    },
-    ...(isAuthorizedToAdjust
-      ? [
-          {
-            header: 'Thao Tác',
-            align: 'center' as const,
-            cell: (alert: InventoryAlert) => (
-              <button
-                type="button"
-                onClick={() => handleOpenAdjust(alert.drugId, alert.batchId, alert.quantity)}
-                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-forest hover:bg-mint hover:text-forest cursor-pointer transition-colors"
-              >
-                <Edit3 size={12} />
-                <span>Chỉnh</span>
-              </button>
-            ),
-          },
-        ]
-      : []),
+  const tabs: Array<{ id: InventoryTab; label: string; icon: typeof Boxes }> = [
+    { id: 'all', label: `Tất cả (${rows.length})`, icon: Boxes },
+    { id: 'expiring', label: `Cận hạn ≤ ${EXPIRING_DAYS} ngày`, icon: CalendarClock },
+    { id: 'expired', label: 'Đã hết hạn', icon: PackageX },
+    { id: 'low', label: `Sắp hết ≤ ${LOW_STOCK_THRESHOLD}`, icon: AlertTriangle },
   ];
 
   return (
     <div className="ui-page">
-      {/* Header */}
-      <PageHeader title="Tồn kho chi nhánh" actions={<>
-{isAuthorizedToAdjust && (
-          <button
-            type="button"
-            onClick={() => handleOpenAdjust()}
-            className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-forest/90 cursor-pointer"
-          >
-            <SlidersHorizontal size={15} />
-            <span>Điều chỉnh tồn kho</span>
-          </button>
-        )}
-</>} />
+      <PageHeader title="Tồn kho chi nhánh" description="Theo dõi tồn ghi nhận và số lượng đủ điều kiện bán. Điều chỉnh chênh lệch được thực hiện qua quy trình kiểm kê và OWNER phê duyệt." />
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <StatCard
-          loading={loading} unavailable={Boolean(error)}
-          title="Tổng đơn vị tồn kho"
-          value={totalUnits.toLocaleString('vi-VN')}
-          icon={Boxes}
-          subValue="Tồn hiện tại trong chi nhánh"
-        />
-        <StatCard
-          loading={loading} unavailable={Boolean(error)}
-          title="Lô sắp hết hàng"
-          value={`${lowStockCount} lô`}
-          icon={AlertTriangle}
-          subValue="Số lượng còn từ 0 đến 10 đơn vị"
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard loading={loading} unavailable={Boolean(error)} title="Tồn ghi nhận" value={quantity.format(metrics.recorded)} icon={Boxes} subValue="Tổng đơn vị đang lưu trong kho" />
+        <StatCard loading={loading} unavailable={Boolean(error)} title="Có thể bán" value={quantity.format(metrics.sellable)} icon={PackageCheck} subValue="Còn hạn và thuốc đang hoạt động" />
+        <StatCard loading={loading} unavailable={Boolean(error)} title="Lô đã hết hạn" value={`${metrics.expiredLots} lô`} icon={PackageX} subValue="Vẫn được giữ trong tồn ghi nhận" />
+        <StatCard loading={loading} unavailable={Boolean(error)} title="Thuốc hết hàng" value={`${metrics.outOfStockDrugs} thuốc`} icon={AlertTriangle} subValue="Tổng tồn có thể bán bằng 0" />
       </div>
 
-      {/* Alerts */}
-      <AlertBanner type="success" message={successNotice} onClose={() => setSuccessNotice('')} />
       <AlertBanner type="error" message={error} onClose={() => setError('')} />
 
-      {/* Tab Switcher & Search Toolbar */}
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('all')} aria-pressed={activeTab === 'all'}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
-              activeTab === 'all' ? 'bg-forest text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Boxes size={15} />
-            <span>Tất cả tồn kho ({rows.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('expiring')} aria-pressed={activeTab === 'expiring'}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
-              activeTab === 'expiring' ? 'bg-amber-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Clock size={15} />
-            <span>Cảnh báo cận hạn (&le; 90 ngày)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('low')} aria-pressed={activeTab === 'low'}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition cursor-pointer ${
-              activeTab === 'low' ? 'bg-rose-600 text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <AlertTriangle size={15} />
-            <span>Sắp hết hàng (&le; 10 đơn vị)</span>
-          </button>
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Bộ lọc trạng thái tồn kho">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            const selected = activeTab === tab.id;
+            return <button key={tab.id} type="button" role="tab" aria-selected={selected} onClick={() => setActiveTab(tab.id)} className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors ${selected ? 'bg-forest text-white shadow-2xs' : 'text-slate-600 hover:bg-slate-100'}`}>
+              <Icon size={15} />{tab.label}
+            </button>;
+          })}
         </div>
-
-        <SearchToolbar
-          searchValue={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Tìm thuốc hoặc số lô..."
-          onRefresh={loadData}
-          loading={loading}
-        />
+        <SearchToolbar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Tìm theo tên thuốc hoặc số lô..." onRefresh={() => void loadData()} loading={loading} />
       </div>
 
-      {/* Table Section */}
-      {activeTab === 'all' ? (
-        <DataTable
-          columns={allColumns}
-          data={filteredAllRows}
-          keyExtractor={(item) => `${item.drugId}-${item.batchId}`}
-          loading={loading}
-          loadingText="Đang tải dữ liệu tồn kho chi nhánh..."
-          emptyMessage={rows.length ? 'Không tìm thấy dòng khớp từ khóa tìm kiếm.' : 'Chưa có bản ghi tồn kho nào.'}
-        />
-      ) : (
-        <DataTable
-          columns={alertColumns}
-          data={filteredAlertRows}
-          keyExtractor={(item) => `${item.drugId}-${item.batchId}`}
-          loading={loading}
-          loadingText="Đang tải danh sách cảnh báo tồn kho..."
-          emptyMessage="Không có thuốc nào thuộc diện cảnh báo này. Tình trạng tồn kho an toàn!"
-        />
-      )}
+      <DataTable
+        columns={columns}
+        data={visibleRows}
+        keyExtractor={row => `${row.drugId}-${row.batchId}`}
+        loading={loading}
+        loadingText="Đang tải tồn kho chi nhánh..."
+        emptyMessage={rows.length ? 'Không có lô thuốc phù hợp bộ lọc.' : 'Chưa có dữ liệu tồn kho.'}
+        onRowClick={setSelectedRow}
+        rowLabel={row => `Xem chi tiết ${row.drugName}, lô ${row.batchNo}`}
+      />
 
-      {/* Modal Điều Chỉnh Tồn Kho */}
-      <Modal
-        isOpen={isAdjustModalOpen}
-        onClose={() => setIsAdjustModalOpen(false)}
-        title="Điều Chỉnh Tồn Kho Lô"
-        subtitle="Cập nhật số lượng kiểm kê thực tế tại chi nhánh và ghi vết kiểm toán."
-        icon={SlidersHorizontal}
-        maxWidth="md"
-      >
-        <form onSubmit={handleAdjustSubmit} className="space-y-4">
-          <AlertBanner type="error" message={adjustError} onClose={() => setAdjustError('')} />
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700">Mã Thuốc</label>
-            <input
-              type="text"
-              required
-              value={adjustDrugId}
-              onChange={(e) => setAdjustDrugId(e.target.value)}
-              placeholder="ví dụ: dr-00000000-0000-0000-0000-000000000001"
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono focus:border-forest focus:outline-hidden"
-            />
+      <Modal isOpen={selectedRow !== null} onClose={() => setSelectedRow(null)} title="Chi tiết lô tồn kho" subtitle="Thông tin chỉ đọc của lô thuốc tại chi nhánh hiện tại." icon={Boxes} maxWidth="lg">
+        {selectedRow && <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Detail label="Thuốc" value={selectedRow.drugName} />
+          <Detail label="Số lô" value={selectedRow.batchNo} mono />
+          <Detail label="Ngày sản xuất" value={selectedRow.mfgDate ? calendarDate.format(new Date(selectedRow.mfgDate)) : 'Chưa ghi nhận'} />
+          <Detail label="Hạn sử dụng" value={calendarDate.format(new Date(selectedRow.expiryDate))} />
+          <Detail label="Tồn ghi nhận" value={quantity.format(selectedRow.quantity)} />
+          <Detail label="Có thể bán" value={quantity.format(selectedRow.availableQuantity)} />
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 sm:col-span-2">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Trạng thái hạn dùng</dt>
+            <dd className="mt-2"><FefoExpiryBadge expiryDate={selectedRow.expiryDate} /></dd>
           </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700">Mã Lô Hạn</label>
-            <input
-              type="text"
-              required
-              value={adjustBatchId}
-              onChange={(e) => setAdjustBatchId(e.target.value)}
-              placeholder="ví dụ: bt-00000000-0000-0000-0000-000000000001"
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono focus:border-forest focus:outline-hidden"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700">Số Lượng Thực Tế Sau Điều Chỉnh</label>
-            <input
-              type="number"
-              min="0"
-              required
-              value={adjustNewQuantity}
-              onChange={(e) => setAdjustNewQuantity(Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-mono font-bold text-forest focus:border-forest focus:outline-hidden"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700">Lý Do Điều Chỉnh (Ghi sổ kiểm kê)</label>
-            <textarea
-              required
-              rows={3}
-              value={adjustReason}
-              onChange={(e) => setAdjustReason(e.target.value)}
-              placeholder="ví dụ: Kiểm kê định kỳ phát hiện vỡ 1 vỉ, hoặc điều chỉnh hao hụt..."
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-ink placeholder:text-slate-400 focus:border-forest focus:outline-hidden"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setIsAdjustModalOpen(false)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmittingAdjust}
-              className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-forest/90 disabled:opacity-50"
-            >
-              {isSubmittingAdjust ? <LoaderCircle size={14} className="animate-spin" /> : <SlidersHorizontal size={14} />}
-              <span>{isSubmittingAdjust ? 'Đang cập nhật...' : 'Xác Nhận Điều Chỉnh'}</span>
-            </button>
-          </div>
-        </form>
+        </dl>}
       </Modal>
     </div>
   );
+}
+
+function Detail({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return <div className="rounded-lg border border-slate-200 px-4 py-3">
+    <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
+    <dd className={`mt-1 text-sm font-semibold text-ink ${mono ? 'font-mono' : ''}`}>{value}</dd>
+  </div>;
 }

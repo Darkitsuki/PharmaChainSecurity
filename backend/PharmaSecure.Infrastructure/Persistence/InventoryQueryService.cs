@@ -31,10 +31,20 @@ public sealed class InventoryQueryService : IInventoryQueryService
             var totalCount = await ExecuteCountAsync(branchId, cancellationToken);
             var items = new List<InventoryResponse>();
             await using var command = CreateCommand("""
-                SELECT BranchId, DrugId, BatchId, Quantity
-                FROM INVENTORIES
-                WHERE BranchId = :branchId
-                ORDER BY DrugId, BatchId
+                SELECT i.BranchId, i.DrugId, d.Name, i.BatchId, b.BatchNo,
+                       b.MfgDate, b.ExpiryDate, i.Quantity,
+                       CASE
+                           WHEN i.Quantity > 0
+                            AND b.ExpiryDate >= TRUNC(SYSDATE)
+                            AND NVL(d.IsActive, 1) = 1
+                           THEN i.Quantity
+                           ELSE 0
+                       END AS AvailableQuantity
+                FROM INVENTORIES i
+                INNER JOIN DRUGS d ON d.id = i.DrugId
+                INNER JOIN DRUG_BATCHES b ON b.id = i.BatchId AND b.DrugId = i.DrugId
+                WHERE i.BranchId = :branchId
+                ORDER BY d.Name, b.ExpiryDate, b.BatchNo
                 OFFSET :offset ROWS FETCH NEXT :pageSize ROWS ONLY
                 """);
             command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
@@ -42,7 +52,16 @@ public sealed class InventoryQueryService : IInventoryQueryService
             command.Parameters.Add("pageSize", OracleDbType.Int32).Value = pageSize;
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
-                items.Add(new InventoryResponse(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3)));
+                items.Add(new InventoryResponse(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+                    reader.GetDateTime(6),
+                    reader.GetInt32(7),
+                    reader.GetInt32(8)));
 
             await unitOfWork.CommitAsync(cancellationToken);
             return new PagedResult<InventoryResponse>(items, page, pageSize, totalCount);
@@ -72,7 +91,9 @@ public sealed class InventoryQueryService : IInventoryQueryService
                 INNER JOIN DRUGS d ON d.id = i.DrugId
                 INNER JOIN DRUG_BATCHES b ON b.id = i.BatchId
                 WHERE i.BranchId = :branchId
-                  AND b.ExpiryDate <= (SYSDATE + :days)
+                  AND b.ExpiryDate >= TRUNC(SYSDATE)
+                  AND b.ExpiryDate < TRUNC(SYSDATE) + :days + 1
+                  AND i.Quantity > 0
                 ORDER BY b.ExpiryDate ASC
                 """);
             command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;
@@ -121,6 +142,8 @@ public sealed class InventoryQueryService : IInventoryQueryService
                 INNER JOIN DRUG_BATCHES b ON b.id = i.BatchId
                 WHERE i.BranchId = :branchId
                   AND i.Quantity <= :threshold
+                  AND b.ExpiryDate >= TRUNC(SYSDATE)
+                  AND NVL(d.IsActive, 1) = 1
                 ORDER BY i.Quantity ASC
                 """);
             command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;

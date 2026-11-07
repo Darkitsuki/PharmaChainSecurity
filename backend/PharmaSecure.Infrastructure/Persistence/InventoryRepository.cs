@@ -33,11 +33,15 @@ public sealed class InventoryRepository : IInventoryRepository
         command.Transaction = transaction;
         command.BindByName = true;
         command.CommandText = """
-            SELECT BranchId, DrugId, BatchId, Quantity
-            FROM INVENTORIES
-            WHERE BranchId = :branchId
-              AND DrugId = :drugId
-              AND BatchId = :batchId
+            SELECT i.BranchId, i.DrugId, i.BatchId, i.Quantity
+            FROM INVENTORIES i
+            JOIN DRUG_BATCHES b ON b.id = i.BatchId AND b.DrugId = i.DrugId
+            JOIN DRUGS d ON d.id = i.DrugId
+            WHERE i.BranchId = :branchId
+              AND i.DrugId = :drugId
+              AND i.BatchId = :batchId
+              AND b.ExpiryDate >= TRUNC(SYSDATE)
+              AND d.IsActive = 1
             FOR UPDATE
             """;
         command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;

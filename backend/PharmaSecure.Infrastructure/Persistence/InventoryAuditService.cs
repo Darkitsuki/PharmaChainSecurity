@@ -425,7 +425,7 @@ public sealed class InventoryAuditService : IInventoryAuditService
             {
                 checkCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 checkCmd.BindByName = true;
-                checkCmd.CommandText = "SELECT AuditNo, Status FROM INVENTORY_AUDITS WHERE id = :id AND BranchId = :BranchId";
+                checkCmd.CommandText = "SELECT AuditNo, Status FROM INVENTORY_AUDITS WHERE id = :id AND BranchId = :BranchId FOR UPDATE";
                 checkCmd.Parameters.Add(new OracleParameter("id", OracleDbType.Varchar2, id, ParameterDirection.Input));
                 checkCmd.Parameters.Add(new OracleParameter("BranchId", OracleDbType.Varchar2, branchId, ParameterDirection.Input));
 
@@ -440,31 +440,56 @@ public sealed class InventoryAuditService : IInventoryAuditService
             }
 
             // 2. Lấy danh sách các mặt hàng có chênh lệch
-            var discrepancies = new List<(string DrugId, string BatchId, int ActualQty, int Diff)>();
+            var auditItems = new List<(string DrugId, string BatchId, int SystemQty, int ActualQty, int Diff)>();
             await using (var diffCmd = (OracleCommand)unitOfWork.Connection.CreateCommand())
             {
                 diffCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
                 diffCmd.BindByName = true;
                 diffCmd.CommandText = """
-                    SELECT DrugId, BatchId, ActualQuantity, DiscrepancyQuantity
+                    SELECT DrugId, BatchId, SystemQuantity, ActualQuantity, DiscrepancyQuantity
                     FROM INVENTORY_AUDIT_ITEMS
-                    WHERE AuditId = :AuditId AND DiscrepancyQuantity <> 0
+                    WHERE AuditId = :AuditId
+                    ORDER BY DrugId, BatchId
                     """;
                 diffCmd.Parameters.Add(new OracleParameter("AuditId", OracleDbType.Varchar2, id, ParameterDirection.Input));
 
                 await using var reader = await diffCmd.ExecuteReaderAsync(cancellationToken);
                 while (await reader.ReadAsync(cancellationToken))
                 {
-                    discrepancies.Add((
+                    auditItems.Add((
                         reader.GetString(0),
                         reader.GetString(1),
                         reader.GetInt32(2),
-                        reader.GetInt32(3)));
+                        reader.GetInt32(3),
+                        reader.GetInt32(4)));
                 }
             }
 
+            await EnsureAuditStillMatchesInventorySetAsync(id, branchId, cancellationToken);
+
+            // Lock every audited row and reject stale counts before applying any discrepancy.
+            foreach (var (drugId, batchId, systemQty, _, _) in auditItems)
+            {
+                await using var lockInventoryCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
+                lockInventoryCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+                lockInventoryCmd.BindByName = true;
+                lockInventoryCmd.CommandText = """
+                    SELECT Quantity
+                    FROM INVENTORIES
+                    WHERE BranchId = :BranchId AND DrugId = :DrugId AND BatchId = :BatchId
+                    FOR UPDATE
+                    """;
+                lockInventoryCmd.Parameters.Add(new OracleParameter("BranchId", OracleDbType.Varchar2, branchId, ParameterDirection.Input));
+                lockInventoryCmd.Parameters.Add(new OracleParameter("DrugId", OracleDbType.Varchar2, drugId, ParameterDirection.Input));
+                lockInventoryCmd.Parameters.Add(new OracleParameter("BatchId", OracleDbType.Varchar2, batchId, ParameterDirection.Input));
+
+                var currentQuantity = await lockInventoryCmd.ExecuteScalarAsync(cancellationToken);
+                if (currentQuantity is null || currentQuantity is DBNull || Convert.ToInt32(currentQuantity) != systemQty)
+                    throw new InvalidOperationException("Tồn kho đã thay đổi sau khi lập phiếu kiểm kê. Vui lòng kiểm đếm và đối soát lại trước khi duyệt.");
+            }
+
             // 3. Cân đối tồn kho và sinh nhật ký biến động kho (INVENTORY_TRANSACTIONS)
-            foreach (var (drugId, batchId, actualQty, diff) in discrepancies)
+            foreach (var (drugId, batchId, systemQty, actualQty, diff) in auditItems.Where(item => item.Diff != 0))
             {
                 // Cập nhật tồn kho thực tế
                 await using (var updateInvCmd = (OracleCommand)unitOfWork.Connection.CreateCommand())
@@ -475,13 +500,16 @@ public sealed class InventoryAuditService : IInventoryAuditService
                         UPDATE INVENTORIES
                         SET Quantity = :Quantity
                         WHERE BranchId = :BranchId AND DrugId = :DrugId AND BatchId = :BatchId
+                          AND Quantity = :SystemQuantity
                         """;
                     updateInvCmd.Parameters.Add(new OracleParameter("Quantity", OracleDbType.Int32, actualQty, ParameterDirection.Input));
                     updateInvCmd.Parameters.Add(new OracleParameter("BranchId", OracleDbType.Varchar2, branchId, ParameterDirection.Input));
                     updateInvCmd.Parameters.Add(new OracleParameter("DrugId", OracleDbType.Varchar2, drugId, ParameterDirection.Input));
                     updateInvCmd.Parameters.Add(new OracleParameter("BatchId", OracleDbType.Varchar2, batchId, ParameterDirection.Input));
+                    updateInvCmd.Parameters.Add(new OracleParameter("SystemQuantity", OracleDbType.Int32, systemQty, ParameterDirection.Input));
 
-                    await updateInvCmd.ExecuteNonQueryAsync(cancellationToken);
+                    if (await updateInvCmd.ExecuteNonQueryAsync(cancellationToken) != 1)
+                        throw new InvalidOperationException("Tồn kho đã thay đổi trong lúc duyệt. Giao dịch cân đối đã được hủy.");
                 }
 
                 // Ghi nhận biến động kho loại DIEU_CHINH
@@ -526,7 +554,8 @@ public sealed class InventoryAuditService : IInventoryAuditService
                 completeCmd.Parameters.Add(new OracleParameter("id", OracleDbType.Varchar2, id, ParameterDirection.Input));
                 completeCmd.Parameters.Add(new OracleParameter("BranchId", OracleDbType.Varchar2, branchId, ParameterDirection.Input));
 
-                await completeCmd.ExecuteNonQueryAsync(cancellationToken);
+                if (await completeCmd.ExecuteNonQueryAsync(cancellationToken) != 1)
+                    throw new InvalidOperationException("The inventory audit changed while reconciliation was being completed.");
             }
 
             await unitOfWork.CommitAsync(cancellationToken);
@@ -536,9 +565,36 @@ public sealed class InventoryAuditService : IInventoryAuditService
         }
         catch
         {
-            await unitOfWork.RollbackAsync(cancellationToken);
+            await unitOfWork.RollbackAsync(CancellationToken.None);
             throw;
         }
+    }
+
+    private async Task EnsureAuditStillMatchesInventorySetAsync(
+        string auditId,
+        string branchId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = (OracleCommand)unitOfWork.Connection.CreateCommand();
+        command.Transaction = (OracleTransaction)unitOfWork.Transaction!;
+        command.BindByName = true;
+        command.CommandText = """
+            SELECT COUNT(*)
+            FROM INVENTORIES i
+            WHERE i.BranchId = :BranchId
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM INVENTORY_AUDIT_ITEMS ai
+                  WHERE ai.AuditId = :AuditId
+                    AND ai.DrugId = i.DrugId
+                    AND ai.BatchId = i.BatchId
+              )
+            """;
+        command.Parameters.Add(new OracleParameter("BranchId", OracleDbType.Varchar2, branchId, ParameterDirection.Input));
+        command.Parameters.Add(new OracleParameter("AuditId", OracleDbType.Varchar2, auditId, ParameterDirection.Input));
+
+        if (Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) > 0)
+            throw new InvalidOperationException("Danh mục tồn kho đã thay đổi sau khi lập phiếu kiểm kê. Vui lòng tạo hoặc kiểm đếm lại phiếu.");
     }
 
     public async Task CancelAuditAsync(string id, string branchId, string userId, CancellationToken cancellationToken = default)

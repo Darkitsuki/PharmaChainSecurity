@@ -16,7 +16,7 @@ public class InventoryControllerTests
 
     private InventoryController CreateController(string branchId = "branch-01", string? userId = "user-01", string role = "WAREHOUSE")
     {
-        var controller = new InventoryController(queryServiceMock.Object, repositoryMock.Object);
+        var controller = new InventoryController(queryServiceMock.Object);
         var claims = new List<Claim>
         {
             new("BranchId", branchId),
@@ -104,47 +104,43 @@ public class InventoryControllerTests
     }
 
     [Fact]
-    public async Task AdjustStockAsync_WhenValid_PassesUserIdAndReturnsNoContent()
+    public void AdjustStockAsync_WhenOwnerRequestsAdjustment_ReturnsConflictWithoutWritingInventory()
     {
         var controller = CreateController("branch-01", "user-thukho", "WAREHOUSE");
         var request = new StockAdjustmentRequestBody("drug-1", "batch-1", 50, "Kiem ke kho dinh ky");
 
-        var result = await controller.AdjustStockAsync(request);
-
-        Assert.IsType<NoContentResult>(result);
-        repositoryMock.Verify(repository => repository.AdjustStockAsync(
-            "branch-01",
-            "drug-1",
-            "batch-1",
-            50,
-            "Kiem ke kho dinh ky",
-            "user-thukho",
-            It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task AdjustStockAsync_WhenNegativeQuantity_ReturnsBadRequestProblem()
-    {
-        var controller = CreateController();
-        var request = new StockAdjustmentRequestBody("drug-1", "batch-1", -5, "Sai lech");
-
-        var result = await controller.AdjustStockAsync(request);
+        var result = controller.AdjustStockAsync(request);
 
         var problemResult = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(StatusCodes.Status400BadRequest, problemResult.StatusCode);
+        Assert.Equal(StatusCodes.Status409Conflict, problemResult.StatusCode);
         repositoryMock.Verify(repository => repository.AdjustStockAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task AdjustStockAsync_WhenUserIdClaimIsMissing_ReturnsForbidWithoutWritingInventory()
+    public void AdjustStockAsync_WhenWarehouseRequestsAdjustment_ReturnsConflictWithoutWritingInventory()
+    {
+        var controller = CreateController();
+        var request = new StockAdjustmentRequestBody("drug-1", "batch-1", -5, "Sai lech");
+
+        var result = controller.AdjustStockAsync(request);
+
+        var problemResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, problemResult.StatusCode);
+        repositoryMock.Verify(repository => repository.AdjustStockAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public void AdjustStockAsync_WhenUserIdClaimIsMissing_StillReturnsConflictWithoutWritingInventory()
     {
         var controller = CreateController(userId: null);
         var request = new StockAdjustmentRequestBody("drug-1", "batch-1", 50, "Kiểm kê kho");
 
-        var result = await controller.AdjustStockAsync(request);
+        var result = controller.AdjustStockAsync(request);
 
-        Assert.IsType<ForbidResult>(result);
+        var problemResult = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, problemResult.StatusCode);
         repositoryMock.Verify(repository => repository.AdjustStockAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }

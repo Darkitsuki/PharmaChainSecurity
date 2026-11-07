@@ -1,8 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PharmaSecure.Application.Features.Inventory;
-using PharmaSecure.Application.Interfaces;
 
 namespace PharmaSecure.WebApi.Controllers;
 
@@ -12,14 +10,9 @@ namespace PharmaSecure.WebApi.Controllers;
 public sealed class InventoryController : ControllerBase
 {
     private readonly IInventoryQueryService inventoryQueryService;
-    private readonly IInventoryRepository inventoryRepository;
-
-    public InventoryController(
-        IInventoryQueryService inventoryQueryService,
-        IInventoryRepository inventoryRepository)
+    public InventoryController(IInventoryQueryService inventoryQueryService)
     {
         this.inventoryQueryService = inventoryQueryService;
-        this.inventoryRepository = inventoryRepository;
     }
 
     [HttpGet]
@@ -81,35 +74,12 @@ public sealed class InventoryController : ControllerBase
 
     [HttpPost("adjust")]
     [Authorize(Roles = "OWNER,WAREHOUSE")]
-    public async Task<ActionResult> AdjustStockAsync(
-        [FromBody] StockAdjustmentRequestBody request,
-        CancellationToken cancellationToken = default)
+    public ActionResult AdjustStockAsync([FromBody] StockAdjustmentRequestBody request)
     {
-        if (request is null || string.IsNullOrWhiteSpace(request.DrugId) || string.IsNullOrWhiteSpace(request.BatchId))
-            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "DrugId and BatchId are required.");
-        if (request.NewQuantity < 0)
-            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Quantity cannot be negative.");
-        if (string.IsNullOrWhiteSpace(request.Reason))
-            return Problem(statusCode: StatusCodes.Status400BadRequest, title: "Adjustment reason is required.");
-
-        var branchId = User.FindFirst("BranchId")?.Value;
-        if (string.IsNullOrWhiteSpace(branchId))
-            return Forbid();
-
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
-        if (string.IsNullOrWhiteSpace(userId))
-            return Forbid();
-
-        await inventoryRepository.AdjustStockAsync(
-            branchId,
-            request.DrugId,
-            request.BatchId,
-            request.NewQuantity,
-            request.Reason,
-            userId,
-            cancellationToken);
-
-        return NoContent();
+        return Problem(
+            statusCode: StatusCodes.Status409Conflict,
+            title: "Direct inventory adjustment is disabled.",
+            detail: "Record counted quantities in Inventory Audits and have an OWNER approve the reconciliation.");
     }
 }
 

@@ -3,5 +3,10 @@ namespace PharmaSecure.Application.Features.Inventory;
 public sealed record InventoryResponse(
     string BranchId,
     string DrugId,
+    string DrugName,
     string BatchId,
-    int Quantity);
+    string BatchNo,
+    DateTime? MfgDate,
+    DateTime ExpiryDate,
+    int Quantity,
+    int AvailableQuantity);

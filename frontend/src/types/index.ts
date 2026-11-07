@@ -72,8 +72,13 @@ export interface DrugBatch {
 export interface InventoryRow {
   branchId: string;
   drugId: string;
+  drugName: string;
   batchId: string;
+  batchNo: string;
+  mfgDate: string | null;
+  expiryDate: string;
   quantity: number;
+  availableQuantity: number;
 }
 
 export interface AvailableInventory {
