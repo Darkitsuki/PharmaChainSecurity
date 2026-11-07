@@ -1,507 +1,122 @@
-import { PageHeader } from '../components/common/PageHeader';
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Building2,
-  CheckCircle2,
-  Edit2,
-  FileText,
-  Mail,
-  MapPin,
-  Phone,
-  PowerOff,
-  Plus,
-  UserCheck,
-} from 'lucide-react';
+import { Building2, CheckCircle2, FileText, Mail, MapPin, Phone, Plus, PowerOff, UserCheck } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { ApiError, apiClient } from '../services/apiClient';
-import type { Supplier, CreateSupplierPayload } from '../types';
-import {
-  Modal,
-  DataTable,
-  SearchToolbar,
-  AlertBanner,
-  StatCard,
-  type Column,
-} from '../components/common';
+import type { CreateSupplierPayload, Supplier, UpdateSupplierPayload } from '../types';
+import { AlertBanner, DataTable, Modal, PageHeader, SearchToolbar, StatCard, type Column } from '../components/common';
+
+const emptyForm = { supplierCode: '', supplierName: '', contactPerson: '', phoneNumber: '', email: '', address: '', taxCode: '' };
+type SupplierForm = typeof emptyForm;
 
 export function SuppliersPage() {
+  const { currentUser } = useAuth();
+  const isOwner = currentUser?.role === 'OWNER';
+  const canCreate = currentUser?.role === 'OWNER' || currentUser?.role === 'WAREHOUSE';
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [success, setSuccess] = useState('');
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [page, setPage] = useState(1);
+  const [editing, setEditing] = useState<Supplier | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState<SupplierForm>(emptyForm);
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<Supplier | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
   const pageSize = 10;
 
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
-
-  // Form Fields
-  const [formData, setFormData] = useState<{
-    supplierCode: string;
-    supplierName: string;
-    contactPerson: string;
-    phoneNumber: string;
-    email: string;
-    address: string;
-    taxCode: string;
-    isActive: boolean;
-  }>({
-    supplierCode: '',
-    supplierName: '',
-    contactPerson: '',
-    phoneNumber: '',
-    email: '',
-    address: '',
-    taxCode: '',
-    isActive: true,
-  });
-
-  useEffect(() => {
-    loadSuppliers();
-  }, []);
-
   async function loadSuppliers() {
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
+    try { setSuppliers(await apiClient<Supplier[]>('/suppliers')); }
+    catch (e) { setError(e instanceof ApiError ? e.detail || e.message : 'Không thể tải danh sách nhà cung cấp.'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void loadSuppliers(); }, []);
+
+  function openCreate() {
+    setCreating(true); setEditing(null); setFormError('');
+    setForm({ ...emptyForm, supplierCode: `NCC-${Date.now().toString().slice(-4)}` });
+  }
+  function openSupplier(item: Supplier) {
+    setCreating(false); setEditing(item); setFormError('');
+    setForm({ supplierCode: item.supplierCode, supplierName: item.supplierName, contactPerson: item.contactPerson || '', phoneNumber: item.phoneNumber || '', email: item.email || '', address: item.address || '', taxCode: item.taxCode || '' });
+  }
+  function closeForm() { if (!saving) { setCreating(false); setEditing(null); } }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!isOwner && editing) return;
+    if (!form.supplierCode.trim() || !form.supplierName.trim()) { setFormError('Mã và tên nhà cung cấp là bắt buộc.'); return; }
+    setSaving(true); setFormError('');
     try {
-      const data = await apiClient<Supplier[]>('/suppliers');
-      setSuppliers(data);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.detail || err.message);
+      let saved: Supplier;
+      if (editing) {
+        const payload: UpdateSupplierPayload = { supplierName: form.supplierName.trim(), contactPerson: form.contactPerson.trim() || undefined, phoneNumber: form.phoneNumber.trim() || undefined, email: form.email.trim() || undefined, address: form.address.trim() || undefined, taxCode: form.taxCode.trim() || undefined };
+        saved = await apiClient<Supplier>(`/suppliers/${encodeURIComponent(editing.id)}`, { method: 'PUT', body: JSON.stringify(payload) });
+        setSuppliers(items => items.map(item => item.id === saved.id ? saved : item));
+        setSuccess(`Đã cập nhật nhà cung cấp “${saved.supplierName}”.`);
       } else {
-        setError('Không thể kết nối đến máy chủ.');
+        const payload: CreateSupplierPayload = { supplierCode: form.supplierCode.trim().toUpperCase(), supplierName: form.supplierName.trim(), contactPerson: form.contactPerson.trim() || undefined, phoneNumber: form.phoneNumber.trim() || undefined, email: form.email.trim() || undefined, address: form.address.trim() || undefined, taxCode: form.taxCode.trim() || undefined };
+        saved = await apiClient<Supplier>('/suppliers', { method: 'POST', body: JSON.stringify(payload) });
+        setSuppliers(items => [saved, ...items]);
+        setSuccess(`Đã thêm nhà cung cấp “${saved.supplierName}”.`);
       }
-    } finally {
-      setLoading(false);
-    }
+      closeForm();
+    } catch (e) { setFormError(e instanceof ApiError ? e.detail || e.message : 'Không thể lưu thông tin nhà cung cấp.'); }
+    finally { setSaving(false); }
   }
 
-  function handleOpenCreateModal() {
-    setEditingSupplier(null);
-    setFormData({
-      supplierCode: `NCC-${Date.now().toString().slice(-4)}`,
-      supplierName: '',
-      contactPerson: '',
-      phoneNumber: '',
-      email: '',
-      address: '',
-      taxCode: '',
-      isActive: true,
-    });
-    setFormError('');
-    setShowModal(true);
-  }
-
-  function handleOpenEditModal(s: Supplier) {
-    setEditingSupplier(s);
-    setFormData({
-      supplierCode: s.supplierCode,
-      supplierName: s.supplierName,
-      contactPerson: s.contactPerson || '',
-      phoneNumber: s.phoneNumber || '',
-      email: s.email || '',
-      address: s.address || '',
-      taxCode: s.taxCode || '',
-      isActive: s.isActive,
-    });
-    setFormError('');
-    setShowModal(true);
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFormError('');
-
-    if (!formData.supplierCode.trim()) {
-      setFormError('Vui lòng nhập mã nhà cung cấp.');
-      return;
-    }
-
-    if (!formData.supplierName.trim()) {
-      setFormError('Vui lòng nhập tên nhà cung cấp.');
-      return;
-    }
-
-    setSaving(true);
+  async function updateStatus() {
+    if (!statusTarget || !isOwner) return;
+    setStatusSaving(true);
     try {
-      if (editingSupplier) {
-        setSuccessMsg('Tính năng chỉnh sửa nhà cung cấp đang được hoàn thiện.');
-      } else {
-        const payload: CreateSupplierPayload = {
-          supplierCode: formData.supplierCode.trim().toUpperCase(),
-          supplierName: formData.supplierName.trim(),
-          contactPerson: formData.contactPerson.trim() || undefined,
-          phoneNumber: formData.phoneNumber.trim() || undefined,
-          email: formData.email.trim() || undefined,
-          address: formData.address.trim() || undefined,
-          taxCode: formData.taxCode.trim() || undefined,
-        };
-
-        const created = await apiClient<Supplier>('/suppliers', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-
-        setSuppliers(prev => [created, ...prev]);
-        setSuccessMsg(`Thêm nhà cung cấp "${created.supplierName}" thành công.`);
-      }
-
-      setShowModal(false);
-      setTimeout(() => setSuccessMsg(''), 4000);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setFormError(err.detail || err.message);
-      } else {
-        setFormError('Không thể lưu thông tin nhà cung cấp.');
-      }
-    } finally {
-      setSaving(false);
-    }
+      const saved = await apiClient<Supplier>(`/suppliers/${encodeURIComponent(statusTarget.id)}/status`, { method: 'PUT', body: JSON.stringify({ isActive: !statusTarget.isActive }) });
+      setSuppliers(items => items.map(item => item.id === saved.id ? saved : item));
+      setEditing(saved); setStatusTarget(null);
+      setSuccess(saved.isActive ? `Đã kích hoạt lại “${saved.supplierName}”.` : `Đã tạm ngừng “${saved.supplierName}”.`);
+    } catch (e) { setFormError(e instanceof ApiError ? e.detail || e.message : 'Không thể cập nhật trạng thái.'); setStatusTarget(null); }
+    finally { setStatusSaving(false); }
   }
 
-  // Lọc và Tìm kiếm
-  const filteredSuppliers = useMemo(() => {
-    return suppliers.filter(s => {
-      const matchSearch =
-        s.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.supplierCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.contactPerson && s.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (s.phoneNumber && s.phoneNumber.includes(searchTerm)) ||
-        (s.taxCode && s.taxCode.includes(searchTerm));
-
-      const matchStatus =
-        statusFilter === 'ALL'
-          ? true
-          : statusFilter === 'ACTIVE'
-          ? s.isActive
-          : !s.isActive;
-
-      return matchSearch && matchStatus;
-    });
-  }, [suppliers, searchTerm, statusFilter]);
-
-  // Phân trang
-  const paginatedSuppliers = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredSuppliers.slice(start, start + pageSize);
-  }, [filteredSuppliers, currentPage]);
-
-  const totalPages = Math.ceil(filteredSuppliers.length / pageSize) || 1;
-  useEffect(() => setCurrentPage(value => Math.min(value, totalPages)), [totalPages]);
-
-  // Thống kê
-  const stats = useMemo(() => {
-    const total = suppliers.length;
-    const active = suppliers.filter(s => s.isActive).length;
-    const hasTaxCode = suppliers.filter(s => Boolean(s.taxCode)).length;
-
-    return { total, active, hasTaxCode };
-  }, [suppliers]);
+  const filtered = useMemo(() => suppliers.filter(item => {
+    const term = search.trim().toLocaleLowerCase('vi');
+    const matchesText = [item.supplierCode, item.supplierName, item.contactPerson || '', item.phoneNumber || '', item.taxCode || ''].some(value => value.toLocaleLowerCase('vi').includes(term));
+    return matchesText && (status === 'ALL' || (status === 'ACTIVE' ? item.isActive : !item.isActive));
+  }), [suppliers, search, status]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  useEffect(() => setPage(current => Math.min(current, totalPages)), [totalPages]);
 
   const columns: Column<Supplier>[] = [
-    {
-      header: 'Mã & Tên nhà cung cấp',
-      cell: s => (
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-semibold text-slate-500">{s.supplierCode}</span>
-            <span className="font-semibold text-ink">{s.supplierName}</span>
-          </div>
-          {s.address && (
-            <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
-              <MapPin size={12} className="shrink-0" />
-              <span className="truncate max-w-[280px]">{s.address}</span>
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      header: 'Người liên hệ',
-      cell: s => (
-        <div>
-          <div className="font-medium text-ink text-xs">{s.contactPerson || '—'}</div>
-          {s.phoneNumber && (
-            <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-              <Phone size={11} className="shrink-0 text-slate-400" />
-              <span>{s.phoneNumber}</span>
-            </div>
-          )}
-          {s.email && (
-            <div className="flex items-center gap-1 text-xs text-slate-400">
-              <Mail size={11} className="shrink-0" />
-              <span>{s.email}</span>
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      header: 'Mã số thuế',
-      cell: s => (
-        <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-          {s.taxCode || '—'}
-        </span>
-      ),
-    },
-    {
-      header: 'Trạng thái',
-      cell: s => (
-        <span
-          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            s.isActive
-              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              : 'bg-slate-100 text-slate-500 border border-slate-200'
-          }`}
-        >
-          {s.isActive ? (
-            <>
-              <CheckCircle2 size={12} /> Hoạt động
-            </>
-          ) : (
-            <>
-              <PowerOff size={12} /> Tạm ngừng
-            </>
-          )}
-        </span>
-      ),
-    },
-    {
-      header: 'Thao tác',
-      cell: s => (
-        <button
-          onClick={() => handleOpenEditModal(s)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-mint hover:text-forest"
-          title="Xem / Chỉnh sửa"
-        >
-          <Edit2 size={15} /> Chỉnh sửa
-        </button>
-      ),
-    },
+    { header: 'Nhà cung cấp', cell: item => <div><p className="font-semibold text-ink break-words">{item.supplierName}</p>{item.address && <p className="mt-1 flex items-start gap-1 text-xs text-slate-500"><MapPin size={12} className="mt-0.5 shrink-0"/><span className="break-words">{item.address}</span></p>}</div> },
+    { header: 'Người liên hệ', cell: item => <div className="space-y-1 text-xs"><p className="font-medium text-ink">{item.contactPerson || '—'}</p>{item.phoneNumber && <p className="flex items-center gap-1 text-slate-500"><Phone size={11}/>{item.phoneNumber}</p>}{item.email && <p className="flex items-center gap-1 break-all text-slate-500"><Mail size={11} className="shrink-0"/>{item.email}</p>}</div> },
+    { header: 'Mã số thuế', cell: item => <span className="text-xs text-slate-600 break-words">{item.taxCode || '—'}</span> },
+    { header: 'Trạng thái', cell: item => <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${item.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{item.isActive ? <CheckCircle2 size={12}/> : <PowerOff size={12}/>} {item.isActive ? 'Hoạt động' : 'Tạm ngừng'}</span> },
   ];
+  const modalOpen = creating || editing !== null;
+  const readOnly = Boolean(editing) && !isOwner;
+  const inputClass = 'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-none disabled:bg-slate-50 disabled:text-slate-500';
 
-  return (
-    <div className="ui-page">
-      {/* Header */}
-      <PageHeader title="Nhà cung cấp" actions={<>
-<button
-          onClick={handleOpenCreateModal}
-          className="inline-flex items-center justify-center gap-2 bg-forest hover:bg-forest/90 text-white px-4 py-2 rounded-lg font-medium text-xs shadow-sm transition-colors cursor-pointer"
-        >
-          <Plus size={16} />
-          <span>Thêm nhà cung cấp</span>
-        </button>
-</>} />
+  return <div className="ui-page">
+    <PageHeader title="Nhà cung cấp" actions={canCreate ? <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white"><Plus size={16}/>Thêm nhà cung cấp</button> : undefined}/>
+    {error && <AlertBanner type="error" message={error} onClose={() => setError('')}/>} {success && <AlertBanner type="success" message={success} onClose={() => setSuccess('')}/>}
+    <div className="grid gap-4 sm:grid-cols-3"><StatCard loading={loading} unavailable={Boolean(error)} icon={Building2} title="Tổng nhà cung cấp" value={suppliers.length}/><StatCard loading={loading} unavailable={Boolean(error)} icon={UserCheck} title="Đang giao dịch" value={suppliers.filter(x => x.isActive).length} colorTheme="emerald"/><StatCard loading={loading} unavailable={Boolean(error)} icon={FileText} title="Đầy đủ mã số thuế" value={suppliers.filter(x => Boolean(x.taxCode)).length} colorTheme="amber"/></div>
+    <SearchToolbar searchValue={search} onSearchChange={value => { setSearch(value); setPage(1); }} searchPlaceholder="Tìm theo tên, mã NCC, người liên hệ, SĐT, mã số thuế..." onRefresh={loadSuppliers} loading={loading} filterSlot={<div className="flex gap-1">{(['ALL','ACTIVE','INACTIVE'] as const).map(value => <button type="button" key={value} onClick={() => { setStatus(value); setPage(1); }} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${status === value ? 'bg-forest text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{value === 'ALL' ? 'Tất cả' : value === 'ACTIVE' ? 'Hoạt động' : 'Tạm ngừng'}</button>)}</div>}/>
+    <DataTable columns={columns} data={filtered.slice((page-1)*pageSize,page*pageSize)} keyExtractor={item => item.id} loading={loading} emptyMessage="Không tìm thấy nhà cung cấp phù hợp." onRowClick={openSupplier} rowLabel={item => `${isOwner ? 'Chỉnh sửa' : 'Xem'} nhà cung cấp ${item.supplierName}`} pagination={{ page, totalPages, totalCount: filtered.length, pageSize, onPageChange: setPage }}/>
 
-      {/* Thông báo */}
-      {error && <AlertBanner type="error" message={error} onClose={() => setError('')} />}
-      {successMsg && <AlertBanner type="success" message={successMsg} onClose={() => setSuccessMsg('')} />}
-
-      {/* Thống kê KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard
-          loading={loading} unavailable={Boolean(error)}
-          icon={Building2}
-          title="Tổng nhà cung cấp"
-          value={stats.total}
-          subValue="Đối tác đã đăng ký trong hệ thống"
-        />
-        <StatCard
-          loading={loading} unavailable={Boolean(error)}
-          icon={UserCheck}
-          title="Đang giao dịch"
-          value={stats.active}
-          subValue="Nhà cung cấp đang hoạt động"
-          colorTheme="emerald"
-        />
-        <StatCard
-          loading={loading} unavailable={Boolean(error)}
-          icon={FileText}
-          title="Đầy đủ mã số thuế"
-          value={stats.hasTaxCode}
-          subValue="Đối tác có thông tin MST doanh nghiệp"
-          colorTheme="amber"
-        />
-      </div>
-
-      {/* Bộ lọc và Tìm kiếm */}
-        <SearchToolbar
-          searchValue={searchTerm}
-          onSearchChange={t => {
-            setSearchTerm(t);
-            setCurrentPage(1);
-          }}
-          searchPlaceholder="Tìm theo tên, mã NCC, người liên hệ, SĐT, mã số thuế..."
-          onRefresh={loadSuppliers}
-          loading={loading}
-          filterSlot={<div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-slate-400 font-medium">Trạng thái:</span>
-          {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map(st => (
-            <button
-              key={st}
-              onClick={() => {
-                setStatusFilter(st);
-                setCurrentPage(1);
-              }}
-              className={`px-3 py-1 rounded-md font-medium transition-colors cursor-pointer ${
-                statusFilter === st
-                  ? 'bg-forest text-white'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {st === 'ALL' ? 'Tất cả' : st === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm ngừng'}
-            </button>
-          ))}
-        </div>}
-        />
-
-
-      {/* Danh sách Nhà cung cấp */}
-      <DataTable<Supplier>
-        columns={columns}
-        data={paginatedSuppliers}
-        keyExtractor={s => s.id}
-        loading={loading}
-        emptyMessage="Không tìm thấy nhà cung cấp nào phù hợp."
-        pagination={{
-          page: currentPage,
-          totalPages,
-          totalCount: filteredSuppliers.length,
-          pageSize,
-          onPageChange: setCurrentPage,
-        }}
-      />
-
-      {/* Modal Thêm mới / Chỉnh sửa */}
-      <Modal
-        isOpen={showModal}
-        title={editingSupplier ? 'Thông tin Nhà cung cấp' : 'Thêm Nhà cung cấp mới'}
-        onClose={() => setShowModal(false)}
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {formError && <AlertBanner type="error" message={formError} />}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Mã nhà cung cấp <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.supplierCode}
-                onChange={e => setFormData({ ...formData, supplierCode: e.target.value })}
-                disabled={Boolean(editingSupplier)}
-                placeholder="Ví dụ: NCC-001"
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest disabled:bg-slate-50 font-mono"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Mã số thuế
-              </label>
-              <input
-                type="text"
-                value={formData.taxCode}
-                onChange={e => setFormData({ ...formData, taxCode: e.target.value })}
-                placeholder="Ví dụ: 0101234567"
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest font-mono"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Tên công ty / Nhà cung cấp <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.supplierName}
-              onChange={e => setFormData({ ...formData, supplierName: e.target.value })}
-              placeholder="Ví dụ: Dược phẩm Hậu Giang (DHG Pharma)"
-              className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest"
-              required
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Người liên hệ / Đại diện
-              </label>
-              <input
-                type="text"
-                value={formData.contactPerson}
-                onChange={e => setFormData({ ...formData, contactPerson: e.target.value })}
-                placeholder="Ví dụ: Nguyễn Văn A"
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Số điện thoại
-              </label>
-              <input
-                type="tel"
-                value={formData.phoneNumber}
-                onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })}
-                placeholder="Ví dụ: 0912345678"
-                className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Email liên hệ
-            </label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={e => setFormData({ ...formData, email: e.target.value })}
-              placeholder="contact@nhacungcap.vn"
-              className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Địa chỉ trụ sở
-            </label>
-            <textarea
-              value={formData.address}
-              onChange={e => setFormData({ ...formData, address: e.target.value })}
-              placeholder="Địa chỉ số nhà, đường, quận/huyện, tỉnh/thành phố..."
-              rows={2}
-              className="w-full text-xs px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-forest resize-none"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowModal(false)}
-              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-xs font-medium bg-forest hover:bg-forest/90 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
-            >
-              {saving ? 'Đang lưu...' : editingSupplier ? 'Lưu thay đổi' : 'Thêm mới'}
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </div>
-  );
+    <Modal isOpen={modalOpen} title={creating ? 'Thêm nhà cung cấp mới' : isOwner ? 'Cập nhật nhà cung cấp' : 'Thông tin nhà cung cấp'} subtitle={editing ? `Mã nhà cung cấp: ${editing.supplierCode}` : undefined} onClose={() => { if (!statusTarget) closeForm(); }} closeOnOverlayClick={!statusTarget} maxWidth="xl">
+      <form onSubmit={submit} className="space-y-4">{formError && <AlertBanner type="error" message={formError}/>}<div className="grid gap-4 sm:grid-cols-2">
+        <label className="text-xs font-semibold text-slate-700">Mã nhà cung cấp <span className="text-rose-500" aria-hidden="true">*</span><input className={inputClass} value={form.supplierCode} onChange={e => setForm({...form,supplierCode:e.target.value})} disabled={Boolean(editing)} required/></label>
+        <label className="text-xs font-semibold text-slate-700">Mã số thuế<input className={inputClass} value={form.taxCode} onChange={e => setForm({...form,taxCode:e.target.value})} disabled={readOnly}/></label>
+        <label className="text-xs font-semibold text-slate-700 sm:col-span-2">Tên nhà cung cấp <span className="text-rose-500" aria-hidden="true">*</span><input className={inputClass} value={form.supplierName} onChange={e => setForm({...form,supplierName:e.target.value})} disabled={readOnly} required/></label>
+        <label className="text-xs font-semibold text-slate-700">Người liên hệ<input className={inputClass} value={form.contactPerson} onChange={e => setForm({...form,contactPerson:e.target.value})} disabled={readOnly}/></label>
+        <label className="text-xs font-semibold text-slate-700">Số điện thoại<input className={inputClass} value={form.phoneNumber} onChange={e => setForm({...form,phoneNumber:e.target.value})} disabled={readOnly}/></label>
+        <label className="text-xs font-semibold text-slate-700 sm:col-span-2">Email<input type="email" className={inputClass} value={form.email} onChange={e => setForm({...form,email:e.target.value})} disabled={readOnly}/></label>
+        <label className="text-xs font-semibold text-slate-700 sm:col-span-2">Địa chỉ<textarea rows={3} className={inputClass} value={form.address} onChange={e => setForm({...form,address:e.target.value})} disabled={readOnly}/></label>
+      </div><div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">{editing && isOwner && <button type="button" disabled={saving} onClick={() => setStatusTarget(editing)} className={`mr-auto rounded-lg border px-4 py-2 text-xs font-semibold ${editing.isActive ? 'border-rose-200 text-rose-700' : 'border-emerald-200 text-emerald-700'}`}>{editing.isActive ? 'Tạm ngừng' : 'Kích hoạt lại'}</button>}<button type="button" onClick={closeForm} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600">{readOnly ? 'Đóng' : 'Hủy'}</button>{!readOnly && <button type="submit" disabled={saving} className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? 'Đang lưu...' : creating ? 'Thêm mới' : 'Lưu thay đổi'}</button>}</div></form>
+    </Modal>
+    <Modal isOpen={statusTarget !== null} title={statusTarget?.isActive ? 'Tạm ngừng nhà cung cấp?' : 'Kích hoạt lại nhà cung cấp?'} onClose={() => { if (!statusSaving) setStatusTarget(null); }} maxWidth="sm" closeOnOverlayClick={!statusSaving}><p className="text-sm text-slate-600">{statusTarget?.isActive ? `“${statusTarget.supplierName}” sẽ không thể được chọn cho đơn mua mới. Đơn đã đặt và dữ liệu lịch sử vẫn được giữ nguyên.` : `“${statusTarget?.supplierName ?? ''}” sẽ có thể được chọn lại cho đơn mua mới.`}</p><div className="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-4"><button type="button" disabled={statusSaving} onClick={() => setStatusTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold">Quay lại</button><button type="button" disabled={statusSaving} onClick={() => void updateStatus()} className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{statusSaving ? 'Đang cập nhật...' : 'Xác nhận'}</button></div></Modal>
+  </div>;
 }

@@ -61,8 +61,7 @@ export function DrugCatalogPage() {
     isActive: true,
   });
 
-  // Deactivate
-  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
 
   useEffect(() => {
     loadDrugs();
@@ -146,6 +145,17 @@ export function DrugCatalogPage() {
       return;
     }
 
+    if ((editingDrug.isActive ?? true) && !editForm.isActive) {
+      setConfirmDeactivate(true);
+      return;
+    }
+
+    await saveDrug();
+  }
+
+  async function saveDrug() {
+    if (!editingDrug) return;
+
     setUpdating(true);
     try {
       await apiClient(`/drugs/${encodeURIComponent(editingDrug.drugId)}`, {
@@ -160,29 +170,13 @@ export function DrugCatalogPage() {
       });
 
       setEditingDrug(null);
+      setConfirmDeactivate(false);
       setSuccessMsg(`Đã cập nhật thông tin thuốc '${editForm.name}'.`);
       await loadDrugs();
     } catch (err) {
       setEditError(err instanceof ApiError ? err.detail || err.message : 'Cập nhật thuốc thất bại.');
     } finally {
       setUpdating(false);
-    }
-  }
-
-  async function handleDeactivate(drugId: string) {
-    if (!window.confirm('Bạn có chắc chắn muốn tạm ngừng kinh doanh loại thuốc này?')) return;
-    setDeactivatingId(drugId);
-    setError('');
-    try {
-      await apiClient(`/drugs/${encodeURIComponent(drugId)}`, {
-        method: 'DELETE'
-      });
-      setSuccessMsg('Đã chuyển trạng thái thuốc sang Tạm ngưng kinh doanh.');
-      await loadDrugs();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail || err.message : 'Không thể ngừng kinh doanh thuốc.');
-    } finally {
-      setDeactivatingId(null);
     }
   }
 
@@ -200,10 +194,6 @@ export function DrugCatalogPage() {
   const inactiveCount = items.filter((d) => !(d.isActive ?? true)).length;
 
   const columns: Column<Drug>[] = [
-    {
-      header: 'Mã Thuốc',
-      cell: (d) => <span className="font-mono font-bold text-ink">{d.drugCode}</span>,
-    },
     {
       header: 'Tên Biệt Dược',
       cell: (d) => <span className="font-semibold text-slate-900">{d.name}</span>,
@@ -242,46 +232,6 @@ export function DrugCatalogPage() {
         );
       },
     },
-    ...(isOwner
-      ? [
-          {
-            header: 'Hành Động',
-            align: 'right' as const,
-            cell: (d: Drug) => {
-              const active = d.isActive ?? true;
-              return (
-                <div className="inline-flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(d)}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-600 shadow-2xs hover:bg-slate-50 hover:text-ink cursor-pointer"
-                    title="Chỉnh sửa thông tin & giá bán"
-                  >
-                    <Edit3 size={13} />
-                    <span>Sửa</span>
-                  </button>
-                  {active && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeactivate(d.drugId)}
-                      disabled={deactivatingId === d.drugId}
-                      className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 font-medium text-rose-600 shadow-2xs hover:bg-rose-50 disabled:opacity-50 cursor-pointer"
-                      title="Tạm ngừng kinh doanh"
-                    >
-                      {deactivatingId === d.drugId ? (
-                        <LoaderCircle size={13} className="animate-spin" />
-                      ) : (
-                        <PowerOff size={13} />
-                      )}
-                      <span>Ngừng</span>
-                    </button>
-                  )}
-                </div>
-              );
-            },
-          },
-        ]
-      : []),
   ];
 
   return (
@@ -370,6 +320,8 @@ export function DrugCatalogPage() {
         loading={loading}
         loadingText="Đang tải danh mục thuốc..."
         emptyMessage="Không tìm thấy thuốc nào phù hợp với điều kiện tìm kiếm."
+        onRowClick={handleOpenEdit}
+        rowLabel={(item) => `${isOwner ? 'Chỉnh sửa' : 'Xem'} thuốc ${item.name}`}
         pagination={{
           page,
           totalPages: Math.max(1, Math.ceil(filteredItems.length / pageSize)),
@@ -489,7 +441,8 @@ export function DrugCatalogPage() {
       {/* Edit Drug Modal */}
       <Modal
         isOpen={editingDrug !== null}
-        onClose={() => setEditingDrug(null)}
+        onClose={() => { if (!confirmDeactivate) setEditingDrug(null); }}
+        closeOnOverlayClick={!confirmDeactivate}
         title={`Chỉnh Sửa: ${editingDrug?.name || ''}`}
         subtitle={`Mã thuốc: ${editingDrug?.drugCode || ''}`}
         icon={Edit3}
@@ -506,6 +459,7 @@ export function DrugCatalogPage() {
               type="text"
               required
               value={editForm.name}
+              disabled={!isOwner}
               onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
             />
@@ -518,6 +472,7 @@ export function DrugCatalogPage() {
               </label>
               <select
                 value={editForm.unit}
+                disabled={!isOwner}
                 onChange={(e) => setEditForm((p) => ({ ...p, unit: e.target.value }))}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
               >
@@ -540,6 +495,7 @@ export function DrugCatalogPage() {
                 step="500"
                 required
                 value={editForm.price}
+                disabled={!isOwner}
                 onChange={(e) => setEditForm((p) => ({ ...p, price: Number(e.target.value) }))}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-display font-bold text-forest focus:border-forest focus:outline-hidden"
               />
@@ -551,6 +507,7 @@ export function DrugCatalogPage() {
             <input
               type="text"
               value={editForm.activeIngredient || ''}
+              disabled={!isOwner}
               onChange={(e) => setEditForm((p) => ({ ...p, activeIngredient: e.target.value }))}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:border-forest focus:outline-hidden"
             />
@@ -561,6 +518,7 @@ export function DrugCatalogPage() {
               type="checkbox"
               id="isActiveToggle"
               checked={editForm.isActive ?? true}
+              disabled={!isOwner}
               onChange={(e) => setEditForm((p) => ({ ...p, isActive: e.target.checked }))}
               className="rounded text-forest focus:ring-forest cursor-pointer"
             />
@@ -577,16 +535,30 @@ export function DrugCatalogPage() {
             >
               Hủy
             </button>
-            <button
+            {isOwner && <button
               type="submit"
               disabled={updating}
               className="inline-flex items-center gap-2 rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-forest/90 disabled:opacity-50"
             >
               {updating ? <LoaderCircle size={14} className="animate-spin" /> : <Edit3 size={14} />}
               <span>{updating ? 'Đang lưu...' : 'Lưu Thay Đổi'}</span>
-            </button>
+            </button>}
           </div>
         </form>
+      </Modal>
+      <Modal
+        isOpen={confirmDeactivate}
+        onClose={() => { if (!updating) setConfirmDeactivate(false); }}
+        title="Tạm ngừng kinh doanh thuốc?"
+        maxWidth="sm"
+        closeOnOverlayClick={!updating}
+      >
+        {editError && <AlertBanner type="error" message={editError} onClose={() => setEditError('')} />}
+        <p className="text-sm text-slate-600">Thuốc “{editingDrug?.name}” sẽ không còn được chọn cho bán hàng hoặc đơn mua mới. Hóa đơn, lô và dữ liệu lịch sử vẫn được giữ nguyên.</p>
+        <div className="mt-5 flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <button type="button" disabled={updating} onClick={() => setConfirmDeactivate(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 disabled:opacity-50">Quay lại</button>
+          <button type="button" disabled={updating} onClick={() => void saveDrug()} className="rounded-lg bg-forest px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{updating ? 'Đang cập nhật...' : 'Xác nhận'}</button>
+        </div>
       </Modal>
     </div>
   );

@@ -237,7 +237,7 @@ public sealed class GoodsReceiptService : IGoodsReceiptService
             await using var supCmd = (OracleCommand)unitOfWork.Connection.CreateCommand();
             supCmd.Transaction = (OracleTransaction)unitOfWork.Transaction!;
             supCmd.BindByName = true;
-            supCmd.CommandText = "SELECT SupplierName FROM SUPPLIERS WHERE id = :id AND IsActive = 1";
+            supCmd.CommandText = "SELECT SupplierName FROM SUPPLIERS WHERE id = :id";
             supCmd.Parameters.Add("id", OracleDbType.Varchar2, 50).Value = request.SupplierId;
             var supplierNameObj = await supCmd.ExecuteScalarAsync(cancellationToken);
             if (supplierNameObj is null)
