@@ -1,34 +1,8 @@
 -- ============================================================================
 -- PROJECT: PharmaChainSecurity
--- FILE: 03_Test_Security_Policies.sql
--- MÔ TẢ: Kịch bản kiểm thử thực nghiệm VPD (Cô lập chi nhánh) và CLS (Ẩn doanh thu)
+-- FILE: Test_Security_Policies.sql
+-- MÔ TẢ: Kịch bản kiểm thử thực nghiệm tự động VPD (Cô lập chi nhánh) và CLS (Ẩn doanh thu)
+-- CHÚ Ý: Kịch bản này phải được thực thi dưới tài khoản PHARMA_APP_USER.
 -- ============================================================================
 
--- 1. Giả lập phiên đăng nhập của Nhân viên bán hàng tại Chi nhánh Quận 1 (SALES)
-EXEC PKG_PHARMA_SECURITY.SET_USER_CONTEXT('us-00000000-0000-0000-0000-000000000001', 'SALES', 'br-00000000-0000-0000-0000-000000000001');
-
--- Kiểm tra: Chỉ trả về các dòng tồn kho và hóa đơn của Chi nhánh Quận 1 (...0001)
-SELECT BranchId, DrugId, BatchId, Quantity FROM INVENTORIES;
-SELECT InvoiceNo, BranchId, TotalAmount FROM INVOICES;
-
--- Kiểm tra CLS: Thấy danh sách nhân viên nhưng cột PersonalRevenue bị ẩn (NULL)
-SELECT Username, FullName, PhoneNumber, RoleName, PersonalRevenue FROM VW_STAFF_REVENUE_SECURITY;
-
-
--- 2. Giả lập phiên đăng nhập chuẩn từ Backend .NET 8 của Chủ nhà thuốc (OWNER)
-EXEC PKG_PHARMA_SECURITY.SET_USER_CONTEXT('us-00000000-0000-0000-0000-000000000003', 'OWNER', 'br-00000000-0000-0000-0000-000000000001');
-
--- Kiểm tra: Thấy toàn bộ tồn kho của cả các chi nhánh
-SELECT BranchId, DrugId, BatchId, Quantity FROM INVENTORIES;
-
--- Kiểm tra CLS: Chủ nhà thuốc nhìn thấy rõ cột PersonalRevenue của từng nhân viên
-SELECT Username, FullName, PhoneNumber, RoleName, PersonalRevenue FROM VW_STAFF_REVENUE_SECURITY;
-
--- 3. Kiểm tra VPD trên bảng RETURNS và INVENTORY_AUDITS
-EXEC PKG_PHARMA_SECURITY.SET_USER_CONTEXT('us-00000000-0000-0000-0000-000000000001', 'SALES', 'br-00000000-0000-0000-0000-000000000001');
-
--- Kiểm tra: Chỉ trả về phiếu đổi trả của Chi nhánh Quận 1
-SELECT id, ReturnNo, BranchId, TotalRefundAmount FROM RETURNS;
-
--- Kiểm tra: Chỉ trả về phiếu kiểm kê của Chi nhánh Quận 1
-SELECT id, AuditNo, BranchId, Status FROM INVENTORY_AUDITS;
+@@scripts/security/05_verify_security_suite.sql
