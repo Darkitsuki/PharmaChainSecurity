@@ -27,6 +27,7 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
   const headers = new Headers(options.headers);
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   headers.set('X-Correlation-ID', headers.get('X-Correlation-ID') ?? correlationId);
+  headers.set('ngrok-skip-browser-warning', 'true');
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
   const response = await fetch(resolveUrl(endpoint), {

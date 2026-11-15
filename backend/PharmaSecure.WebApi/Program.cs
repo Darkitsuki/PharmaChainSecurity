@@ -28,7 +28,10 @@ var app = builder.Build();
 app.UseCors();
 
 app.UseMiddleware<CorrelationIdMiddleware>();
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthentication();
 app.UseMiddleware<SecurityAuditMiddleware>();

@@ -36,18 +36,54 @@ CREATE OR REPLACE PACKAGE BODY PKG_PHARMA_SECURITY AS
         v_branch_id := SYS_CONTEXT('PHARMA_CTX', 'BRANCH_ID');
 
         -- Hỗ trợ cả mã chuẩn từ Backend .NET ('OWNER') lẫn tên tiếng Việt lịch sử ('CHU_NHA_THUOC', 'Chủ nhà thuốc', 'ADMIN')
-        IF UPPER(TRIM(v_role_code)) IN ('OWNER', 'CHU_NHA_THUOC', 'CHỦ NHÀ THUỐC', 'ADMIN') THEN
+        IF UPPER(TRIM(v_role_code)) IN ('OWNER', 'CHU_NHA_THUOC', 'CHỦ NHÀ THUỐC', 'ADMIN') OR USER = 'PHARMA_ADMIN' THEN
             RETURN '1 = 1';
         END IF;
 
         -- Nếu kết nối không có ngữ cảnh chi nhánh hợp lệ -> Chặn truy xuất (Fail-closed)
         IF v_branch_id IS NULL OR TRIM(v_branch_id) IS NULL THEN
-            RETURN '1 = 0';
+            RETURN '1 = 2';
         END IF;
 
         -- Cô lập dữ liệu: Nhân viên thuộc chi nhánh nào chỉ thấy dữ liệu chi nhánh đó
-        RETURN 'BranchId = ''' || v_branch_id || '''';
+        RETURN 'BranchId = SYS_CONTEXT(''PHARMA_CTX'', ''BRANCH_ID'')';
     END FN_VPD_BRANCH_ISOLATION;
+
+    FUNCTION FN_VPD_TRANSFER_ISOLATION(
+        p_schema IN VARCHAR2,
+        p_object IN VARCHAR2
+    ) RETURN VARCHAR2 IS
+        v_role_code VARCHAR2(100);
+        v_branch_id VARCHAR2(50);
+    BEGIN
+        v_role_code := SYS_CONTEXT('PHARMA_CTX', 'ROLE_CODE');
+        v_branch_id := SYS_CONTEXT('PHARMA_CTX', 'BRANCH_ID');
+
+        IF UPPER(TRIM(v_role_code)) IN ('OWNER', 'CHU_NHA_THUOC', 'CHỦ NHÀ THUỐC', 'ADMIN') OR USER = 'PHARMA_ADMIN' THEN
+            RETURN '1 = 1';
+        END IF;
+
+        IF v_branch_id IS NULL OR TRIM(v_branch_id) IS NULL THEN
+            RETURN '1 = 2';
+        END IF;
+
+        RETURN '(FromBranchId = SYS_CONTEXT(''PHARMA_CTX'', ''BRANCH_ID'') OR ToBranchId = SYS_CONTEXT(''PHARMA_CTX'', ''BRANCH_ID''))';
+    END FN_VPD_TRANSFER_ISOLATION;
+
+    FUNCTION GET_USER_ID RETURN VARCHAR2 IS
+    BEGIN
+        RETURN SYS_CONTEXT('PHARMA_CTX', 'USER_ID');
+    END GET_USER_ID;
+
+    FUNCTION GET_ROLE_CODE RETURN VARCHAR2 IS
+    BEGIN
+        RETURN SYS_CONTEXT('PHARMA_CTX', 'ROLE_CODE');
+    END GET_ROLE_CODE;
+
+    FUNCTION GET_BRANCH_ID RETURN VARCHAR2 IS
+    BEGIN
+        RETURN SYS_CONTEXT('PHARMA_CTX', 'BRANCH_ID');
+    END GET_BRANCH_ID;
 
 END PKG_PHARMA_SECURITY;
 /

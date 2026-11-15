@@ -104,7 +104,7 @@ public sealed class NotificationService : INotificationService
                 await using var cmd = connection.CreateCommand();
                 cmd.BindByName = true;
                 cmd.CommandText = """
-                    SELECT p.id, p.OrderNo, p.TotalAmount, p.CreatedDate, NVL(s.SupplierName, 'Nhà cung cấp')
+                    SELECT p.id, p.OrderNo, p.TotalEstimatedAmount, p.CreatedDate, NVL(s.SupplierName, 'Nhà cung cấp')
                     FROM PURCHASE_ORDERS p
                     LEFT JOIN SUPPLIERS s ON s.id = p.SupplierId
                     WHERE p.BranchId = :branchId
