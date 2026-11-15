@@ -39,6 +39,7 @@ class ApiClient {
         ..followRedirects = false
         ..headers.addAll({
           'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
           'X-Correlation-ID':
               correlationId ?? DateTime.now().microsecondsSinceEpoch.toString(),
           if (token != null) 'Authorization': 'Bearer $token',
