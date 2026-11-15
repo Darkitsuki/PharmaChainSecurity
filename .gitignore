@@ -11,3 +11,4 @@ mobile/android/build/
 .gradle/
 desktop.ini
 **/desktop.ini
+*.apk
