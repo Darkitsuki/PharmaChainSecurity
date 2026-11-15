@@ -43,7 +43,7 @@ echo.
 echo =====================================================================
 echo   TOAN BO HE THONG DA SAN SANG!
 echo   - Ten dang nhap : chunhathuoc
-echo   - Mat khau      : Admin@123
+echo   - Mat khau      : Pharma@Owner2026
 echo.
 echo   (Khi nao muon tat he thong, hay chay file stop-project.bat)
 echo =====================================================================
