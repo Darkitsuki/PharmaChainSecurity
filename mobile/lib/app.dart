@@ -11,6 +11,7 @@ import 'screens/medicine_screen.dart';
 import 'screens/purchase_order_screen.dart';
 import 'screens/records_screen.dart';
 import 'screens/patient_shell.dart';
+import 'services/dashboard_service.dart';
 import 'services/drug_service.dart';
 import 'services/order_service.dart';
 import 'services/staff_notification_service.dart';
@@ -183,6 +184,10 @@ class _PharmaShellState extends State<PharmaShell> {
     tokenProvider: () => widget.session?.token,
     defaultBranchId: widget.user?.branchId,
   );
+  late final DashboardService _dashboardService = DashboardService(
+    api: widget.session?.api,
+    tokenProvider: () => widget.session?.token,
+  );
 
   List<AppSection> get primarySections {
     final role = widget.user?.role;
@@ -248,8 +253,17 @@ class _PharmaShellState extends State<PharmaShell> {
   }
 
   Widget get screen => switch (selected) {
-        AppSection.overview => DashboardScreen(onNavigate: select),
-        AppSection.reports => DashboardScreen(report: true, onNavigate: select),
+        AppSection.overview => DashboardScreen(
+            dashboardService: _dashboardService,
+            user: widget.user,
+            onNavigate: select,
+          ),
+        AppSection.reports => DashboardScreen(
+            report: true,
+            dashboardService: _dashboardService,
+            user: widget.user,
+            onNavigate: select,
+          ),
         AppSection.catalog => MedicineScreen(
             drugService: _drugService,
             branchName: widget.user?.branchName,
