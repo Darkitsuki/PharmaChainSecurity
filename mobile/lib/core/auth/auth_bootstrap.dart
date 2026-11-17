@@ -18,7 +18,7 @@ Uri parseApiUrl(String value) {
 Future<AuthSession> createAuthSession() async {
   const url = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'https://10.13.226.181:55198/api/v1',
+    defaultValue: 'https://circulate-share-unfilled.ngrok-free.dev/api/v1',
   );
   const trustLocalDevCa = bool.fromEnvironment(
     'TRUST_LOCAL_DEV_CA',
