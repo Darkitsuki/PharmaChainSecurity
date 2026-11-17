@@ -282,18 +282,29 @@ class OrderService extends ChangeNotifier {
 
     if (client != null) {
       try {
-        // 1. Prepare checkout lines (resolve batches if empty)
+        // 1. Prepare checkout lines (resolve batches with stock & valid expiry if empty)
         final lines = <Map<String, dynamic>>[];
         for (final item in request.items) {
           String batchId = item.batch?.batchId ?? '';
           if (batchId.isEmpty) {
             try {
-              final batchesRes = await client.get('/drugs/${item.drug.drugId}/batches', token: token);
-              final rawBatches = batchesRes['batches'] ?? batchesRes['items'];
+              final branchParam = request.branchId.isNotEmpty ? '?branchId=${request.branchId}' : '';
+              final batchesRes = await client.get('/drugs/${item.drug.drugId}/batches$branchParam', token: token);
+              final rawBatches = batchesRes['batches'] ?? batchesRes['items'] ?? batchesRes['data'];
               if (rawBatches is List && rawBatches.isNotEmpty) {
-                final firstBatch = rawBatches.first;
-                if (firstBatch is Map) {
-                  batchId = firstBatch['batchId'] as String? ?? firstBatch['id'] as String? ?? '';
+                final now = DateTime.now();
+                // Pick earliest expiring batch that has sufficient stock and is not expired (FEFO)
+                final validBatches = rawBatches.where((b) {
+                  if (b is! Map) return false;
+                  final stock = (b['stockQuantity'] as num?)?.toInt() ?? 0;
+                  final expStr = b['expiryDate'] as String?;
+                  final exp = expStr != null ? DateTime.tryParse(expStr) : null;
+                  return stock >= item.quantity && (exp == null || exp.isAfter(now));
+                }).toList();
+
+                if (validBatches.isNotEmpty) {
+                  final bestBatch = validBatches.first as Map;
+                  batchId = bestBatch['batchId'] as String? ?? bestBatch['id'] as String? ?? '';
                 }
               }
             } catch (_) {}

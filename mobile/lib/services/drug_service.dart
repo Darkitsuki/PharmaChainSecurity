@@ -118,10 +118,17 @@ class DrugService {
     }
 
     // Fallback catalog from demoMedicines
+    const dbDrugIdMap = {
+      'THUOC001': 'dr-00000000-0000-0000-0000-000000000001',
+      'THUOC002': 'dr-00000000-0000-0000-0000-000000000002',
+      'THUOC003': 'dr-00000000-0000-0000-0000-000000000003',
+      'THUOC004': 'dr-00000000-0000-0000-0000-000000000004',
+    };
+
     var list = demoMedicines
         .where((m) => includeInactive ? true : m.active)
         .map((m) => DrugModel(
-              drugId: m.code,
+              drugId: dbDrugIdMap[m.code] ?? m.code,
               drugCode: m.code,
               name: m.name,
               activeIngredient: m.ingredient,

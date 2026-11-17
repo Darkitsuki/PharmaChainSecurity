@@ -52,17 +52,31 @@ class ApiClient {
         if (response.statusCode == 401 && token != null) {
           onUnauthorized?.call();
         }
+
+        // Try extracting user-friendly message from server ProblemDetails or error JSON
+        String? serverMessage;
+        try {
+          final errBody = jsonDecode(utf8.decode(response.bodyBytes));
+          if (errBody is Map<String, dynamic>) {
+            serverMessage = errBody['detail'] as String? ??
+                errBody['title'] as String? ??
+                errBody['message'] as String?;
+          }
+        } catch (_) {}
+
         // Never surface raw responses: they may contain diagnostics or secrets.
         throw ApiException(
-            switch (response.statusCode) {
-              400 => 'Thông tin gửi lên không hợp lệ.',
-              401 => 'Thông tin đăng nhập không hợp lệ hoặc phiên đã hết hạn.',
-              403 => 'Tài khoản không có quyền truy cập.',
-              404 => 'Không tìm thấy tài khoản hoặc API.',
-              429 => 'Quá nhiều yêu cầu. Vui lòng thử lại sau.',
-              >= 500 => 'Máy chủ gặp lỗi. Vui lòng thử lại sau.',
-              _ => 'Yêu cầu không thành công (HTTP ${response.statusCode}).',
-            },
+            serverMessage ??
+                switch (response.statusCode) {
+                  400 => 'Thông tin gửi lên không hợp lệ.',
+                  401 => 'Thông tin đăng nhập không hợp lệ hoặc phiên đã hết hạn.',
+                  403 => 'Tài khoản không có quyền truy cập.',
+                  404 => 'Không tìm thấy tài khoản hoặc API.',
+                  422 => 'Mặt hàng thuốc hoặc tồn kho tại chi nhánh tạm thời không khả dụng.',
+                  429 => 'Quá nhiều yêu cầu. Vui lòng thử lại sau.',
+                  >= 500 => 'Máy chủ gặp lỗi. Vui lòng thử lại sau.',
+                  _ => 'Yêu cầu không thành công (HTTP ${response.statusCode}).',
+                },
             statusCode: response.statusCode);
       }
       if (response.statusCode == 204) return {};

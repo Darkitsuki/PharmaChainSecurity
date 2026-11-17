@@ -121,8 +121,9 @@ public sealed class DrugQueryService : IDrugQueryService
             await using var command = CreateCommand("""
                 SELECT b.id, b.DrugId, b.BatchNo, b.MfgDate, b.ExpiryDate, NVL(inv.Quantity, 0)
                 FROM DRUG_BATCHES b
+                JOIN DRUGS d ON b.DrugId = d.id
                 LEFT JOIN INVENTORIES inv ON b.id = inv.BatchId AND inv.BranchId = :branchId
-                WHERE b.DrugId = :drugId
+                WHERE (b.DrugId = :drugId OR d.DrugCode = :drugId)
                 ORDER BY b.ExpiryDate ASC
                 """);
             command.Parameters.Add("branchId", OracleDbType.Varchar2, 50).Value = branchId;

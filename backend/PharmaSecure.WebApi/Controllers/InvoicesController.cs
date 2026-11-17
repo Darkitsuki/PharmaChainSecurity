@@ -232,37 +232,46 @@ public sealed class InvoicesController : ControllerBase
                     branchId),
                 cancellationToken);
 
-            // Tự động resolve số lô thực tế theo FEFO nếu client chưa truyền hoặc truyền mã giả lập
+            // Tự động resolve số lô thực tế theo FEFO nếu client chưa truyền, truyền mã giả lập hoặc lô truyền lên không đủ hàng
             var checkoutLines = new List<CheckoutLineRequest>();
             foreach (var line in request.Lines)
             {
+                var availableBatches = await drugQueryService.GetBatchesAsync(branchId, line.DrugId, cancellationToken);
                 var batchId = line.BatchId;
-                if (string.IsNullOrWhiteSpace(batchId) || batchId.StartsWith("BATCH-", StringComparison.OrdinalIgnoreCase))
+                var resolvedDrugId = line.DrugId;
+
+                // 1. Nếu client truyền batchId cụ thể, kiểm tra xem lô đó có đủ hàng và chưa hết hạn không
+                DrugBatchResponse? matchingBatch = null;
+                if (!string.IsNullOrWhiteSpace(batchId) && !batchId.StartsWith("BATCH-", StringComparison.OrdinalIgnoreCase))
                 {
-                    var availableBatches = await drugQueryService.GetBatchesAsync(branchId, line.DrugId, cancellationToken);
-                    var matchingBatch = availableBatches
-                        .Where(b => b.StockQuantity >= line.Quantity && b.ExpiryDate > DateTime.UtcNow)
-                        .OrderBy(b => b.ExpiryDate)
-                        .FirstOrDefault()
-                        ?? availableBatches
-                            .Where(b => b.StockQuantity > 0)
-                            .OrderBy(b => b.ExpiryDate)
-                            .FirstOrDefault();
-
-                    if (matchingBatch is null)
-                    {
-                        return UnprocessableEntity(new ProblemDetails
-                        {
-                            Title = "Tồn kho không đủ",
-                            Detail = $"Mặt hàng thuốc tại chi nhánh tạm thời hết hàng hoặc không có lô khả dụng.",
-                            Status = StatusCodes.Status422UnprocessableEntity
-                        });
-                    }
-
-                    batchId = matchingBatch.BatchId;
+                    matchingBatch = availableBatches
+                        .FirstOrDefault(b => b.BatchId == batchId && b.StockQuantity >= line.Quantity && b.ExpiryDate > DateTime.UtcNow);
                 }
 
-                checkoutLines.Add(new CheckoutLineRequest(line.DrugId, batchId, line.Quantity));
+                // 2. Nếu chưa có hoặc lô client truyền không đủ tồn kho / hết hạn, áp dụng FEFO tự động
+                matchingBatch ??= availableBatches
+                    .Where(b => b.StockQuantity >= line.Quantity && b.ExpiryDate > DateTime.UtcNow)
+                    .OrderBy(b => b.ExpiryDate)
+                    .FirstOrDefault()
+                    ?? availableBatches
+                        .Where(b => b.StockQuantity > 0)
+                        .OrderBy(b => b.ExpiryDate)
+                        .FirstOrDefault();
+
+                if (matchingBatch is null)
+                {
+                    return UnprocessableEntity(new ProblemDetails
+                    {
+                        Title = "Tồn kho không đủ",
+                        Detail = $"Mặt hàng thuốc tại chi nhánh tạm thời hết hàng hoặc không có lô khả dụng.",
+                        Status = StatusCodes.Status422UnprocessableEntity
+                    });
+                }
+
+                batchId = matchingBatch.BatchId;
+                resolvedDrugId = matchingBatch.DrugId;
+
+                checkoutLines.Add(new CheckoutLineRequest(resolvedDrugId, batchId, line.Quantity));
             }
 
             var result = await checkoutService.CheckoutAsync(
